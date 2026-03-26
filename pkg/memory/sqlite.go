@@ -261,6 +261,44 @@ func (s *SQLiteStore) HasContentHash(hash string) (bool, error) {
 	return exists, nil
 }
 
+// RecallBySource returns up to limit chunks matching the given sourceFile and/or
+// heading. Empty strings are treated as wildcards (not filtered).
+func (s *SQLiteStore) RecallBySource(sourceFile, heading string, limit int) ([]Chunk, error) {
+	query := `
+		SELECT id, source_file, heading, content, content_hash, created_at, updated_at
+		FROM memory_chunks
+		WHERE 1=1`
+	args := []any{}
+
+	if sourceFile != "" {
+		query += " AND source_file = ?"
+		args = append(args, sourceFile)
+	}
+	if heading != "" {
+		query += " AND heading = ?"
+		args = append(args, heading)
+	}
+
+	query += " ORDER BY created_at DESC LIMIT ?"
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("recall query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Chunk
+	for rows.Next() {
+		var ch Chunk
+		if err := rows.Scan(&ch.ID, &ch.SourceFile, &ch.Heading, &ch.Content, &ch.ContentHash, &ch.CreatedAt, &ch.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan chunk: %w", err)
+		}
+		results = append(results, ch)
+	}
+	return results, rows.Err()
+}
+
 // Close closes the underlying database connection.
 func (s *SQLiteStore) Close() error {
 	if s.db != nil {
