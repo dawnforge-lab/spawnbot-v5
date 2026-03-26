@@ -324,6 +324,8 @@ type AgentDefaults struct {
 	SubTurn                   SubTurnConfig      `json:"subturn"                                                                                     envPrefix:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_"`
 	ToolFeedback              ToolFeedbackConfig `json:"tool_feedback,omitempty"`
 	SplitOnMarker             bool               `json:"split_on_marker"                 env:"SPAWNBOT_AGENTS_DEFAULTS_SPLIT_ON_MARKER"` // split messages on <|[SPLIT]|> marker
+	ApprovalMode              string             `json:"approval_mode"                   env:"SPAWNBOT_APPROVAL_MODE"`
+	ApprovalTimeoutSeconds    int                `json:"approval_timeout_seconds"        env:"SPAWNBOT_APPROVAL_TIMEOUT_SECONDS"`
 }
 
 const DefaultMaxMediaSize = 20 * 1024 * 1024 // 20 MB

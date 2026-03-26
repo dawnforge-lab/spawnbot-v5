@@ -101,6 +101,18 @@ func configureHookManagerFromConfig(hm *HookManager, cfg *config.Config) {
 		hookTimeoutFromMS(cfg.Hooks.Defaults.InterceptorTimeoutMS),
 		hookTimeoutFromMS(cfg.Hooks.Defaults.ApprovalTimeoutMS),
 	)
+
+	// Wire the built-in YOLO/Approval tool approver based on agent defaults.
+	mode := cfg.Agents.Defaults.ApprovalMode
+	if mode == "" {
+		mode = "yolo"
+	}
+	timeoutSeconds := cfg.Agents.Defaults.ApprovalTimeoutSeconds
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 300
+	}
+	approvalHook := NewApprovalHook(mode, timeoutSeconds)
+	_ = hm.Mount(NamedHook("approval", approvalHook))
 }
 
 func hookTimeoutFromMS(ms int) time.Duration {
