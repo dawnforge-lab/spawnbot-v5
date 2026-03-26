@@ -50,4 +50,4 @@ CGO_ENABLED=1 go build -tags "goolm,stdjson,fts5" -o spawnbot ./cmd/spawnbot/
 
 ## License
 
-Apache-2.0 (forked from PicoClaw by Sipeed)
+Apache-2.0 (based on PicoClaw by Sipeed)

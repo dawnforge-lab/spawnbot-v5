@@ -4,31 +4,31 @@
 
 ## ⚙️ Configuration
 
-Config file: `~/.picoclaw/config.json`
+Config file: `~/.spawnbot/config.json`
 
 ### Environment Variables
 
-You can override default paths using environment variables. This is useful for portable installations, containerized deployments, or running picoclaw as a system service. These variables are independent and control different paths.
+You can override default paths using environment variables. This is useful for portable installations, containerized deployments, or running spawnbot as a system service. These variables are independent and control different paths.
 
 | Variable          | Description                                                                                                                             | Default Path              |
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| `PICOCLAW_CONFIG` | Overrides the path to the configuration file. This directly tells picoclaw which `config.json` to load, ignoring all other locations. | `~/.picoclaw/config.json` |
-| `PICOCLAW_HOME`   | Overrides the root directory for picoclaw data. This changes the default location of the `workspace` and other data directories.          | `~/.picoclaw`             |
+| `SPAWNBOT_CONFIG` | Overrides the path to the configuration file. This directly tells spawnbot which `config.json` to load, ignoring all other locations. | `~/.spawnbot/config.json` |
+| `SPAWNBOT_HOME`   | Overrides the root directory for spawnbot data. This changes the default location of the `workspace` and other data directories.          | `~/.spawnbot`             |
 
 **Examples:**
 
 ```bash
-# Run picoclaw using a specific config file
+# Run spawnbot using a specific config file
 # The workspace path will be read from within that config file
-PICOCLAW_CONFIG=/etc/picoclaw/production.json picoclaw gateway
+SPAWNBOT_CONFIG=/etc/spawnbot/production.json spawnbot gateway
 
-# Run picoclaw with all its data stored in /opt/picoclaw
-# Config will be loaded from the default ~/.picoclaw/config.json
-# Workspace will be created at /opt/picoclaw/workspace
-PICOCLAW_HOME=/opt/picoclaw picoclaw agent
+# Run spawnbot with all its data stored in /opt/spawnbot
+# Config will be loaded from the default ~/.spawnbot/config.json
+# Workspace will be created at /opt/spawnbot/workspace
+SPAWNBOT_HOME=/opt/spawnbot spawnbot agent
 
 # Use both for a fully customized setup
-PICOCLAW_HOME=/srv/picoclaw PICOCLAW_CONFIG=/srv/picoclaw/main.json picoclaw gateway
+SPAWNBOT_HOME=/srv/spawnbot SPAWNBOT_CONFIG=/srv/spawnbot/main.json spawnbot gateway
 ```
 
 ### Gateway Log Level
@@ -45,14 +45,14 @@ PICOCLAW_HOME=/srv/picoclaw PICOCLAW_CONFIG=/srv/picoclaw/main.json picoclaw gat
 
 When omitted, the default is `fatal`. Supported values: `debug`, `info`, `warn`, `error`, `fatal`.
 
-You can also override this with the environment variable `PICOCLAW_LOG_LEVEL`.
+You can also override this with the environment variable `SPAWNBOT_LOG_LEVEL`.
 
 ### Workspace Layout
 
-PicoClaw stores data in your configured workspace (default: `~/.picoclaw/workspace`):
+Spawnbot stores data in your configured workspace (default: `~/.spawnbot/workspace`):
 
 ```
-~/.picoclaw/workspace/
+~/.spawnbot/workspace/
 ├── sessions/          # Conversation sessions and history
 ├── memory/           # Long-term memory (MEMORY.md)
 ├── state/            # Persistent state (last channel, etc.)
@@ -71,14 +71,14 @@ PicoClaw stores data in your configured workspace (default: `~/.picoclaw/workspa
 
 By default, skills are loaded from:
 
-1. `~/.picoclaw/workspace/skills` (workspace)
-2. `~/.picoclaw/skills` (global)
+1. `~/.spawnbot/workspace/skills` (workspace)
+2. `~/.spawnbot/skills` (global)
 3. `<binary-embedded-path>/skills` (builtin, set at build time)
 
 For advanced/test setups, you can override the builtin skills root with:
 
 ```bash
-export PICOCLAW_BUILTIN_SKILLS=/path/to/skills
+export SPAWNBOT_BUILTIN_SKILLS=/path/to/skills
 ```
 
 ### Using Skills From Chat Channels
@@ -114,7 +114,7 @@ Use `bindings` in `config.json` to route incoming messages to different agents b
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.spawnbot/workspace",
       "model_name": "gpt-4o-mini"
     },
     "list": [
@@ -157,7 +157,7 @@ Use `bindings` in `config.json` to route incoming messages to different agents b
 
 #### Matching priority
 
-When multiple bindings exist, PicoClaw resolves in this order:
+When multiple bindings exist, Spawnbot resolves in this order:
 
 1. `peer`
 2. `parent_peer` (for thread/topic parent contexts)
@@ -167,11 +167,11 @@ When multiple bindings exist, PicoClaw resolves in this order:
 6. channel wildcard (`account_id: "*"`)
 7. default agent
 
-If a binding points to a missing `agent_id`, PicoClaw falls back to the default agent.
+If a binding points to a missing `agent_id`, Spawnbot falls back to the default agent.
 
 #### How matching works (step-by-step)
 
-1. PicoClaw first filters bindings by `match.channel` (must equal current channel).
+1. Spawnbot first filters bindings by `match.channel` (must equal current channel).
 2. It then filters by `match.account_id`:
    - omitted: match only the channel's default account
    - `"*"`: match all accounts on this channel
@@ -236,7 +236,7 @@ In other words: **channel + account form the candidate set; peer/guild/team then
 
 ### 🔒 Security Sandbox
 
-PicoClaw runs in a sandboxed environment by default. The agent can only access files and execute commands within the configured workspace.
+Spawnbot runs in a sandboxed environment by default. The agent can only access files and execute commands within the configured workspace.
 
 #### Default Configuration
 
@@ -244,7 +244,7 @@ PicoClaw runs in a sandboxed environment by default. The agent can only access f
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.spawnbot/workspace",
       "restrict_to_workspace": true
     }
   }
@@ -253,7 +253,7 @@ PicoClaw runs in a sandboxed environment by default. The agent can only access f
 
 | Option                  | Default                 | Description                               |
 | ----------------------- | ----------------------- | ----------------------------------------- |
-| `workspace`             | `~/.picoclaw/workspace` | Working directory for the agent           |
+| `workspace`             | `~/.spawnbot/workspace` | Working directory for the agent           |
 | `restrict_to_workspace` | `true`                  | Restrict file/command access to workspace |
 
 #### Protected Tools
@@ -300,7 +300,7 @@ Even with `restrict_to_workspace: false`, the `exec` tool blocks these dangerous
 
 #### Known Limitation: Child Processes From Build Tools
 
-The exec safety guard only inspects the command line PicoClaw launches directly. It does not recursively inspect child
+The exec safety guard only inspects the command line Spawnbot launches directly. It does not recursively inspect child
 processes spawned by allowed developer tools such as `make`, `go run`, `cargo`, `npm run`, or custom build scripts.
 
 That means a top-level command can still compile or launch other binaries after it passes the initial guard check. In
@@ -311,7 +311,7 @@ For higher-risk environments:
 
 * Review build scripts before execution.
 * Prefer approval/manual review for compile-and-run workflows.
-* Run PicoClaw inside a container or VM if you need stronger isolation than the built-in guard provides.
+* Run Spawnbot inside a container or VM if you need stronger isolation than the built-in guard provides.
 
 #### Error Examples
 
@@ -344,7 +344,7 @@ If you need the agent to access paths outside the workspace:
 **Method 2: Environment variable**
 
 ```bash
-export PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE=false
+export SPAWNBOT_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE=false
 ```
 
 > ⚠️ **Warning**: Disabling this restriction allows the agent to access any path on your system. Use with caution in controlled environments only.
@@ -363,7 +363,7 @@ All paths share the same workspace restriction — there's no way to bypass the 
 
 ### Heartbeat (Periodic Tasks)
 
-PicoClaw can perform periodic tasks automatically. Create a `HEARTBEAT.md` file in your workspace:
+Spawnbot can perform periodic tasks automatically. Create a `HEARTBEAT.md` file in your workspace:
 
 ```markdown
 # Periodic Tasks
@@ -437,8 +437,8 @@ The subagent has access to tools (message, web_search, etc.) and can communicate
 
 **Environment variables:**
 
-* `PICOCLAW_HEARTBEAT_ENABLED=false` to disable
-* `PICOCLAW_HEARTBEAT_INTERVAL=60` to change interval
+* `SPAWNBOT_HEARTBEAT_ENABLED=false` to disable
+* `SPAWNBOT_HEARTBEAT_INTERVAL=60` to change interval
 
 ### Providers
 
@@ -449,7 +449,7 @@ The subagent has access to tools (message, web_search, etc.) and can communicate
 | ------------ | --------------------------------------- | ------------------------------------------------------------ |
 | `gemini`     | LLM (Gemini direct)                     | [aistudio.google.com](https://aistudio.google.com)           |
 | `zhipu`      | LLM (Zhipu direct)                      | [bigmodel.cn](https://bigmodel.cn)                           |
-| `volcengine` | LLM (Volcengine direct)                 | [volcengine.com](https://www.volcengine.com/activity/codingplan?utm_campaign=PicoClaw&utm_content=PicoClaw&utm_medium=devrel&utm_source=OWO&utm_term=PicoClaw) |
+| `volcengine` | LLM (Volcengine direct)                 | [volcengine.com](https://www.volcengine.com/activity/codingplan?utm_campaign=Spawnbot&utm_content=Spawnbot&utm_medium=devrel&utm_source=OWO&utm_term=Spawnbot) |
 | `openrouter` | LLM (recommended, access to all models) | [openrouter.ai](https://openrouter.ai)                       |
 | `anthropic`  | LLM (Claude direct)                     | [console.anthropic.com](https://console.anthropic.com)       |
 | `openai`     | LLM (GPT direct)                        | [platform.openai.com](https://platform.openai.com)           |
@@ -461,7 +461,7 @@ The subagent has access to tools (message, web_search, etc.) and can communicate
 
 ### Model Configuration (model_list)
 
-> **What's New?** PicoClaw now uses a **model-centric** configuration approach. Simply specify `vendor/model` format (e.g., `zhipu/glm-4.7`) to add new providers — **zero code changes required!**
+> **What's New?** Spawnbot now uses a **model-centric** configuration approach. Simply specify `vendor/model` format (e.g., `zhipu/glm-4.7`) to add new providers — **zero code changes required!**
 
 This design also enables **multi-agent support** with flexible provider selection:
 
@@ -472,7 +472,7 @@ This design also enables **multi-agent support** with flexible provider selectio
 
 #### 🔒 Security Configuration (Recommended)
 
-PicoClaw supports separating sensitive data (API keys, tokens, secrets) from your main configuration by storing them in a `.security.yml` file.
+Spawnbot supports separating sensitive data (API keys, tokens, secrets) from your main configuration by storing them in a `.security.yml` file.
 
 **Key Benefits:**
 - **Security**: Sensitive data is never in your main config file
@@ -482,7 +482,7 @@ PicoClaw supports separating sensitive data (API keys, tokens, secrets) from you
 
 **Quick Setup:**
 
-1. Create `~/.picoclaw/.security.yml` with your API keys:
+1. Create `~/.spawnbot/.security.yml` with your API keys:
 ```yaml
 model_list:
   gpt-5.4:
@@ -504,7 +504,7 @@ web:
 
 2. Set proper permissions:
 ```bash
-chmod 600 ~/.picoclaw/.security.yml
+chmod 600 ~/.spawnbot/.security.yml
 ```
 
 3. Remove sensitive fields from `config.json` (recommended):
@@ -552,7 +552,7 @@ For complete documentation, see [`security_configuration.md`](security_configura
 | **LiteLLM Proxy**       | `litellm/`        | `http://localhost:4000/v1`                          | OpenAI    | Your LiteLLM proxy key                                           |
 | **VLLM**                | `vllm/`           | `http://localhost:8000/v1`                          | OpenAI    | Local                                                            |
 | **Cerebras**            | `cerebras/`       | `https://api.cerebras.ai/v1`                        | OpenAI    | [Get Key](https://cerebras.ai)                                   |
-| **VolcEngine (Doubao)** | `volcengine/`     | `https://ark.cn-beijing.volces.com/api/v3`          | OpenAI    | [Get Key](https://www.volcengine.com/activity/codingplan?utm_campaign=PicoClaw&utm_content=PicoClaw&utm_medium=devrel&utm_source=OWO&utm_term=PicoClaw) |
+| **VolcEngine (Doubao)** | `volcengine/`     | `https://ark.cn-beijing.volces.com/api/v3`          | OpenAI    | [Get Key](https://www.volcengine.com/activity/codingplan?utm_campaign=Spawnbot&utm_content=Spawnbot&utm_medium=devrel&utm_source=OWO&utm_term=Spawnbot) |
 | **神算云**              | `shengsuanyun/`   | `https://router.shengsuanyun.com/api/v1`            | OpenAI    | —                                                                |
 | **BytePlus**            | `byteplus/`       | `https://ark.ap-southeast.bytepluses.com/api/v3`    | OpenAI    | [Get Key](https://www.byteplus.com)                              |
 | **Vivgrid**             | `vivgrid/`        | `https://api.vivgrid.com/v1`                        | OpenAI    | [Get Key](https://vivgrid.com)                                   |
@@ -664,7 +664,7 @@ For complete documentation, see [`security_configuration.md`](security_configura
 }
 ```
 
-> Run `picoclaw auth login --provider anthropic` to paste your API token.
+> Run `spawnbot auth login --provider anthropic` to paste your API token.
 
 For direct Anthropic API access or custom endpoints that only support Anthropic's native message format:
 
@@ -705,13 +705,13 @@ For direct Anthropic API access or custom endpoints that only support Anthropic'
 }
 ```
 
-PicoClaw strips only the outer `litellm/` prefix before sending the request, so `litellm/lite-gpt4` sends `lite-gpt4`, while `litellm/openai/gpt-4o` sends `openai/gpt-4o`.
+Spawnbot strips only the outer `litellm/` prefix before sending the request, so `litellm/lite-gpt4` sends `lite-gpt4`, while `litellm/openai/gpt-4o` sends `openai/gpt-4o`.
 
 </details>
 
 #### Load Balancing
 
-Configure multiple endpoints for the same model name — PicoClaw will automatically round-robin between them:
+Configure multiple endpoints for the same model name — Spawnbot will automatically round-robin between them:
 
 **Option 1: Multiple API Keys in .security.yml (Recommended)**
 
@@ -765,7 +765,7 @@ The old `providers` configuration is **deprecated** but still supported for back
 
 ### Provider Architecture
 
-PicoClaw routes providers by protocol family:
+Spawnbot routes providers by protocol family:
 
 - **OpenAI-compatible**: OpenRouter, Groq, Zhipu, vLLM-style endpoints, and most others.
 - **Anthropic**: Claude-native API behavior.
@@ -780,7 +780,7 @@ This keeps the runtime lightweight while making new OpenAI-compatible backends m
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "~/.spawnbot/workspace",
       "model": "glm-4.7",
       "max_tokens": 8192,
       "temperature": 0.7,
@@ -842,7 +842,7 @@ This keeps the runtime lightweight while making new OpenAI-compatible backends m
 
 ### Scheduled Tasks / Reminders
 
-PicoClaw supports cron-style scheduled tasks via the `cron` tool. The agent can set, list, and cancel reminders or recurring jobs that trigger at specified times.
+Spawnbot supports cron-style scheduled tasks via the `cron` tool. The agent can set, list, and cancel reminders or recurring jobs that trigger at specified times.
 
 ```json
 {
@@ -855,7 +855,7 @@ PicoClaw supports cron-style scheduled tasks via the `cron` tool. The agent can 
 }
 ```
 
-Scheduled tasks persist across restarts and are stored in `~/.picoclaw/workspace/cron/`.
+Scheduled tasks persist across restarts and are stored in `~/.spawnbot/workspace/cron/`.
 
 ### Advanced Topics
 

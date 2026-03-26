@@ -25,47 +25,47 @@ func TestParseGitHubRef(t *testing.T) {
 	}{
 		{
 			name:         "simple owner/repo",
-			repo:         "sipeed/spawnbot",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			repo:         "dawnforge-lab/spawnbot-v5",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
 		{
 			name:         "owner/repo with subpath",
-			repo:         "sipeed/spawnbot/skills/test",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			repo:         "dawnforge-lab/spawnbot-v5/skills/test",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "main",
 			wantSubPath:  "skills/test",
 		},
 		{
 			name:         "full URL with tree",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/tree/dev/skills/test",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "dev",
 			wantSubPath:  "skills/test",
 		},
 		{
 			name:         "full URL with blob",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/blob/main/README.md",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "main",
 			wantSubPath:  "README.md",
 		},
 		{
 			name:         "full URL without ref",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
 		{
 			name:           "invalid format - single part",
-			repo:           "sipeed",
+			repo:           "dawnforge-lab",
 			wantErr:        true,
 			wantErrContain: "expected 'owner/repo'",
 		},
@@ -77,15 +77,15 @@ func TestParseGitHubRef(t *testing.T) {
 		},
 		{
 			name:           "invalid GitHub URL - only one path part",
-			repo:           "https://github.com/sipeed",
+			repo:           "https://github.com/dawnforge-lab",
 			wantErr:        true,
 			wantErrContain: "invalid GitHub URL",
 		},
 		{
 			name:         "with whitespace",
-			repo:         "  sipeed/spawnbot  ",
-			wantOwner:    "sipeed",
-			wantRepoName: "spawnbot",
+			repo:         "  dawnforge-lab/spawnbot-v5  ",
+			wantOwner:    "dawnforge-lab",
+			wantRepoName: "spawnbot-v5",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
@@ -431,12 +431,12 @@ func TestSkillInstaller_InstallFromGitHub_SkillAlreadyExists(t *testing.T) {
 	}
 
 	// Create an existing skill directory
-	existingSkill := filepath.Join(skillsDir, "spawnbot")
+	existingSkill := filepath.Join(skillsDir, "spawnbot-v5")
 	os.MkdirAll(existingSkill, 0o755)
 	os.WriteFile(filepath.Join(existingSkill, "SKILL.md"), []byte("existing"), 0o644)
 
 	// Try to install the same skill - should fail
-	err = installer.InstallFromGitHub(context.Background(), "sipeed/spawnbot")
+	err = installer.InstallFromGitHub(context.Background(), "dawnforge-lab/spawnbot-v5")
 	if err == nil {
 		t.Error("InstallFromGitHub() expected error for existing skill, got nil")
 	}

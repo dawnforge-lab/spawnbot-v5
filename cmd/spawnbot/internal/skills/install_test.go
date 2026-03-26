@@ -37,7 +37,7 @@ func TestInstallCommandArgs(t *testing.T) {
 	}{
 		{
 			name:        "no registry, one arg",
-			args:        []string{"sipeed/spawnbot-skills/weather"},
+			args:        []string{"dawnforge-lab/spawnbot-skills/weather"},
 			registry:    "",
 			expectError: false,
 		},

@@ -8,14 +8,14 @@ build/
 *.dylib
 *.test
 *.out
-/picoclaw
-/picoclaw-test
+/spawnbot
+/spawnbot-test
 cmd/**/workspace
 
-# Picoclaw specific
+# Spawnbot specific
 
-# PicoClaw
-.picoclaw/
+# Spawnbot
+.spawnbot/
 config.json
 sessions/
 build/

@@ -162,19 +162,19 @@ pkg/identity/
 package channels
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 // 新代码（重构分支）
 package telegram
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"     // 引用父包
-    "github.com/sipeed/spawnbot/pkg/config"
-    "github.com/sipeed/spawnbot/pkg/identity"      // 新增
-    "github.com/sipeed/spawnbot/pkg/media"          // 新增（如需媒体）
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"     // 引用父包
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/identity"      // 新增
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/media"          // 新增（如需媒体）
 )
 ```
 
@@ -321,9 +321,9 @@ c.HandleMessage(ctx, peer, messageID, senderID, chatID, content, mediaRefs, meta
 package telegram
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func init() {
@@ -338,9 +338,9 @@ func init() {
 ```go
 // cmd/spawnbot/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/spawnbot/pkg/channels/telegram"   // 触发 init() 注册
-    _ "github.com/sipeed/spawnbot/pkg/channels/discord"
-    _ "github.com/sipeed/spawnbot/pkg/channels/your_new_channel"  // 新增
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/telegram"   // 触发 init() 注册
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/discord"
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/your_new_channel"  // 新增
 )
 ```
 
@@ -421,9 +421,9 @@ Agent Loop 的主要变化：
 package matrix
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func init() {
@@ -442,11 +442,11 @@ import (
     "context"
     "fmt"
 
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
-    "github.com/sipeed/spawnbot/pkg/identity"
-    "github.com/sipeed/spawnbot/pkg/logger"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/identity"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 // MatrixChannel implements channels.Channel for the Matrix protocol.
@@ -811,7 +811,7 @@ if m.config.Channels.Matrix.Enabled && m.config.Channels.Matrix.Token != "" {
 ```go
 // cmd/spawnbot/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/spawnbot/pkg/channels/matrix"
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/matrix"
 )
 ```
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Spawnbot Launcher
+Comment=Web-based configuration and management UI for Spawnbot
+Exec=spawnbot-launcher
+Icon=spawnbot-launcher
+Terminal=true
+Type=Application
+Categories=Utility;Network;
+Keywords=spawnbot;ai;agent;bot;

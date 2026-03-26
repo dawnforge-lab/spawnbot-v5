@@ -162,19 +162,19 @@ Using Telegram as an example, the main changes are:
 package channels
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 // New code (refactored branch)
 package telegram
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"     // Reference parent package
-    "github.com/sipeed/spawnbot/pkg/config"
-    "github.com/sipeed/spawnbot/pkg/identity"      // New
-    "github.com/sipeed/spawnbot/pkg/media"          // New (if media support needed)
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"     // Reference parent package
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/identity"      // New
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/media"          // New (if media support needed)
 )
 ```
 
@@ -321,9 +321,9 @@ Create `init.go` for your channel:
 package telegram
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func init() {
@@ -338,9 +338,9 @@ func init() {
 ```go
 // cmd/spawnbot/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/spawnbot/pkg/channels/telegram"   // Triggers init() registration
-    _ "github.com/sipeed/spawnbot/pkg/channels/discord"
-    _ "github.com/sipeed/spawnbot/pkg/channels/your_new_channel"  // New addition
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/telegram"   // Triggers init() registration
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/discord"
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/your_new_channel"  // New addition
 )
 ```
 
@@ -421,9 +421,9 @@ To add a new chat platform (e.g., `matrix`), you need to:
 package matrix
 
 import (
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func init() {
@@ -442,11 +442,11 @@ import (
     "context"
     "fmt"
 
-    "github.com/sipeed/spawnbot/pkg/bus"
-    "github.com/sipeed/spawnbot/pkg/channels"
-    "github.com/sipeed/spawnbot/pkg/config"
-    "github.com/sipeed/spawnbot/pkg/identity"
-    "github.com/sipeed/spawnbot/pkg/logger"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/identity"
+    "github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 // MatrixChannel implements channels.Channel for the Matrix protocol.
@@ -812,7 +812,7 @@ if m.config.Channels.Matrix.Enabled && m.config.Channels.Matrix.Token != "" {
 ```go
 // cmd/spawnbot/internal/gateway/helpers.go
 import (
-    _ "github.com/sipeed/spawnbot/pkg/channels/matrix"
+    _ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/matrix"
 )
 ```
 

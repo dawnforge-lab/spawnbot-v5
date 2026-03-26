@@ -64,8 +64,8 @@ INSTALL_MAN_DIR=$(INSTALL_PREFIX)/share/man/man1
 INSTALL_TMP_SUFFIX=.new
 
 # Workspace and Skills
-PICOCLAW_HOME?=$(HOME)/.spawnbot
-WORKSPACE_DIR?=$(PICOCLAW_HOME)/workspace
+SPAWNBOT_HOME?=$(HOME)/.spawnbot
+WORKSPACE_DIR?=$(SPAWNBOT_HOME)/workspace
 WORKSPACE_SKILLS_DIR=$(WORKSPACE_DIR)/skills
 BUILTIN_SKILLS_DIR=$(CURDIR)/skills
 
@@ -231,8 +231,8 @@ uninstall:
 ## uninstall-all: Remove spawnbot and all data
 uninstall-all:
 	@echo "Removing workspace and skills..."
-	@rm -rf $(PICOCLAW_HOME)
-	@echo "Removed workspace: $(PICOCLAW_HOME)"
+	@rm -rf $(SPAWNBOT_HOME)
+	@echo "Removed workspace: $(SPAWNBOT_HOME)"
 	@echo "Complete uninstallation done!"
 
 ## clean: Remove build artifacts
@@ -320,7 +320,7 @@ docker-clean:
 	docker rmi spawnbot:latest spawnbot:full 2>/dev/null || true
 
 
-## build-macos-app: Build PicoClaw macOS .app bundle (no terminal window)
+## build-macos-app: Build Spawnbot macOS .app bundle (no terminal window)
 build-macos-app:
 	@echo "Building macOS .app bundle..."
 	@if [ "$(UNAME_S)" != "Darwin" ]; then \
@@ -329,7 +329,7 @@ build-macos-app:
 	fi
 	@cd web && $(MAKE) build && cd ..
 	@./scripts/build-macos-app.sh $(BINARY_NAME)-$(PLATFORM)-$(ARCH)
-	@echo "macOS .app bundle created: $(BUILD_DIR)/PicoClaw.app"
+	@echo "macOS .app bundle created: $(BUILD_DIR)/Spawnbot.app"
 
 ## help: Show this help message
 help:

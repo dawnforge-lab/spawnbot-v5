@@ -2,7 +2,7 @@
 
 # WeCom
 
-PicoClaw now exposes WeCom as a single `channels.wecom` channel built on the official WeCom AI Bot WebSocket API.
+Spawnbot now exposes WeCom as a single `channels.wecom` channel built on the official WeCom AI Bot WebSocket API.
 This replaces the legacy `wecom`, `wecom_app`, and `wecom_aibot` split with one configuration model.
 
 ## What This Channel Supports
@@ -11,10 +11,10 @@ This replaces the legacy `wecom`, `wecom_app`, and `wecom_aibot` split with one 
 - Channel-side streaming replies over WeCom's AI Bot protocol
 - Incoming text, voice, image, file, video, and mixed messages
 - Outbound text and media replies (`image`, `file`, `voice`, `video`)
-- QR-based CLI onboarding with `picoclaw auth wecom`
+- QR-based CLI onboarding with `spawnbot auth wecom`
 - Shared allowlist and `reasoning_channel_id` routing
 
-> No public webhook callback URL is required for this channel. PicoClaw opens an outbound WebSocket connection to WeCom.
+> No public webhook callback URL is required for this channel. Spawnbot opens an outbound WebSocket connection to WeCom.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ This replaces the legacy `wecom`, `wecom_app`, and `wecom_aibot` split with one 
 Run:
 
 ```bash
-picoclaw auth wecom
+spawnbot auth wecom
 ```
 
 The command prints a QR code in the terminal, waits for confirmation in WeCom, and then writes the resulting
@@ -32,7 +32,7 @@ The command prints a QR code in the terminal, waits for confirmation in WeCom, a
 Use `--timeout` if you want to wait longer:
 
 ```bash
-picoclaw auth wecom --timeout 10m
+spawnbot auth wecom --timeout 10m
 ```
 
 ### Option 2: Configure Manually
@@ -67,7 +67,7 @@ picoclaw auth wecom --timeout 10m
 
 ## Runtime Behavior
 
-- PicoClaw keeps the active WeCom turn so normal replies can continue the same stream when possible.
+- Spawnbot keeps the active WeCom turn so normal replies can continue the same stream when possible.
 - If streaming is no longer available, replies fall back to active push delivery to the resolved chat route.
 - Incoming media is downloaded into the media store before being handed to the agent.
 - Outbound media is uploaded to WeCom in temporary chunks and then sent as a regular media message.
@@ -87,7 +87,7 @@ This branch removes the old multi-channel WeCom model.
 
 ## Troubleshooting
 
-### `picoclaw auth wecom` times out
+### `spawnbot auth wecom` times out
 
 - Re-run with a larger `--timeout`.
 - Make sure the QR code was confirmed inside WeCom, not only scanned.

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Spawnbot v5 is a fork of picoclaw (Go, ~15MB binary, <10MB RAM) replacing the previous Goose-based Rust build (250MB binary). The fork is fully rebranded — module path, binary, config dirs, UI, all references.
+Spawnbot v5 is a fork of spawnbot (Go, ~15MB binary, <10MB RAM) replacing the previous Goose-based Rust build (250MB binary). The fork is fully rebranded — module path, binary, config dirs, UI, all references.
 
 **Repo:** `github.com/dawnforge-lab/spawnbot-v5`
 **Module:** `github.com/dawnforge-lab/spawnbot-v5`
@@ -13,11 +13,11 @@ Spawnbot v5 is a fork of picoclaw (Go, ~15MB binary, <10MB RAM) replacing the pr
 - Simplicity is the USP — guided onboarding, no JSON fighting
 - Prompt control is non-negotiable — SOUL.md is single source of truth
 - No fallbacks — transparent errors that can be fixed
-- Everything picoclaw has stays — no stripping
+- Everything spawnbot has stays — no stripping
 
 ## Architecture
 
-Spawnbot v5 inherits picoclaw's three-layer architecture:
+Spawnbot v5 inherits spawnbot's three-layer architecture:
 
 ```
 Presentation:  Web UI (enhanced chat) | Telegram | CLI | Discord | Slack | ...
@@ -30,7 +30,7 @@ Business:      AgentLoop → ContextBuilder → Providers (25+)
 Data:          SQLite (FTS5 + sqlite-vec) | JSONL sessions | Workspace files
 ```
 
-### What picoclaw already provides
+### What spawnbot already provides
 
 - 25+ LLM providers (Anthropic, OpenAI, OpenRouter, Gemini, LiteLLM, Ollama, etc.)
 - Full MCP client (stdio, SSE, HTTP) with BM25 tool discovery
@@ -62,7 +62,7 @@ Data:          SQLite (FTS5 + sqlite-vec) | JSONL sessions | Workspace files
 
 Only SOUL.md is injected into the system prompt. It is the single source of truth for the agent's identity and contains references to the other files, which the agent reads via `read_file` when needed. This keeps the system prompt lean.
 
-Picoclaw's existing `LoadBootstrapFiles()` loads AGENT.md, AGENTS.md, SOUL.md, USER.md, and IDENTITY.md. We strip out AGENT.md, AGENTS.md, and IDENTITY.md entirely — remove the loading code, the `AgentDefinition` struct, `definition.go`, and any references. These concepts don't exist in Spawnbot and would create confusion. Only SOUL.md loading remains.
+PicoClaw's (upstream) existing `LoadBootstrapFiles()` loads AGENT.md, AGENTS.md, SOUL.md, USER.md, and IDENTITY.md. We strip out AGENT.md, AGENTS.md, and IDENTITY.md entirely — remove the loading code, the `AgentDefinition` struct, `definition.go`, and any references. These concepts don't exist in Spawnbot and would create confusion. Only SOUL.md loading remains.
 
 ### Workspace files (created at onboarding)
 
@@ -95,13 +95,13 @@ These files contain important context. Read them with read_file when relevant:
 
 2. **`pkg/agent/definition.go`**: Delete entirely. The `AgentDefinition` struct and its `trackedPaths()` method are no longer needed.
 
-3. **`pkg/agent/context.go` — `getIdentity()`**: Replace the hardcoded picoclaw identity string with spawnbot branding. The core rules (always use tools, be helpful, memory instructions) stay the same.
+3. **`pkg/agent/context.go` — `getIdentity()`**: Replace the hardcoded spawnbot identity string with spawnbot branding. The core rules (always use tools, be helpful, memory instructions) stay the same.
 
 4. **`pkg/agent/context.go` — `sourcePaths()`**: Update to track SOUL.md directly instead of going through the deleted `AgentDefinition`.
 
 ## 2. Memory System
 
-Replace picoclaw's flat MEMORY.md approach with a full indexed memory store backed by SQLite with FTS5 and sqlite-vec.
+Replace spawnbot's flat MEMORY.md approach with a full indexed memory store backed by SQLite with FTS5 and sqlite-vec.
 
 ### Architecture
 
@@ -119,7 +119,7 @@ Workspace markdown files (MEMORY.md, daily notes, any .md)
   SQLite Store (pkg/memory/sqlite.go)
   - mattn/go-sqlite3 (CGO) with FTS5 enabled
   - asg017/sqlite-vec-go-bindings/cgo (vector search)
-  - Note: picoclaw uses modernc.org/sqlite elsewhere — the memory
+  - Note: spawnbot uses modernc.org/sqlite elsewhere — the memory
     package uses its own mattn/go-sqlite3 connection with a separate
     driver name ("sqlite3_memory") to avoid conflicts. The two drivers
     coexist via Go's database/sql driver registry.
@@ -192,7 +192,7 @@ Daily notes (`memory/YYYYMM/YYYYMMDD.md`) continue to work as-is — the indexer
 
 ### Cron (existing)
 
-Picoclaw's cron system stays as-is. Supports one-time reminders, recurring tasks, cron expressions, and direct shell command execution.
+PicoClaw's (upstream) cron system stays as-is. Supports one-time reminders, recurring tasks, cron expressions, and direct shell command execution.
 
 ### Idle triggers (new)
 
@@ -236,11 +236,11 @@ Two modes, chosen at onboarding:
 | **YOLO** | All tools auto-approved. Agent acts autonomously. |
 | **Approval** | Dangerous tools (exec, write_file, edit_file) require user confirmation via Telegram or web UI before execution. |
 
-Implementation: uses picoclaw's existing `ToolApprover` hook. A built-in approver checks the mode from config. In Approval mode, it sends a confirmation request to the user's active channel and blocks until approved/rejected.
+Implementation: uses spawnbot's existing `ToolApprover` hook. A built-in approver checks the mode from config. In Approval mode, it sends a confirmation request to the user's active channel and blocks until approved/rejected.
 
 ### Timeout behavior
 
-Picoclaw's hook system has a default 60-second approval timeout (`hooks.defaults.approval_timeout_ms`). For human-in-the-loop approval, this is too short. The built-in approver overrides the timeout to 5 minutes (configurable). On timeout, the tool is denied with a user-visible notification: "Tool {name} was denied — approval timed out after {duration}."
+PicoClaw's (upstream) hook system has a default 60-second approval timeout (`hooks.defaults.approval_timeout_ms`). For human-in-the-loop approval, this is too short. The built-in approver overrides the timeout to 5 minutes (configurable). On timeout, the tool is denied with a user-visible notification: "Tool {name} was denied — approval timed out after {duration}."
 
 Stored in config:
 
@@ -279,7 +279,7 @@ First run of web UI detects no config and shows a step-by-step setup flow with t
 
 ## 6. Web UI Enhancements
 
-Keep picoclaw's existing management pages (config, channels, models, credentials, logs, skills, tools). Enhance the chat page:
+Keep spawnbot's existing management pages (config, channels, models, credentials, logs, skills, tools). Enhance the chat page:
 
 ### Chat page redesign
 
@@ -319,13 +319,13 @@ Implementation: `pkg/memory/embeddings.go` with a `EmbeddingProvider` interface 
 
 | What | From | To |
 |------|------|----|
-| Go module | `github.com/sipeed/picoclaw` | `github.com/dawnforge-lab/spawnbot-v5` |
-| Binary | `picoclaw` | `spawnbot` |
-| Config dir | `~/.picoclaw/` | `~/.spawnbot/` |
-| Config env prefix | `PICOCLAW_*` | `SPAWNBOT_*` |
-| System prompt identity | "picoclaw" | "spawnbot" |
-| Web UI title/branding | PicoClaw | Spawnbot |
-| Package references | All `picoclaw` imports | All `spawnbot` imports |
+| Go module | `github.com/dawnforge-lab/spawnbot-v5` | `github.com/dawnforge-lab/spawnbot-v5` |
+| Binary | `spawnbot` | `spawnbot` |
+| Config dir | `~/.spawnbot/` | `~/.spawnbot/` |
+| Config env prefix | `SPAWNBOT_*` | `SPAWNBOT_*` |
+| System prompt identity | "spawnbot" | "spawnbot" |
+| Web UI title/branding | Spawnbot | Spawnbot |
+| Package references | All `spawnbot` imports | All `spawnbot` imports |
 
 ### Method
 
@@ -333,10 +333,10 @@ Global find-replace across all Go files, configs, frontend, and documentation. T
 
 ## Non-goals for v5
 
-- No changes to picoclaw's provider system (25+ providers work as-is)
+- No changes to spawnbot's provider system (25+ providers work as-is)
 - No changes to MCP client (works as-is)
 - No changes to sub-agent system (spawn/SubTurn work as-is, sub-agents intentionally don't get SOUL)
-- No stripping of any picoclaw features (all channels, tools, providers stay)
+- No stripping of any spawnbot features (all channels, tools, providers stay)
 - No custom TUI (web UI is the primary interface, CLI for headless)
 
 ## File changes summary
@@ -368,4 +368,4 @@ Global find-replace across all Go files, configs, frontend, and documentation. T
 | `cmd/spawnbot/main.go` | Rename entry point |
 | `web/frontend/` | Enhanced chat page + web onboarding wizard |
 | `go.mod` | New module path + mattn/go-sqlite3 + sqlite-vec + charmbracelet/huh + mmcdole/gofeed |
-| Every file | `sipeed/picoclaw` → `dawnforge-lab/spawnbot-v5` |
+| Every file | `dawnforge-lab/spawnbot-v5` → `dawnforge-lab/spawnbot-v5` |

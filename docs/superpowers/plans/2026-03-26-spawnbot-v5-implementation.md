@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Transform picoclaw fork into Spawnbot v5 — rebranded, with semantic memory, autonomy, approval modes, onboarding, and enhanced web UI.
+**Goal:** Transform spawnbot fork into Spawnbot v5 — rebranded, with semantic memory, autonomy, approval modes, onboarding, and enhanced web UI.
 
-**Architecture:** Fork picoclaw (Go agent), full rename to spawnbot, add SQLite-backed semantic memory with FTS5 + sqlite-vec, idle/feed autonomy, YOLO/Approval tool modes, CLI + web onboarding, and enhanced chat frontend.
+**Architecture:** Fork spawnbot (Go agent), full rename to spawnbot, add SQLite-backed semantic memory with FTS5 + sqlite-vec, idle/feed autonomy, YOLO/Approval tool modes, CLI + web onboarding, and enhanced chat frontend.
 
 **Tech Stack:** Go 1.25+, mattn/go-sqlite3 (CGO), asg017/sqlite-vec, charmbracelet/huh, mmcdole/gofeed, TypeScript/Vite (frontend)
 
@@ -14,29 +14,29 @@
 
 ## Phase 1: Full Rebrand (foundation — everything else depends on this)
 
-### Task 1: Commit picoclaw source as base
+### Task 1: Commit spawnbot source as base
 
 **Files:**
-- All picoclaw source files (currently untracked)
+- All spawnbot source files (currently untracked)
 
-- [ ] **Step 1: Add the full picoclaw source**
+- [ ] **Step 1: Add the full spawnbot source**
 
 ```bash
 git add -A
-git commit -m "chore: add picoclaw v0.2.3 source as spawnbot-v5 base"
+git commit -m "chore: add spawnbot v0.2.3 source as spawnbot-v5 base"
 ```
 
 ### Task 2: Rename Go module and all imports
 
 **Files:**
 - Modify: `go.mod:1` (module path)
-- Modify: All 268 `.go` files with `sipeed/picoclaw` imports
+- Modify: All 268 `.go` files with `dawnforge-lab/spawnbot-v5` imports
 
 - [ ] **Step 1: Replace module path in go.mod**
 
 Change line 1 of `go.mod`:
 ```
-module github.com/sipeed/picoclaw
+module github.com/dawnforge-lab/spawnbot-v5
 ```
 to:
 ```
@@ -46,7 +46,7 @@ module github.com/dawnforge-lab/spawnbot-v5
 - [ ] **Step 2: Replace all Go import paths**
 
 ```bash
-find . -name '*.go' -exec sed -i 's|github.com/sipeed/picoclaw|github.com/dawnforge-lab/spawnbot-v5|g' {} +
+find . -name '*.go' -exec sed -i 's|github.com/dawnforge-lab/spawnbot-v5|github.com/dawnforge-lab/spawnbot-v5|g' {} +
 ```
 
 - [ ] **Step 3: Run go mod tidy to verify**
@@ -67,17 +67,17 @@ Expected: PASS, no import errors.
 
 ```bash
 git add -A
-git commit -m "refactor: rename Go module sipeed/picoclaw → dawnforge-lab/spawnbot-v5"
+git commit -m "refactor: rename Go module dawnforge-lab/spawnbot-v5 → dawnforge-lab/spawnbot-v5"
 ```
 
 ### Task 3: Rename branding constants and env vars
 
 **Files:**
-- Modify: `pkg/env.go` (AppName, DefaultPicoClawHome, Logo)
-- Modify: `pkg/config/envkeys.go` (all `PICOCLAW_*` → `SPAWNBOT_*`)
-- Modify: `pkg/config/config.go` (any hardcoded "picoclaw" strings)
+- Modify: `pkg/env.go` (AppName, DefaultSpawnbotHome, Logo)
+- Modify: `pkg/config/envkeys.go` (all `SPAWNBOT_*` → `SPAWNBOT_*`)
+- Modify: `pkg/config/config.go` (any hardcoded "spawnbot" strings)
 - Modify: `pkg/config/defaults.go` (default paths)
-- Modify: `pkg/agent/context.go:95-116` (identity string "picoclaw")
+- Modify: `pkg/agent/context.go:95-116` (identity string "spawnbot")
 
 - [ ] **Step 1: Update pkg/env.go**
 
@@ -91,37 +91,37 @@ const (
 )
 ```
 
-- [ ] **Step 2: Rename DefaultPicoClawHome references across codebase**
+- [ ] **Step 2: Rename DefaultSpawnbotHome references across codebase**
 
 ```bash
-grep -rn "DefaultPicoClawHome" --include="*.go" -l
+grep -rn "DefaultSpawnbotHome" --include="*.go" -l
 # Update each file to use DefaultSpawnbotHome
-find . -name '*.go' -exec sed -i 's/DefaultPicoClawHome/DefaultSpawnbotHome/g' {} +
+find . -name '*.go' -exec sed -i 's/DefaultSpawnbotHome/DefaultSpawnbotHome/g' {} +
 ```
 
 - [ ] **Step 3: Update env var prefix in pkg/config/envkeys.go**
 
-Replace all `PICOCLAW_` with `SPAWNBOT_`:
+Replace all `SPAWNBOT_` with `SPAWNBOT_`:
 ```bash
-sed -i 's/PICOCLAW_/SPAWNBOT_/g' pkg/config/envkeys.go
+sed -i 's/SPAWNBOT_/SPAWNBOT_/g' pkg/config/envkeys.go
 ```
 
 - [ ] **Step 4: Update env var references across codebase**
 
 ```bash
-grep -rn "PICOCLAW_" --include="*.go" -l
+grep -rn "SPAWNBOT_" --include="*.go" -l
 # Update each occurrence
-find . -name '*.go' -exec sed -i 's/PICOCLAW_/SPAWNBOT_/g' {} +
+find . -name '*.go' -exec sed -i 's/SPAWNBOT_/SPAWNBOT_/g' {} +
 ```
 
 - [ ] **Step 5: Update identity string in pkg/agent/context.go getIdentity()**
 
-Replace "picoclaw" with "spawnbot" and "🦞" with "🤖" in the `getIdentity()` function (lines 89-116).
+Replace "spawnbot" with "spawnbot" and "🦞" with "🤖" in the `getIdentity()` function (lines 89-116).
 
-- [ ] **Step 6: Grep for any remaining "picoclaw" in Go files**
+- [ ] **Step 6: Grep for any remaining "spawnbot" in Go files**
 
 ```bash
-grep -rni "picoclaw" --include="*.go" | grep -v "_test.go" | grep -v "vendor/"
+grep -rni "spawnbot" --include="*.go" | grep -v "_test.go" | grep -v "vendor/"
 ```
 Fix any remaining references.
 
@@ -136,36 +136,36 @@ go test ./pkg/... -count=1 -short 2>&1 | tail -20
 
 ```bash
 git add -A
-git commit -m "refactor: rebrand PicoClaw → Spawnbot (constants, env vars, identity)"
+git commit -m "refactor: rebrand Spawnbot → Spawnbot (constants, env vars, identity)"
 ```
 
 ### Task 4: Rename binary entry points
 
 **Files:**
-- Rename: `cmd/picoclaw/` → `cmd/spawnbot/`
-- Rename: `cmd/picoclaw-launcher-tui/` → `cmd/spawnbot-launcher-tui/`
+- Rename: `cmd/spawnbot/` → `cmd/spawnbot/`
+- Rename: `cmd/spawnbot-launcher-tui/` → `cmd/spawnbot-launcher-tui/`
 - Modify: `Makefile` (binary names, build targets)
 - Modify: `web/backend/main.go` (subprocess binary name)
 
 - [ ] **Step 1: Rename cmd directories**
 
 ```bash
-mv cmd/picoclaw cmd/spawnbot
-mv cmd/picoclaw-launcher-tui cmd/spawnbot-launcher-tui
+mv cmd/spawnbot cmd/spawnbot
+mv cmd/spawnbot-launcher-tui cmd/spawnbot-launcher-tui
 ```
 
 - [ ] **Step 2: Update Makefile binary names**
 
-Replace all `picoclaw` binary references with `spawnbot` in Makefile.
+Replace all `spawnbot` binary references with `spawnbot` in Makefile.
 
 - [ ] **Step 3: Update web backend subprocess launch**
 
-In `web/backend/main.go`, update the binary name used when spawning the core subprocess from "picoclaw" to "spawnbot".
+In `web/backend/main.go`, update the binary name used when spawning the core subprocess from "spawnbot" to "spawnbot".
 
 - [ ] **Step 4: Update any other binary name references**
 
 ```bash
-grep -rn '"picoclaw"' --include="*.go" | grep -v "_test.go"
+grep -rn '"spawnbot"' --include="*.go" | grep -v "_test.go"
 ```
 Fix remaining hardcoded binary name strings.
 
@@ -181,25 +181,25 @@ Expected: shows "Spawnbot" in output.
 
 ```bash
 git add -A
-git commit -m "refactor: rename binary picoclaw → spawnbot"
+git commit -m "refactor: rename binary spawnbot → spawnbot"
 ```
 
 ### Task 5: Rebrand frontend
 
 **Files:**
-- Modify: `web/frontend/` (~12 files with "picoclaw" references)
+- Modify: `web/frontend/` (~12 files with "spawnbot" references)
 - Modify: `web/frontend/index.html` (title)
 - Modify: `web/frontend/package.json` (name)
 
-- [ ] **Step 1: Find all frontend picoclaw references**
+- [ ] **Step 1: Find all frontend spawnbot references**
 
 ```bash
-grep -rni "picoclaw" web/frontend/ --include="*.ts" --include="*.tsx" --include="*.json" --include="*.html" --include="*.css"
+grep -rni "spawnbot" web/frontend/ --include="*.ts" --include="*.tsx" --include="*.json" --include="*.html" --include="*.css"
 ```
 
 - [ ] **Step 2: Replace all occurrences**
 
-Replace "PicoClaw" / "picoclaw" with "Spawnbot" / "spawnbot" in all frontend files.
+Replace "Spawnbot" / "spawnbot" with "Spawnbot" / "spawnbot" in all frontend files.
 
 - [ ] **Step 3: Update page title in index.html**
 
@@ -214,7 +214,7 @@ Expected: PASS.
 
 ```bash
 git add -A
-git commit -m "refactor: rebrand frontend PicoClaw → Spawnbot"
+git commit -m "refactor: rebrand frontend Spawnbot → Spawnbot"
 ```
 
 ---
@@ -603,7 +603,7 @@ Test each tool's `Execute()` method with mock store.
 
 - [ ] **Step 2: Implement tools**
 
-Three tools implementing picoclaw's `tools.Tool` interface:
+Three tools implementing spawnbot's `tools.Tool` interface:
 - `MemoryStoreTool` — stores a new memory chunk (agent calls this when something is worth remembering)
 - `MemorySearchTool` — runs hybrid search, returns ranked results
 - `MemoryRecallTool` — retrieves by source file or heading
@@ -1102,7 +1102,7 @@ git commit -m "test: add end-to-end integration test"
 
 **Files:**
 - Modify: `README.md`
-- Delete or update any picoclaw-specific docs
+- Delete or update any spawnbot-specific docs
 
 - [ ] **Step 1: Rewrite README for Spawnbot v5**
 
