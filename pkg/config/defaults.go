@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/autonomy"
 )
 
 // DefaultConfig returns the default configuration for Spawnbot.
@@ -520,6 +521,13 @@ func DefaultConfig() *Config {
 			APIKey:     "",
 			BaseURL:    "",
 			Dimensions: 768,
+		},
+		Autonomy: autonomy.AutonomyConfig{
+			IdleTrigger: autonomy.IdleTriggerConfig{
+				Enabled:        false,
+				ThresholdHours: 8,
+			},
+			Feeds: nil,
 		},
 		BuildInfo: BuildInfo{
 			Version:   Version,

@@ -12,6 +12,7 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/autonomy"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/credential"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
@@ -95,8 +96,9 @@ type Config struct {
 	Tools     ToolsConfig     `json:"tools"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
 	Devices   DevicesConfig   `json:"devices"`
-	Voice      VoiceConfig      `json:"voice"`
-	Embeddings EmbeddingsConfig `json:"embeddings"`
+	Voice      VoiceConfig              `json:"voice"`
+	Embeddings EmbeddingsConfig         `json:"embeddings"`
+	Autonomy   autonomy.AutonomyConfig  `json:"autonomy"`
 	// BuildInfo contains build-time version information
 	BuildInfo BuildInfo `json:"build_info,omitempty"`
 

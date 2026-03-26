@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agent"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/autonomy"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/dingtalk"
@@ -30,6 +31,7 @@ import (
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/whatsapp"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/whatsapp_native"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/constants"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/cron"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/devices"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/health"
@@ -59,6 +61,9 @@ type services struct {
 	ChannelManager   *channels.Manager
 	DeviceService    *devices.Service
 	HealthServer     *health.Server
+	IdleMonitor      *autonomy.IdleMonitor
+	FeedPoller       *autonomy.FeedPoller
+	autonomyCancel   context.CancelFunc // cancels idle monitor and feed poller
 	manualReloadChan chan struct{}
 	reloading        atomic.Bool
 }
@@ -339,12 +344,26 @@ func setupAndStartServices(
 		fmt.Println("✓ Device event service started")
 	}
 
+	// --- Autonomy: idle monitor & feed poller ---
+	setupAutonomy(cfg, agentLoop, msgBus, runningServices)
+
 	return runningServices, nil
 }
 
 func stopAndCleanupServices(runningServices *services, shutdownTimeout time.Duration, isReload bool) {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer shutdownCancel()
+
+	// Stop autonomy services first (they depend on the bus being open)
+	if runningServices.autonomyCancel != nil {
+		runningServices.autonomyCancel()
+		runningServices.autonomyCancel = nil
+	}
+	if runningServices.FeedPoller != nil {
+		runningServices.FeedPoller.Stop()
+		runningServices.FeedPoller = nil
+	}
+	runningServices.IdleMonitor = nil
 
 	// reload should not stop channel manager
 	if !isReload && runningServices.ChannelManager != nil {
@@ -535,6 +554,9 @@ func restartServices(
 		logger.InfoCF("voice", "Transcription disabled", nil)
 	}
 
+	// Re-setup autonomy services after reload
+	setupAutonomy(cfg, al, msgBus, runningServices)
+
 	return nil
 }
 
@@ -667,5 +689,113 @@ func createHeartbeatHandler(agentLoop *agent.AgentLoop) func(prompt, channel, ch
 			return tools.SilentResult("Heartbeat OK")
 		}
 		return tools.SilentResult(response)
+	}
+}
+
+// setupAutonomy configures and starts the idle monitor and feed poller based
+// on the autonomy config. It is safe to call on reload — previous autonomy
+// services should already be stopped via stopAndCleanupServices.
+func setupAutonomy(
+	cfg *config.Config,
+	agentLoop *agent.AgentLoop,
+	msgBus *bus.MessageBus,
+	svc *services,
+) {
+	autoCfg := cfg.Autonomy
+	autoCtx, autoCancel := context.WithCancel(context.Background())
+	svc.autonomyCancel = autoCancel
+
+	// --- Idle Monitor ---
+	if autoCfg.IdleTrigger.Enabled && autoCfg.IdleTrigger.ThresholdHours > 0 {
+		threshold := time.Duration(autoCfg.IdleTrigger.ThresholdHours) * time.Hour
+
+		idleCb := func(channel string) {
+			logger.InfoCF("autonomy", "Idle trigger fired", map[string]any{
+				"channel":   channel,
+				"threshold": threshold.String(),
+			})
+
+			// The channel key is "platform:chatID" — split to route via system message.
+			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer pubCancel()
+			_ = msgBus.PublishInbound(pubCtx, bus.InboundMessage{
+				Channel:  "system",
+				SenderID: "autonomy:idle",
+				ChatID:   channel, // already "platform:chatID" format
+				Content:  fmt.Sprintf("No user activity for %s. Check in on the user or review pending tasks.", threshold),
+			})
+		}
+
+		svc.IdleMonitor = autonomy.NewIdleMonitor(threshold, idleCb)
+		svc.IdleMonitor.Start(autoCtx)
+
+		// Hook inbound messages so the idle monitor tracks activity.
+		agentLoop.SetInboundHook(func(msg bus.InboundMessage) {
+			if constants.IsInternalChannel(msg.Channel) {
+				return
+			}
+			if msg.Channel != "" && msg.ChatID != "" {
+				svc.IdleMonitor.RecordActivity(fmt.Sprintf("%s:%s", msg.Channel, msg.ChatID))
+			}
+		})
+
+		logger.InfoCF("autonomy", "Idle monitor started", map[string]any{
+			"threshold_hours": autoCfg.IdleTrigger.ThresholdHours,
+		})
+		fmt.Printf("✓ Idle monitor started (threshold: %dh)\n", autoCfg.IdleTrigger.ThresholdHours)
+	}
+
+	// --- Feed Poller ---
+	if len(autoCfg.Feeds) > 0 {
+		feedCb := func(items []autonomy.FeedItem, feedCfg autonomy.FeedConfig) {
+			if len(items) == 0 {
+				return
+			}
+
+			// Build a summary of new items.
+			var summary string
+			if len(items) == 1 {
+				summary = fmt.Sprintf("New feed item from %s:\n• %s — %s",
+					feedCfg.URL, items[0].Title, items[0].Link)
+			} else {
+				summary = fmt.Sprintf("%d new feed items from %s:\n", len(items), feedCfg.URL)
+				for i, item := range items {
+					if i >= 10 {
+						summary += fmt.Sprintf("• ... and %d more\n", len(items)-10)
+						break
+					}
+					summary += fmt.Sprintf("• %s — %s\n", item.Title, item.Link)
+				}
+			}
+
+			// Route to the configured notify channel via system message.
+			chatID := feedCfg.NotifyChannel + ":" + feedCfg.NotifyChatID
+			if feedCfg.NotifyChannel == "" || feedCfg.NotifyChatID == "" {
+				chatID = "cli:direct"
+			}
+
+			logger.InfoCF("autonomy", "Feed poller: new items", map[string]any{
+				"feed":       feedCfg.URL,
+				"item_count": len(items),
+				"target":     chatID,
+			})
+
+			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer pubCancel()
+			_ = msgBus.PublishInbound(pubCtx, bus.InboundMessage{
+				Channel:  "system",
+				SenderID: "autonomy:feed",
+				ChatID:   chatID,
+				Content:  summary,
+			})
+		}
+
+		svc.FeedPoller = autonomy.NewFeedPoller(autoCfg.Feeds, feedCb)
+		svc.FeedPoller.Start(autoCtx)
+
+		logger.InfoCF("autonomy", "Feed poller started", map[string]any{
+			"feed_count": len(autoCfg.Feeds),
+		})
+		fmt.Printf("✓ Feed poller started (%d feeds)\n", len(autoCfg.Feeds))
 	}
 }

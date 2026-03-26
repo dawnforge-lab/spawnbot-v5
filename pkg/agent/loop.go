@@ -67,7 +67,8 @@ type AgentLoop struct {
 	turnSeq        atomic.Uint64
 	activeRequests sync.WaitGroup
 
-	reloadFunc func() error
+	reloadFunc   func() error
+	inboundHook  func(msg bus.InboundMessage) // optional hook called on every inbound message
 }
 
 // processOptions configures how a message is processed
@@ -400,6 +401,11 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 		case msg, ok := <-al.bus.InboundChan():
 			if !ok {
 				return nil
+			}
+
+			// Notify inbound hook (used for idle activity tracking).
+			if al.inboundHook != nil {
+				al.inboundHook(msg)
 			}
 
 			// Start a goroutine that drains the bus while processMessage is
@@ -1049,6 +1055,13 @@ func (al *AgentLoop) SetTranscriber(t voice.Transcriber) {
 // SetReloadFunc sets the callback function for triggering config reload.
 func (al *AgentLoop) SetReloadFunc(fn func() error) {
 	al.reloadFunc = fn
+}
+
+// SetInboundHook registers a callback that is called for every inbound message
+// before it is processed. This is used by the gateway to track channel activity
+// for idle triggers and similar autonomy features.
+func (al *AgentLoop) SetInboundHook(fn func(msg bus.InboundMessage)) {
+	al.inboundHook = fn
 }
 
 var audioAnnotationRe = regexp.MustCompile(`\[(voice|audio)(?::[^\]]*)?\]`)
