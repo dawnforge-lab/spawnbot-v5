@@ -250,6 +250,17 @@ func (s *SQLiteStore) SearchVec(queryEmbedding []float32, limit int) ([]ScoredCh
 	return results, rows.Err()
 }
 
+// HasContentHash reports whether a chunk with the given SHA-256 content hash
+// already exists in the store.
+func (s *SQLiteStore) HasContentHash(hash string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM memory_chunks WHERE content_hash = ?)`, hash).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check content hash: %w", err)
+	}
+	return exists, nil
+}
+
 // Close closes the underlying database connection.
 func (s *SQLiteStore) Close() error {
 	if s.db != nil {
