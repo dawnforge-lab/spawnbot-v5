@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package config
 
@@ -85,61 +85,61 @@ type ChannelsSecurity struct {
 }
 
 type TelegramSecurity struct {
-	Token string `yaml:"token,omitempty" env:"PICOCLAW_CHANNELS_TELEGRAM_TOKEN"`
+	Token string `yaml:"token,omitempty" env:"SPAWNBOT_CHANNELS_TELEGRAM_TOKEN"`
 }
 
 type FeishuSecurity struct {
-	AppSecret         string `yaml:"app_secret,omitempty"         env:"PICOCLAW_CHANNELS_FEISHU_APP_SECRET"`
-	EncryptKey        string `yaml:"encrypt_key,omitempty"        env:"PICOCLAW_CHANNELS_FEISHU_ENCRYPT_KEY"`
-	VerificationToken string `yaml:"verification_token,omitempty" env:"PICOCLAW_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
+	AppSecret         string `yaml:"app_secret,omitempty"         env:"SPAWNBOT_CHANNELS_FEISHU_APP_SECRET"`
+	EncryptKey        string `yaml:"encrypt_key,omitempty"        env:"SPAWNBOT_CHANNELS_FEISHU_ENCRYPT_KEY"`
+	VerificationToken string `yaml:"verification_token,omitempty" env:"SPAWNBOT_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
 }
 
 type DiscordSecurity struct {
-	Token string `yaml:"token,omitempty" env:"PICOCLAW_CHANNELS_DISCORD_TOKEN"`
+	Token string `yaml:"token,omitempty" env:"SPAWNBOT_CHANNELS_DISCORD_TOKEN"`
 }
 
 type WeixinSecurity struct {
-	Token string `yaml:"token,omitempty" env:"PICOCLAW_CHANNELS_WEIXIN_TOKEN"`
+	Token string `yaml:"token,omitempty" env:"SPAWNBOT_CHANNELS_WEIXIN_TOKEN"`
 }
 
 type QQSecurity struct {
-	AppSecret string `yaml:"app_secret,omitempty" env:"PICOCLAW_CHANNELS_QQ_APP_SECRET"`
+	AppSecret string `yaml:"app_secret,omitempty" env:"SPAWNBOT_CHANNELS_QQ_APP_SECRET"`
 }
 
 type DingTalkSecurity struct {
-	ClientSecret string `yaml:"client_secret,omitempty" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
+	ClientSecret string `yaml:"client_secret,omitempty" env:"SPAWNBOT_CHANNELS_DINGTALK_CLIENT_SECRET"`
 }
 
 type SlackSecurity struct {
-	BotToken string `yaml:"bot_token,omitempty" env:"PICOCLAW_CHANNELS_SLACK_BOT_TOKEN"`
-	AppToken string `yaml:"app_token,omitempty" env:"PICOCLAW_CHANNELS_SLACK_APP_TOKEN"`
+	BotToken string `yaml:"bot_token,omitempty" env:"SPAWNBOT_CHANNELS_SLACK_BOT_TOKEN"`
+	AppToken string `yaml:"app_token,omitempty" env:"SPAWNBOT_CHANNELS_SLACK_APP_TOKEN"`
 }
 
 type MatrixSecurity struct {
-	AccessToken string `yaml:"access_token,omitempty" env:"PICOCLAW_CHANNELS_MATRIX_ACCESS_TOKEN"`
+	AccessToken string `yaml:"access_token,omitempty" env:"SPAWNBOT_CHANNELS_MATRIX_ACCESS_TOKEN"`
 }
 
 type LINESecurity struct {
-	ChannelSecret      string `yaml:"channel_secret,omitempty"       env:"PICOCLAW_CHANNELS_LINE_CHANNEL_SECRET"`
-	ChannelAccessToken string `yaml:"channel_access_token,omitempty" env:"PICOCLAW_CHANNELS_LINE_CHANNEL_ACCESS_TOKEN"`
+	ChannelSecret      string `yaml:"channel_secret,omitempty"       env:"SPAWNBOT_CHANNELS_LINE_CHANNEL_SECRET"`
+	ChannelAccessToken string `yaml:"channel_access_token,omitempty" env:"SPAWNBOT_CHANNELS_LINE_CHANNEL_ACCESS_TOKEN"`
 }
 
 type OneBotSecurity struct {
-	AccessToken string `yaml:"access_token,omitempty" env:"PICOCLAW_CHANNELS_ONEBOT_ACCESS_TOKEN"`
+	AccessToken string `yaml:"access_token,omitempty" env:"SPAWNBOT_CHANNELS_ONEBOT_ACCESS_TOKEN"`
 }
 
 type WeComSecurity struct {
-	Secret string `yaml:"secret,omitempty" env:"PICOCLAW_CHANNELS_WECOM_SECRET"`
+	Secret string `yaml:"secret,omitempty" env:"SPAWNBOT_CHANNELS_WECOM_SECRET"`
 }
 
 type PicoSecurity struct {
-	Token string `yaml:"token,omitempty" env:"PICOCLAW_CHANNELS_PICO_TOKEN"`
+	Token string `yaml:"token,omitempty" env:"SPAWNBOT_CHANNELS_PICO_TOKEN"`
 }
 
 type IRCSecurity struct {
-	Password         string `yaml:"password,omitempty"          env:"PICOCLAW_CHANNELS_IRC_PASSWORD"`
-	NickServPassword string `yaml:"nickserv_password,omitempty" env:"PICOCLAW_CHANNELS_IRC_NICKSERV_PASSWORD"`
-	SASLPassword     string `yaml:"sasl_password,omitempty"     env:"PICOCLAW_CHANNELS_IRC_SASL_PASSWORD"`
+	Password         string `yaml:"password,omitempty"          env:"SPAWNBOT_CHANNELS_IRC_PASSWORD"`
+	NickServPassword string `yaml:"nickserv_password,omitempty" env:"SPAWNBOT_CHANNELS_IRC_NICKSERV_PASSWORD"`
+	SASLPassword     string `yaml:"sasl_password,omitempty"     env:"SPAWNBOT_CHANNELS_IRC_SASL_PASSWORD"`
 }
 
 type WebToolsSecurity struct {
@@ -167,7 +167,7 @@ type GLMSearchSecurity struct {
 }
 
 type BaiduSearchSecurity struct {
-	APIKey string `yaml:"api_key,omitempty" env:"PICOCLAW_TOOLS_WEB_BAIDU_API_KEY"`
+	APIKey string `yaml:"api_key,omitempty" env:"SPAWNBOT_TOOLS_WEB_BAIDU_API_KEY"`
 }
 
 type SkillsSecurity struct {

@@ -25,17 +25,17 @@ func TestParseGitHubRef(t *testing.T) {
 	}{
 		{
 			name:         "simple owner/repo",
-			repo:         "sipeed/picoclaw",
+			repo:         "sipeed/spawnbot",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
 		{
 			name:         "owner/repo with subpath",
-			repo:         "sipeed/picoclaw/skills/test",
+			repo:         "sipeed/spawnbot/skills/test",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "main",
 			wantSubPath:  "skills/test",
 		},
@@ -43,7 +43,7 @@ func TestParseGitHubRef(t *testing.T) {
 			name:         "full URL with tree",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/tree/dev/skills/test",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "dev",
 			wantSubPath:  "skills/test",
 		},
@@ -51,7 +51,7 @@ func TestParseGitHubRef(t *testing.T) {
 			name:         "full URL with blob",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/blob/main/README.md",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "main",
 			wantSubPath:  "README.md",
 		},
@@ -59,7 +59,7 @@ func TestParseGitHubRef(t *testing.T) {
 			name:         "full URL without ref",
 			repo:         "https://github.com/dawnforge-lab/spawnbot-v5",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
@@ -83,9 +83,9 @@ func TestParseGitHubRef(t *testing.T) {
 		},
 		{
 			name:         "with whitespace",
-			repo:         "  sipeed/picoclaw  ",
+			repo:         "  sipeed/spawnbot  ",
 			wantOwner:    "sipeed",
-			wantRepoName: "picoclaw",
+			wantRepoName: "spawnbot",
 			wantRef:      "main",
 			wantSubPath:  "",
 		},
@@ -431,12 +431,12 @@ func TestSkillInstaller_InstallFromGitHub_SkillAlreadyExists(t *testing.T) {
 	}
 
 	// Create an existing skill directory
-	existingSkill := filepath.Join(skillsDir, "picoclaw")
+	existingSkill := filepath.Join(skillsDir, "spawnbot")
 	os.MkdirAll(existingSkill, 0o755)
 	os.WriteFile(filepath.Join(existingSkill, "SKILL.md"), []byte("existing"), 0o644)
 
 	// Try to install the same skill - should fail
-	err = installer.InstallFromGitHub(context.Background(), "sipeed/picoclaw")
+	err = installer.InstallFromGitHub(context.Background(), "sipeed/spawnbot")
 	if err == nil {
 		t.Error("InstallFromGitHub() expected error for existing skill, got nil")
 	}

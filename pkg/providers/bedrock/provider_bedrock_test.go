@@ -1,9 +1,9 @@
 //go:build bedrock
 
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package bedrock
 

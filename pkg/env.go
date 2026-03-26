@@ -3,10 +3,10 @@
 package pkg
 
 const (
-	Logo = "🦞"
+	Logo = "🤖"
 	// AppName is the name of the app
-	AppName = "PicoClaw"
+	AppName = "Spawnbot"
 
-	DefaultPicoClawHome = ".picoclaw"
+	DefaultSpawnbotHome = ".spawnbot"
 	WorkspaceName       = "workspace"
 )

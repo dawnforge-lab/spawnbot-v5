@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package main
 
@@ -23,7 +23,7 @@ func main() {
 
 	configDir := filepath.Dir(configPath)
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		cmd := exec.Command("picoclaw", "onboard")
+		cmd := exec.Command("spawnbot", "onboard")
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -32,7 +32,7 @@ func main() {
 
 	cfg, err := tuicfg.Load(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "picoclaw-launcher-tui: %v\n", err)
+		fmt.Fprintf(os.Stderr, "spawnbot-launcher-tui: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -42,7 +42,7 @@ func main() {
 		_ = tuicfg.SyncSelectedModelToMainConfig(scheme, user, modelID)
 	}
 	if err := app.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "picoclaw-launcher-tui: %v\n", err)
+		fmt.Fprintf(os.Stderr, "spawnbot-launcher-tui: %v\n", err)
 		os.Exit(1)
 	}
 }

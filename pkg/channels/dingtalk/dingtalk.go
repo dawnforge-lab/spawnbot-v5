@@ -1,4 +1,4 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // DingTalk channel implementation using Stream Mode
 
 package dingtalk
@@ -214,7 +214,7 @@ func (c *DingTalkChannel) SendDirectReply(ctx context.Context, sessionWebhook, c
 
 	// Convert string content to []byte for the API
 	contentBytes := []byte(content)
-	titleBytes := []byte("PicoClaw")
+	titleBytes := []byte("Spawnbot")
 
 	// Send markdown formatted reply
 	err := replier.SimpleReplyMarkdown(

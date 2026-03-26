@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package config
 
@@ -12,16 +12,16 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 )
 
-// DefaultConfig returns the default configuration for PicoClaw.
+// DefaultConfig returns the default configuration for Spawnbot.
 func DefaultConfig() *Config {
 	// Determine the base path for the workspace.
-	// Priority: $PICOCLAW_HOME > ~/.picoclaw
+	// Priority: $SPAWNBOT_HOME > ~/.spawnbot
 	var homePath string
-	if picoclawHome := os.Getenv(EnvHome); picoclawHome != "" {
-		homePath = picoclawHome
+	if spawnbotHome := os.Getenv(EnvHome); spawnbotHome != "" {
+		homePath = spawnbotHome
 	} else {
 		userHome, _ := os.UserHomeDir()
-		homePath = filepath.Join(userHome, pkg.DefaultPicoClawHome)
+		homePath = filepath.Join(userHome, pkg.DefaultSpawnbotHome)
 	}
 	workspacePath := filepath.Join(homePath, pkg.WorkspaceName)
 

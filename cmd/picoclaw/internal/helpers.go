@@ -11,21 +11,21 @@ import (
 
 const Logo = pkg.Logo
 
-// GetPicoclawHome returns the picoclaw home directory.
-// Priority: $PICOCLAW_HOME > ~/.picoclaw
-func GetPicoclawHome() string {
+// GetSpawnbotHome returns the spawnbot home directory.
+// Priority: $SPAWNBOT_HOME > ~/.spawnbot
+func GetSpawnbotHome() string {
 	if home := os.Getenv(config.EnvHome); home != "" {
 		return home
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, pkg.DefaultPicoClawHome)
+	return filepath.Join(home, pkg.DefaultSpawnbotHome)
 }
 
 func GetConfigPath() string {
 	if configPath := os.Getenv(config.EnvConfig); configPath != "" {
 		return configPath
 	}
-	return filepath.Join(GetPicoclawHome(), "config.json")
+	return filepath.Join(GetSpawnbotHome(), "config.json")
 }
 
 func LoadConfig() (*config.Config, error) {

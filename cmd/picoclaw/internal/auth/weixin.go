@@ -23,11 +23,11 @@ func newWeixinCommand() *cobra.Command {
 		Long: `Start the interactive Weixin (WeChat personal) QR code login flow.
 
 A QR code is displayed in the terminal. Scan it with the WeChat mobile app
-to authorize your account. On success, the bot token is saved to the picoclaw
+to authorize your account. On success, the bot token is saved to the spawnbot
 config so you can start the gateway immediately.
 
 Example:
-  picoclaw auth weixin`,
+  spawnbot auth weixin`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runWeixinOnboard(baseURL, proxy, time.Duration(timeout)*time.Second)
 		},
@@ -78,7 +78,7 @@ func runWeixinOnboard(baseURL, proxy string, timeout time.Duration) error {
 
 	fmt.Println("✓ Config updated. Start the gateway with:")
 	fmt.Println()
-	fmt.Println("  picoclaw gateway")
+	fmt.Println("  spawnbot gateway")
 	fmt.Println()
 	fmt.Println("To restrict which WeChat users can send messages, add their user IDs")
 	fmt.Println("to channels.weixin.allow_from in your config.")
@@ -110,7 +110,7 @@ func saveWeixinConfig(token, baseURL, proxy string) error {
 
 func printManualWeixinConfig(token, baseURL string) {
 	fmt.Println()
-	fmt.Println("Add the following to the channels section of your picoclaw config:")
+	fmt.Println("Add the following to the channels section of your spawnbot config:")
 	fmt.Println()
 	fmt.Println(`  "weixin": {`)
 	fmt.Println(`    "enabled": true,`)

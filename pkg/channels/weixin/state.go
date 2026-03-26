@@ -36,12 +36,12 @@ type syncCursorFile struct {
 	GetUpdatesBuf string `json:"get_updates_buf"`
 }
 
-func picoclawHomeDir() string {
+func spawnbotHomeDir() string {
 	if home := os.Getenv(config.EnvHome); home != "" {
 		return home
 	}
 	userHome, _ := os.UserHomeDir()
-	return filepath.Join(userHome, ".picoclaw")
+	return filepath.Join(userHome, ".spawnbot")
 }
 
 func buildWeixinSyncBufPath(cfg config.WeixinConfig) string {
@@ -51,7 +51,7 @@ func buildWeixinSyncBufPath(cfg config.WeixinConfig) string {
 		sum := sha256.Sum256([]byte(strings.TrimSpace(cfg.BaseURL) + "|" + token))
 		key = hex.EncodeToString(sum[:8])
 	}
-	return filepath.Join(picoclawHomeDir(), "channels", "weixin", "sync", key+".json")
+	return filepath.Join(spawnbotHomeDir(), "channels", "weixin", "sync", key+".json")
 }
 
 func loadGetUpdatesBuf(path string) (string, error) {

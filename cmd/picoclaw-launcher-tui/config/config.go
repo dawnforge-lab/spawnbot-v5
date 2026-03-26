@@ -1,9 +1,9 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
-// Package config provides types and I/O for ~/.picoclaw/tui.toml.
+// Package config provides types and I/O for ~/.spawnbot/tui.toml.
 package config
 
 import (
@@ -24,10 +24,10 @@ func DefaultConfigPath() string {
 	if err != nil {
 		home = "."
 	}
-	return filepath.Join(home, ".picoclaw", "tui.toml")
+	return filepath.Join(home, ".spawnbot", "tui.toml")
 }
 
-// TUIConfig is the top-level structure of ~/.picoclaw/tui.toml.
+// TUIConfig is the top-level structure of ~/.spawnbot/tui.toml.
 type TUIConfig struct {
 	Version  string   `toml:"version"`
 	Model    Model    `toml:"model"`
@@ -151,7 +151,7 @@ func (p *Provider) UsersForScheme(schemeName string) []User {
 	return out
 }
 
-// SyncSelectedModelToMainConfig syncs the currently selected model to ~/.picoclaw/config.json
+// SyncSelectedModelToMainConfig syncs the currently selected model to ~/.spawnbot/config.json
 // Adds/replaces a "tui-prefer" model entry and sets it as the default model.
 // Preserves all other existing fields in the config file unchanged.
 func SyncSelectedModelToMainConfig(scheme Scheme, user User, modelID string) error {
@@ -159,7 +159,7 @@ func SyncSelectedModelToMainConfig(scheme Scheme, user User, modelID string) err
 	if err != nil {
 		home = "."
 	}
-	mainConfigPath := filepath.Join(home, ".picoclaw", "config.json")
+	mainConfigPath := filepath.Join(home, ".spawnbot", "config.json")
 
 	var cfg map[string]any
 	if data, readErr := os.ReadFile(mainConfigPath); readErr == nil {

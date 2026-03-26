@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package ui
 
@@ -39,7 +39,7 @@ func (a *App) newChannelsPage() tview.Primitive {
 		if err != nil {
 			home = "."
 		}
-		configPath := filepath.Join(home, ".picoclaw", "config.json")
+		configPath := filepath.Join(home, ".spawnbot", "config.json")
 
 		var cfg map[string]any
 		if data, err := os.ReadFile(configPath); err == nil {

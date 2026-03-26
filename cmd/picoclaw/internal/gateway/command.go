@@ -19,7 +19,7 @@ func NewGatewayCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "gateway",
 		Aliases: []string{"g"},
-		Short:   "Start picoclaw gateway",
+		Short:   "Start spawnbot gateway",
 		Args:    cobra.NoArgs,
 		PreRunE: func(_ *cobra.Command, _ []string) error {
 			if noTruncate && !debug {
@@ -34,7 +34,7 @@ func NewGatewayCommand() *cobra.Command {
 			return nil
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return gateway.Run(debug, internal.GetPicoclawHome(), internal.GetConfigPath(), allowEmpty)
+			return gateway.Run(debug, internal.GetSpawnbotHome(), internal.GetConfigPath(), allowEmpty)
 		},
 	}
 

@@ -316,7 +316,7 @@ func globalConfigDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".picoclaw")
+	return filepath.Join(home, ".spawnbot")
 }
 
 func builtinSkillsDir() string {

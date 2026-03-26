@@ -1,13 +1,13 @@
-// PicoClaw Web Console - Web-based chat and management interface
+// Spawnbot Web Console - Web-based chat and management interface
 //
-// Provides a web UI for chatting with PicoClaw via the Pico Channel WebSocket,
+// Provides a web UI for chatting with Spawnbot via the Pico Channel WebSocket,
 // with configuration management and gateway process control.
 //
 // Usage:
 //
-//	go build -o picoclaw-web ./web/backend/
-//	./picoclaw-web [config.json]
-//	./picoclaw-web -public config.json
+//	go build -o spawnbot-web ./web/backend/
+//	./spawnbot-web [config.json]
+//	./spawnbot-web -public config.json
 
 package main
 
@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appName = "PicoClaw"
+	appName = "Spawnbot"
 
 	logPath   = "logs"
 	panicFile = "launcher_panic.log"
@@ -57,10 +57,10 @@ func main() {
 	console := flag.Bool("console", false, "Console mode, no GUI")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "PicoClaw Launcher - A web-based configuration editor\n\n")
+		fmt.Fprintf(os.Stderr, "Spawnbot Launcher - A web-based configuration editor\n\n")
 		fmt.Fprintf(os.Stderr, "Usage: %s [options] [config.json]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Arguments:\n")
-		fmt.Fprintf(os.Stderr, "  config.json    Path to the configuration file (default: ~/.picoclaw/config.json)\n\n")
+		fmt.Fprintf(os.Stderr, "  config.json    Path to the configuration file (default: ~/.spawnbot/config.json)\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
@@ -75,7 +75,7 @@ func main() {
 	flag.Parse()
 
 	// Initialize logger
-	picoHome := utils.GetPicoclawHome()
+	picoHome := utils.GetSpawnbotHome()
 
 	f := filepath.Join(picoHome, logPath, panicFile)
 	panicFunc, err := logger.InitPanic(f)
@@ -99,7 +99,7 @@ func main() {
 	}
 
 	logger.InfoC("web", fmt.Sprintf("%s Launcher %s starting...", appName, appVersion))
-	logger.InfoC("web", fmt.Sprintf("PicoClaw Home: %s", picoHome))
+	logger.InfoC("web", fmt.Sprintf("Spawnbot Home: %s", picoHome))
 
 	// Set language from command line or auto-detect
 	if *lang != "" {
@@ -118,7 +118,7 @@ func main() {
 	}
 	err = utils.EnsureOnboarded(absPath)
 	if err != nil {
-		logger.Errorf("Warning: Failed to initialize PicoClaw config automatically: %v", err)
+		logger.Errorf("Warning: Failed to initialize Spawnbot config automatically: %v", err)
 	}
 
 	var explicitPort bool

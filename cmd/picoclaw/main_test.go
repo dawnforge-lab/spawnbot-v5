@@ -17,9 +17,9 @@ func TestNewPicoclawCommand(t *testing.T) {
 
 	require.NotNil(t, cmd)
 
-	short := fmt.Sprintf("%s picoclaw - Personal AI Assistant v%s\n\n", internal.Logo, config.GetVersion())
+	short := fmt.Sprintf("%s spawnbot - Personal AI Assistant v%s\n\n", internal.Logo, config.GetVersion())
 
-	assert.Equal(t, "picoclaw", cmd.Use)
+	assert.Equal(t, "spawnbot", cmd.Use)
 	assert.Equal(t, short, cmd.Short)
 
 	assert.True(t, cmd.HasSubCommands())

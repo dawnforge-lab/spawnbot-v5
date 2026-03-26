@@ -45,7 +45,7 @@ func authFilePath() string {
 		return filepath.Join(home, "auth.json")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, pkg.DefaultPicoClawHome, "auth.json")
+	return filepath.Join(home, pkg.DefaultSpawnbotHome, "auth.json")
 }
 
 func LoadStore() (*AuthStore, error) {

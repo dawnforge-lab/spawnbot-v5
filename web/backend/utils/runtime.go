@@ -11,33 +11,33 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
-// GetPicoclawHome returns the picoclaw home directory.
-// Priority: $PICOCLAW_HOME > ~/.picoclaw
-func GetPicoclawHome() string {
+// GetSpawnbotHome returns the spawnbot home directory.
+// Priority: $SPAWNBOT_HOME > ~/.spawnbot
+func GetSpawnbotHome() string {
 	if home := os.Getenv(config.EnvHome); home != "" {
 		return home
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".picoclaw")
+	return filepath.Join(home, ".spawnbot")
 }
 
-// GetDefaultConfigPath returns the default path to the picoclaw config file.
+// GetDefaultConfigPath returns the default path to the spawnbot config file.
 func GetDefaultConfigPath() string {
 	if configPath := os.Getenv(config.EnvConfig); configPath != "" {
 		return configPath
 	}
-	return filepath.Join(GetPicoclawHome(), "config.json")
+	return filepath.Join(GetSpawnbotHome(), "config.json")
 }
 
-// FindPicoclawBinary locates the picoclaw executable.
+// FindSpawnbotBinary locates the spawnbot executable.
 // Search order:
-//  1. PICOCLAW_BINARY environment variable (explicit override)
+//  1. SPAWNBOT_BINARY environment variable (explicit override)
 //  2. Same directory as the current executable
-//  3. Falls back to "picoclaw" and relies on $PATH
-func FindPicoclawBinary() string {
-	binaryName := "picoclaw"
+//  3. Falls back to "spawnbot" and relies on $PATH
+func FindSpawnbotBinary() string {
+	binaryName := "spawnbot"
 	if runtime.GOOS == "windows" {
-		binaryName = "picoclaw.exe"
+		binaryName = "spawnbot.exe"
 	}
 
 	if p := os.Getenv(config.EnvBinary); p != "" {
@@ -53,7 +53,7 @@ func FindPicoclawBinary() string {
 		}
 	}
 
-	return "picoclaw"
+	return "spawnbot"
 }
 
 // GetLocalIP returns the local IP address of the machine.

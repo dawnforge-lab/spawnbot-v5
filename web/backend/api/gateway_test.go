@@ -756,11 +756,11 @@ func TestGatewayRestartReturnsErrorStatusWhenReplacementFailsToStart(t *testing.
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
 
-	invalidBinaryPath := filepath.Join(t.TempDir(), "fake-picoclaw")
+	invalidBinaryPath := filepath.Join(t.TempDir(), "fake-spawnbot")
 	if err := os.WriteFile(invalidBinaryPath, []byte("#!/bin/sh\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	t.Setenv("PICOCLAW_BINARY", invalidBinaryPath)
+	t.Setenv("SPAWNBOT_BINARY", invalidBinaryPath)
 
 	h := NewHandler(configPath)
 	mux := http.NewServeMux()
@@ -933,29 +933,29 @@ func TestGatewayClearLogsResetsBufferedHistory(t *testing.T) {
 	}
 }
 
-func TestFindPicoclawBinary_EnvOverride(t *testing.T) {
+func TestFindSpawnbotBinary_EnvOverride(t *testing.T) {
 	// Create a temporary file to act as the mock binary
 	tmpDir := t.TempDir()
-	mockBinary := filepath.Join(tmpDir, "picoclaw-mock")
+	mockBinary := filepath.Join(tmpDir, "spawnbot-mock")
 	if err := os.WriteFile(mockBinary, []byte("mock"), 0o755); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	t.Setenv("PICOCLAW_BINARY", mockBinary)
+	t.Setenv("SPAWNBOT_BINARY", mockBinary)
 
-	got := utils.FindPicoclawBinary()
+	got := utils.FindSpawnbotBinary()
 	if got != mockBinary {
-		t.Errorf("FindPicoclawBinary() = %q, want %q", got, mockBinary)
+		t.Errorf("FindSpawnbotBinary() = %q, want %q", got, mockBinary)
 	}
 }
 
-func TestFindPicoclawBinary_EnvOverride_InvalidPath(t *testing.T) {
-	// When PICOCLAW_BINARY points to a non-existent path, fall through to next strategy
-	t.Setenv("PICOCLAW_BINARY", "/nonexistent/picoclaw-binary")
+func TestFindSpawnbotBinary_EnvOverride_InvalidPath(t *testing.T) {
+	// When SPAWNBOT_BINARY points to a non-existent path, fall through to next strategy
+	t.Setenv("SPAWNBOT_BINARY", "/nonexistent/spawnbot-binary")
 
-	got := utils.FindPicoclawBinary()
-	// Should not return the invalid path; falls back to "picoclaw" or another found path
-	if got == "/nonexistent/picoclaw-binary" {
-		t.Errorf("FindPicoclawBinary() returned invalid env path %q, expected fallback", got)
+	got := utils.FindSpawnbotBinary()
+	// Should not return the invalid path; falls back to "spawnbot" or another found path
+	if got == "/nonexistent/spawnbot-binary" {
+		t.Errorf("FindSpawnbotBinary() returned invalid env path %q, expected fallback", got)
 	}
 }

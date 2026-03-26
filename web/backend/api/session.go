@@ -248,7 +248,7 @@ func truncateRunes(s string, maxLen int) string {
 }
 
 // sessionsDir resolves the path to the gateway's session storage directory.
-// It reads the workspace from config, falling back to ~/.picoclaw/workspace.
+// It reads the workspace from config, falling back to ~/.spawnbot/workspace.
 func (h *Handler) sessionsDir() (string, error) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
@@ -258,7 +258,7 @@ func (h *Handler) sessionsDir() (string, error) {
 	workspace := cfg.Agents.Defaults.Workspace
 	if workspace == "" {
 		home, _ := os.UserHomeDir()
-		workspace = filepath.Join(home, ".picoclaw", "workspace")
+		workspace = filepath.Join(home, ".spawnbot", "workspace")
 	}
 
 	// Expand ~ prefix

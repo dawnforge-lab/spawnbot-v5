@@ -66,7 +66,7 @@ func getGlobalConfigDir() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, pkg.DefaultPicoClawHome)
+	return filepath.Join(home, pkg.DefaultSpawnbotHome)
 }
 
 func NewContextBuilder(workspace string) *ContextBuilder {
@@ -92,9 +92,9 @@ func (cb *ContextBuilder) getIdentity() string {
 	version := config.FormatVersion()
 
 	return fmt.Sprintf(
-		`# picoclaw 🦞 (%s)
+		`# spawnbot 🤖 (%s)
 
-You are picoclaw, a helpful AI assistant.
+You are spawnbot, a helpful AI assistant.
 
 ## Workspace
 Your workspace is at: %s

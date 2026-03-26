@@ -1,7 +1,7 @@
-// PicoClaw - Ultra-lightweight personal AI agent
+// Spawnbot - Personal AI assistant
 // License: MIT
 //
-// Copyright (c) 2026 PicoClaw contributors
+// Copyright (c) 2026 Spawnbot contributors
 
 package ui
 
@@ -31,7 +31,7 @@ func getPidPath() string {
 	if err != nil {
 		home = "."
 	}
-	return filepath.Join(home, ".picoclaw", pidFileName)
+	return filepath.Join(home, ".spawnbot", pidFileName)
 }
 
 func isProcessRunning(pid int) bool {
@@ -85,9 +85,9 @@ func startGateway() error {
 	var cmd *exec.Cmd
 
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", "start /B picoclaw gateway > NUL 2>&1")
+		cmd = exec.Command("cmd", "/C", "start /B spawnbot gateway > NUL 2>&1")
 	} else {
-		cmd = exec.Command("sh", "-c", "nohup picoclaw gateway > /dev/null 2>&1 & echo $! > "+pidPath)
+		cmd = exec.Command("sh", "-c", "nohup spawnbot gateway > /dev/null 2>&1 & echo $! > "+pidPath)
 	}
 
 	err := cmd.Start()
@@ -102,7 +102,7 @@ func startGateway() error {
 			"wmic",
 			"process",
 			"where",
-			"name='picoclaw.exe' and commandline like '%gateway%'",
+			"name='spawnbot.exe' and commandline like '%gateway%'",
 			"get",
 			"processid",
 		)
