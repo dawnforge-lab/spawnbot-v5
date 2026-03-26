@@ -15,6 +15,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/skills"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/utils"
@@ -24,6 +25,7 @@ type ContextBuilder struct {
 	workspace          string
 	skillsLoader       *skills.SkillsLoader
 	memory             *MemoryStore
+	sqliteMemory       *memory.SQLiteStore // optional SQLite-backed semantic memory
 	toolDiscoveryBM25  bool
 	toolDiscoveryRegex bool
 	splitOnMarker      bool
@@ -56,6 +58,44 @@ func (cb *ContextBuilder) WithToolDiscovery(useBM25, useRegex bool) *ContextBuil
 func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
 	cb.splitOnMarker = enabled
 	return cb
+}
+
+// WithSQLiteMemory sets the SQLite-backed semantic memory store.
+// When set, GetMemoryContext queries the SQLite store instead of MEMORY.md.
+func (cb *ContextBuilder) WithSQLiteMemory(store *memory.SQLiteStore) *ContextBuilder {
+	cb.sqliteMemory = store
+	return cb
+}
+
+// getMemoryContext returns formatted memory context for the system prompt.
+// If the SQLite semantic memory store is configured, it queries the top 10
+// most recent chunks. Otherwise it falls back to the flat-file MemoryStore
+// (MEMORY.md + daily notes).
+func (cb *ContextBuilder) getMemoryContext() string {
+	if cb.sqliteMemory != nil {
+		chunks, err := cb.sqliteMemory.RecentChunks(10)
+		if err != nil {
+			logger.WarnCF("agent", "Failed to query semantic memory", map[string]any{"error": err.Error()})
+			// Fall through to flat-file fallback.
+		} else if len(chunks) > 0 {
+			var sb strings.Builder
+			sb.WriteString("## Semantic Memory (recent)\n\n")
+			for i, ch := range chunks {
+				if i > 0 {
+					sb.WriteString("\n---\n")
+				}
+				if ch.Heading != "" {
+					sb.WriteString(fmt.Sprintf("[%s] ", ch.Heading))
+				}
+				sb.WriteString(ch.Content)
+				sb.WriteString("\n")
+			}
+			return sb.String()
+		}
+	}
+
+	// Flat-file fallback: MEMORY.md + recent daily notes.
+	return cb.memory.GetMemoryContext()
 }
 
 func getGlobalConfigDir() string {
@@ -160,8 +200,9 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 %s`, skillsSummary))
 	}
 
-	// Memory context
-	memoryContext := cb.memory.GetMemoryContext()
+	// Memory context — prefer SQLite semantic memory when available,
+	// fall back to flat-file MEMORY.md for backward compatibility.
+	memoryContext := cb.getMemoryContext()
 	if memoryContext != "" {
 		parts = append(parts, "# Memory\n\n"+memoryContext)
 	}
@@ -242,7 +283,11 @@ func (cb *ContextBuilder) InvalidateCache() {
 func (cb *ContextBuilder) sourcePaths() []string {
 	paths := []string{
 		filepath.Join(cb.workspace, "SOUL.md"),
-		filepath.Join(cb.workspace, "memory", "MEMORY.md"),
+	}
+	if cb.sqliteMemory != nil {
+		paths = append(paths, cb.sqliteMemory.DBPath())
+	} else {
+		paths = append(paths, filepath.Join(cb.workspace, "memory", "MEMORY.md"))
 	}
 	return uniquePaths(paths)
 }

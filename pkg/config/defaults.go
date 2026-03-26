@@ -513,6 +513,14 @@ func DefaultConfig() *Config {
 			ModelName:         "",
 			EchoTranscription: false,
 		},
+		Embeddings: EmbeddingsConfig{
+			// Disabled by default — set provider to enable semantic memory.
+			Provider:   "",
+			Model:      "",
+			APIKey:     "",
+			BaseURL:    "",
+			Dimensions: 768,
+		},
 		BuildInfo: BuildInfo{
 			Version:   Version,
 			GitCommit: GitCommit,

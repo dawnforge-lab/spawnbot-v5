@@ -26,6 +26,7 @@ func init() {
 // SQLiteStore is a chunk store backed by SQLite with FTS5 full-text search.
 type SQLiteStore struct {
 	db            *sql.DB
+	dbPath        string
 	vecDimensions int
 }
 
@@ -48,6 +49,7 @@ func NewSQLiteStore(dbDir string, vecDimensions int) (*SQLiteStore, error) {
 
 	s := &SQLiteStore{
 		db:            db,
+		dbPath:        dbPath,
 		vecDimensions: vecDimensions,
 	}
 
@@ -285,6 +287,34 @@ func (s *SQLiteStore) RecallBySource(sourceFile, heading string, limit int) ([]C
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("recall query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Chunk
+	for rows.Next() {
+		var ch Chunk
+		if err := rows.Scan(&ch.ID, &ch.SourceFile, &ch.Heading, &ch.Content, &ch.ContentHash, &ch.CreatedAt, &ch.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan chunk: %w", err)
+		}
+		results = append(results, ch)
+	}
+	return results, rows.Err()
+}
+
+// DBPath returns the filesystem path to the SQLite database file.
+func (s *SQLiteStore) DBPath() string {
+	return s.dbPath
+}
+
+// RecentChunks returns up to limit chunks ordered by creation time (newest first).
+func (s *SQLiteStore) RecentChunks(limit int) ([]Chunk, error) {
+	rows, err := s.db.Query(`
+		SELECT id, source_file, heading, content, content_hash, created_at, updated_at
+		FROM memory_chunks
+		ORDER BY created_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("recent chunks query: %w", err)
 	}
 	defer rows.Close()
 

@@ -110,6 +110,40 @@ func NewAgentInstance(
 		).
 		WithSplitOnMarker(cfg.Agents.Defaults.SplitOnMarker)
 
+	// Semantic memory: initialize SQLite store and register memory tools
+	// when an embeddings provider is configured.
+	if cfg.Embeddings.Provider != "" {
+		memoryDir := filepath.Join(workspace, "memory")
+		os.MkdirAll(memoryDir, 0o755)
+
+		sqliteStore, err := memory.NewSQLiteStore(memoryDir, cfg.Embeddings.Dimensions)
+		if err != nil {
+			logger.ErrorCF("agent", "Failed to initialize semantic memory store; continuing without semantic memory",
+				map[string]any{"error": err.Error()})
+		} else {
+			contextBuilder.WithSQLiteMemory(sqliteStore)
+
+			// Create embedding provider (may be nil on error — tools degrade to FTS-only).
+			var embedder memory.EmbeddingProvider
+			embCfg := memory.EmbeddingConfig{
+				Provider:   cfg.Embeddings.Provider,
+				Model:      cfg.Embeddings.Model,
+				APIKey:     cfg.Embeddings.APIKey,
+				BaseURL:    cfg.Embeddings.BaseURL,
+				Dimensions: cfg.Embeddings.Dimensions,
+			}
+			embedder, err = memory.NewEmbeddingProvider(embCfg)
+			if err != nil {
+				logger.WarnCF("agent", "Failed to create embedding provider; memory tools will use FTS-only",
+					map[string]any{"error": err.Error()})
+			}
+
+			toolsRegistry.Register(memory.NewMemoryStoreTool(sqliteStore, embedder))
+			toolsRegistry.Register(memory.NewMemorySearchTool(sqliteStore, embedder))
+			toolsRegistry.Register(memory.NewMemoryRecallTool(sqliteStore))
+		}
+	}
+
 	agentID := routing.DefaultAgentID
 	agentName := ""
 	var subagents *config.SubagentsConfig

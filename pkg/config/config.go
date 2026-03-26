@@ -95,7 +95,8 @@ type Config struct {
 	Tools     ToolsConfig     `json:"tools"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
 	Devices   DevicesConfig   `json:"devices"`
-	Voice     VoiceConfig     `json:"voice"`
+	Voice      VoiceConfig      `json:"voice"`
+	Embeddings EmbeddingsConfig `json:"embeddings"`
 	// BuildInfo contains build-time version information
 	BuildInfo BuildInfo `json:"build_info,omitempty"`
 
@@ -836,6 +837,16 @@ type VoiceConfig struct {
 	ModelName         string `json:"model_name,omitempty"         env:"SPAWNBOT_VOICE_MODEL_NAME"`
 	EchoTranscription bool   `json:"echo_transcription"           env:"SPAWNBOT_VOICE_ECHO_TRANSCRIPTION"`
 	ElevenLabsAPIKey  string `json:"elevenlabs_api_key,omitempty" env:"SPAWNBOT_VOICE_ELEVENLABS_API_KEY"`
+}
+
+// EmbeddingsConfig holds configuration for the embedding provider used by
+// the semantic memory system (vector search, hybrid retrieval).
+type EmbeddingsConfig struct {
+	Provider   string `json:"provider"   env:"SPAWNBOT_EMBEDDINGS_PROVIDER"`
+	Model      string `json:"model"      env:"SPAWNBOT_EMBEDDINGS_MODEL"`
+	APIKey     string `json:"api_key"    env:"SPAWNBOT_EMBEDDINGS_API_KEY"`
+	BaseURL    string `json:"base_url"   env:"SPAWNBOT_EMBEDDINGS_BASE_URL"`
+	Dimensions int    `json:"dimensions" env:"SPAWNBOT_EMBEDDINGS_DIMENSIONS"`
 }
 
 // ModelConfig represents a model-centric provider configuration.
