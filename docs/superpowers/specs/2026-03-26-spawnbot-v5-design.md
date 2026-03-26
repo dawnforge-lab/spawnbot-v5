@@ -271,7 +271,7 @@ Terminal wizard using `charmbracelet/huh` (Go interactive forms library, added t
 6. **Telegram** (optional) — enter bot token to connect
 7. **Embedding provider** — pick provider + API key for memory embeddings (can be same or different from chat)
 
-Writes: `config.json`, `.security.yml`, workspace files (SOUL.md, USER.md, GOALS.md, PLAYBOOK.md)
+Writes: `config.json`, `.security.yml`, workspace files (SOUL.md, USER.md, GOALS.md, PLAYBOOK.md, HEARTBEAT.md)
 
 ### Web wizard
 
@@ -360,7 +360,7 @@ Global find-replace across all Go files, configs, frontend, and documentation. T
 |------|--------|
 | `pkg/agent/context.go` | Update `getIdentity()` for spawnbot branding, simplify `LoadBootstrapFiles()` to SOUL.md only, update `GetMemoryContext()` to use SQLite store, update `sourcePaths()` to track SQLite DB file |
 | `pkg/agent/instance.go` | Register memory tools in ToolRegistry |
-| `pkg/agent/hooks.go` | Built-in ToolApprover for YOLO/Approval modes with configurable timeout |
+| `pkg/agent/approval.go` | New file: built-in ToolApprover for YOLO/Approval modes with configurable timeout (registered via instance.go) |
 | `pkg/gateway/gateway.go` | Wire idle monitor + feed poller |
 | `pkg/config/config.go` | Add autonomy + embeddings + approval config sections |
 | `pkg/config/defaults.go` | Default values for new config |
