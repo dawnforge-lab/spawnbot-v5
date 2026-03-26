@@ -1,7 +1,7 @@
 name: PR
 
 on:
-  pull_request: { }
+  pull_request: {}
 
 jobs:
   lint:
@@ -23,13 +23,13 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.10.1
-          args: --build-tags=goolm,stdjson
+          args: --build-tags=goolm,stdjson,fts5
 
   vuln_check:
     name: Security Check
     runs-on: ubuntu-latest
     env:
-      GOFLAGS: -tags=goolm,stdjson
+      GOFLAGS: -tags=goolm,stdjson,fts5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -58,8 +58,13 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
       - name: Run go generate
         run: go generate ./...
 
       - name: Run go test
-        run: go test -tags goolm,stdjson ./...
+        env:
+          CGO_ENABLED: "1"
+        run: go test -tags "goolm,stdjson,fts5" ./pkg/... ./tests/... -count=1

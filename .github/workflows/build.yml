@@ -1,11 +1,13 @@
-name: build
+name: Build
 
 on:
   push:
     branches: [ "main" ]
+  pull_request: {}
 
 jobs:
   build:
+    name: Build and Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -16,5 +18,15 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
       - name: Build
-        run: make build-all
+        env:
+          CGO_ENABLED: "1"
+        run: go build -tags "goolm,stdjson,fts5" ./cmd/spawnbot/...
+
+      - name: Test
+        env:
+          CGO_ENABLED: "1"
+        run: go test -tags "goolm,stdjson,fts5" ./pkg/... ./tests/... -count=1

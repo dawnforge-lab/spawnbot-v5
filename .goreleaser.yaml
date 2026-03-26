@@ -19,10 +19,11 @@ builds:
   - id: spawnbot
     binary: spawnbot
     env:
-      - CGO_ENABLED=0
+      - CGO_ENABLED=1
     tags:
       - goolm
       - stdjson
+      - fts5
     ldflags:
       - -s -w
       - -X github.com/dawnforge-lab/spawnbot-v5/pkg/config.Version={{ .Version }}
