@@ -13,6 +13,10 @@ import (
 )
 
 func init() {
+	// Register sqlite-vec as an auto-extension so all new connections
+	// get the vec0 virtual-table module.
+	sqliteVecAuto()
+
 	// Register under a distinct driver name so we don't conflict with
 	// modernc.org/sqlite (registers as "sqlite") or mattn's default
 	// registration (registers as "sqlite3").
@@ -89,6 +93,15 @@ CREATE TRIGGER IF NOT EXISTS memory_fts_update AFTER UPDATE ON memory_chunks BEG
 END;
 `
 	_, err := s.db.Exec(schema)
+	if err != nil {
+		return err
+	}
+
+	// Create the vec0 virtual table for vector search.
+	_, err = s.db.Exec(fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS memory_vec USING vec0(
+		chunk_id TEXT PRIMARY KEY,
+		embedding float[%d]
+	)`, s.vecDimensions))
 	return err
 }
 
@@ -142,6 +155,97 @@ func (s *SQLiteStore) SearchFTS(query string, limit int) ([]Chunk, error) {
 			return nil, fmt.Errorf("scan chunk: %w", err)
 		}
 		results = append(results, ch)
+	}
+	return results, rows.Err()
+}
+
+// StoreWithEmbedding inserts a chunk and its embedding vector atomically.
+// The chunk is stored via Store (FTS5-indexed), then the embedding is
+// inserted into the vec0 virtual table.
+func (s *SQLiteStore) StoreWithEmbedding(chunk Chunk, embedding []float32) error {
+	now := time.Now().UTC()
+
+	// Generate ULID for the primary key.
+	id, err := ulid.New(ulid.Timestamp(now), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate ulid: %w", err)
+	}
+
+	// Compute SHA-256 hash of the content for dedup.
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(chunk.Content)))
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	idStr := id.String()
+
+	// Insert the chunk (with dedup on content_hash).
+	res, err := tx.Exec(`
+		INSERT OR IGNORE INTO memory_chunks (id, source_file, heading, content, content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		idStr, chunk.SourceFile, chunk.Heading, chunk.Content, hash, now, now,
+	)
+	if err != nil {
+		return fmt.Errorf("insert chunk: %w", err)
+	}
+
+	// If the chunk was a duplicate (OR IGNORE), look up its existing ID.
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		// Content already exists — look up the existing chunk's ID.
+		err = tx.QueryRow(`SELECT id FROM memory_chunks WHERE content_hash = ?`, hash).Scan(&idStr)
+		if err != nil {
+			return fmt.Errorf("lookup existing chunk: %w", err)
+		}
+	}
+
+	// Insert embedding into the vec0 table.
+	serialized, err := serializeFloat32(embedding)
+	if err != nil {
+		return fmt.Errorf("serialize embedding: %w", err)
+	}
+
+	_, err = tx.Exec(`INSERT OR REPLACE INTO memory_vec (chunk_id, embedding) VALUES (?, ?)`,
+		idStr, serialized,
+	)
+	if err != nil {
+		return fmt.Errorf("insert embedding: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// SearchVec performs a vector similarity search and returns up to limit
+// results ordered by distance (closest first).
+func (s *SQLiteStore) SearchVec(queryEmbedding []float32, limit int) ([]ScoredChunk, error) {
+	serialized, err := serializeFloat32(queryEmbedding)
+	if err != nil {
+		return nil, fmt.Errorf("serialize query embedding: %w", err)
+	}
+
+	rows, err := s.db.Query(`
+		SELECT c.id, c.source_file, c.heading, c.content, c.content_hash, c.created_at, c.updated_at, v.distance
+		FROM memory_vec v
+		JOIN memory_chunks c ON c.id = v.chunk_id
+		WHERE v.embedding MATCH ? AND k = ?
+		ORDER BY v.distance`,
+		serialized, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("vec query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []ScoredChunk
+	for rows.Next() {
+		var sc ScoredChunk
+		if err := rows.Scan(&sc.ID, &sc.SourceFile, &sc.Heading, &sc.Content, &sc.ContentHash, &sc.CreatedAt, &sc.UpdatedAt, &sc.Score); err != nil {
+			return nil, fmt.Errorf("scan scored chunk: %w", err)
+		}
+		results = append(results, sc)
 	}
 	return results, rows.Err()
 }
