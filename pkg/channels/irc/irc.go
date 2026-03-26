@@ -9,10 +9,10 @@ import (
 	"github.com/ergochat/irc-go/ircevent"
 	"github.com/ergochat/irc-go/ircmsg"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 // IRCChannel implements the Channel interface for IRC servers.

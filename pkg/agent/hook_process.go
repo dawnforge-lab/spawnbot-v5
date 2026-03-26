@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 const (

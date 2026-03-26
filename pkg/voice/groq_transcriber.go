@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/utils"
 )
 
 type GroqTranscriber struct {

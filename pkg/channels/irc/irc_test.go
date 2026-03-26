@@ -3,8 +3,8 @@ package irc
 import (
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestNewIRCChannel(t *testing.T) {

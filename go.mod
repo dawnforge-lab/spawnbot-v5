@@ -1,4 +1,4 @@
-module github.com/sipeed/picoclaw
+module github.com/dawnforge-lab/spawnbot-v5
 
 go 1.25.8
 

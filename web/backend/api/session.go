@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 // registerSessionRoutes binds session list and detail endpoints to the ServeMux.

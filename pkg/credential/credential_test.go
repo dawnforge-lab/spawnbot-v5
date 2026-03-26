@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/credential"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/credential"
 )
 
 func TestResolve_PlainKey(t *testing.T) {

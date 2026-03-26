@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 func writeJSONSession(

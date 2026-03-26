@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 // --- mock types ---

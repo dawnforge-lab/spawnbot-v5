@@ -15,9 +15,9 @@ import (
 
 	"github.com/h2non/filetype"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 // resolveMediaRefs resolves media:// refs in messages.

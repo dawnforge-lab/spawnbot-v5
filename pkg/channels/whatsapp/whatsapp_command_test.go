@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/channels"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestHandleIncomingMessage_DoesNotConsumeGenericCommandsLocally(t *testing.T) {

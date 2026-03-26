@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
 
 const (

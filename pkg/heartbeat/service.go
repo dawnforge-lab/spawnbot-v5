@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
-	"github.com/sipeed/picoclaw/pkg/constants"
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/state"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/constants"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
 
 const (

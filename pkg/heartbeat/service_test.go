@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
 
 func TestExecuteHeartbeat_Async(t *testing.T) {

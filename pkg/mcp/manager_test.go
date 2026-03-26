@@ -9,7 +9,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestLoadEnvFile(t *testing.T) {

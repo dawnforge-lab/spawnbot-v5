@@ -11,7 +11,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/sipeed/picoclaw/pkg/media"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
 )
 
 const (

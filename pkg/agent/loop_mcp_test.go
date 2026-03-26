@@ -9,7 +9,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func boolPtr(b bool) *bool { return &b }

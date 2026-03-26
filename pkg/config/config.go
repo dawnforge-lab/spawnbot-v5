@@ -11,10 +11,10 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
-	"github.com/sipeed/picoclaw/pkg"
-	"github.com/sipeed/picoclaw/pkg/credential"
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/credential"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 // rrCounter is a global counter for round-robin load balancing across models.

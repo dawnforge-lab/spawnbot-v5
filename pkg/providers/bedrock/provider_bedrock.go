@@ -26,8 +26,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 
-	"github.com/sipeed/picoclaw/pkg/providers/common"
-	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/common"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
 
 type (

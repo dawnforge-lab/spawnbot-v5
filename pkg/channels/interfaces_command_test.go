@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/commands"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/commands"
 )
 
 type mockRegistrar struct{}

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/pkg/auth"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw/internal"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/auth"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func statusCmd() {

@@ -41,7 +41,7 @@ func TestParseGitHubRef(t *testing.T) {
 		},
 		{
 			name:         "full URL with tree",
-			repo:         "https://github.com/sipeed/picoclaw/tree/dev/skills/test",
+			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/tree/dev/skills/test",
 			wantOwner:    "sipeed",
 			wantRepoName: "picoclaw",
 			wantRef:      "dev",
@@ -49,7 +49,7 @@ func TestParseGitHubRef(t *testing.T) {
 		},
 		{
 			name:         "full URL with blob",
-			repo:         "https://github.com/sipeed/picoclaw/blob/main/README.md",
+			repo:         "https://github.com/dawnforge-lab/spawnbot-v5/blob/main/README.md",
 			wantOwner:    "sipeed",
 			wantRepoName: "picoclaw",
 			wantRef:      "main",
@@ -57,7 +57,7 @@ func TestParseGitHubRef(t *testing.T) {
 		},
 		{
 			name:         "full URL without ref",
-			repo:         "https://github.com/sipeed/picoclaw",
+			repo:         "https://github.com/dawnforge-lab/spawnbot-v5",
 			wantOwner:    "sipeed",
 			wantRepoName: "picoclaw",
 			wantRef:      "main",

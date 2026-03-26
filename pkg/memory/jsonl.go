@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 const (

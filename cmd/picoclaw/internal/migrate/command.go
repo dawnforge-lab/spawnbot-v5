@@ -3,7 +3,7 @@ package migrate
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/sipeed/picoclaw/pkg/migrate"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/migrate"
 )
 
 func NewMigrateCommand() *cobra.Command {

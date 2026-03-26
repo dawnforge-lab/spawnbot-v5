@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/migrate/internal"
-	"github.com/sipeed/picoclaw/pkg/migrate/sources/openclaw"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/migrate/internal"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/migrate/sources/openclaw"
 )
 
 type (

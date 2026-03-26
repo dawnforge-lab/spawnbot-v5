@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/sipeed/picoclaw/web/backend/launcherconfig"
+	"github.com/dawnforge-lab/spawnbot-v5/web/backend/launcherconfig"
 )
 
 // Handler serves HTTP API requests.

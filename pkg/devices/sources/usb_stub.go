@@ -5,7 +5,7 @@ package sources
 import (
 	"context"
 
-	"github.com/sipeed/picoclaw/pkg/devices/events"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/devices/events"
 )
 
 type USBMonitor struct{}

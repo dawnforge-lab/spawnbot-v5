@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestEnsurePicoChannel_FreshConfig(t *testing.T) {

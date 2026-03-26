@@ -16,7 +16,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 
-	tuicfg "github.com/sipeed/picoclaw/cmd/picoclaw-launcher-tui/config"
+	tuicfg "github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw-launcher-tui/config"
 )
 
 type modelsAPIResponse struct {

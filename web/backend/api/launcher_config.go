@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/sipeed/picoclaw/web/backend/launcherconfig"
+	"github.com/dawnforge-lab/spawnbot-v5/web/backend/launcherconfig"
 )
 
 type launcherConfigPayload struct {

@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw/internal"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestNewWeComCommand(t *testing.T) {

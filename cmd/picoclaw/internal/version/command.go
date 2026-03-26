@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sipeed/picoclaw/cmd/picoclaw/internal"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw/internal"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func NewVersionCommand() *cobra.Command {

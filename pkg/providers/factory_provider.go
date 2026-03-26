@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	anthropicmessages "github.com/sipeed/picoclaw/pkg/providers/anthropic_messages"
-	"github.com/sipeed/picoclaw/pkg/providers/azure"
-	"github.com/sipeed/picoclaw/pkg/providers/bedrock"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	anthropicmessages "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/anthropic_messages"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/azure"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/bedrock"
 )
 
 // createClaudeAuthProvider creates a Claude provider using OAuth credentials from auth store.

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 )
 
 // registerModelRoutes binds model list management endpoints to the ServeMux.

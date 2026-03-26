@@ -8,14 +8,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/media"
-	"github.com/sipeed/picoclaw/pkg/memory"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/routing"
-	"github.com/sipeed/picoclaw/pkg/session"
-	"github.com/sipeed/picoclaw/pkg/tools"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/routing"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/session"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
 
 // AgentInstance represents a fully configured agent with its own workspace,

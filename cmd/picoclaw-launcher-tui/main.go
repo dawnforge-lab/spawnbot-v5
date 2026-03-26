@@ -11,8 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	tuicfg "github.com/sipeed/picoclaw/cmd/picoclaw-launcher-tui/config"
-	"github.com/sipeed/picoclaw/cmd/picoclaw-launcher-tui/ui"
+	tuicfg "github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw-launcher-tui/config"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/picoclaw-launcher-tui/ui"
 )
 
 func main() {

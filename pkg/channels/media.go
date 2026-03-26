@@ -3,7 +3,7 @@ package channels
 import (
 	"context"
 
-	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 )
 
 // MediaSender is an optional interface for channels that can send

@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sipeed/picoclaw/pkg/fileutil"
-	"github.com/sipeed/picoclaw/pkg/logger"
-	"github.com/sipeed/picoclaw/pkg/skills"
-	"github.com/sipeed/picoclaw/pkg/utils"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/skills"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/utils"
 )
 
 // InstallSkillTool allows the LLM agent to install skills from registries.

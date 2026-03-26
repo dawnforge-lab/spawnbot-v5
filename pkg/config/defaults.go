@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sipeed/picoclaw/pkg"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 )
 
 // DefaultConfig returns the default configuration for PicoClaw.

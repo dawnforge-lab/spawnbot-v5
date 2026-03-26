@@ -3,7 +3,7 @@ package voice
 import (
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
 func TestDetectTranscriber(t *testing.T) {

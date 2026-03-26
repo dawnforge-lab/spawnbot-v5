@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/memory"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/session"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/session"
 )
 
 func sessionsTestDir(t *testing.T, configPath string) string {

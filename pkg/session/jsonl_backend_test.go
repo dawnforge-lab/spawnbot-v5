@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/sipeed/picoclaw/pkg/memory"
-	"github.com/sipeed/picoclaw/pkg/providers"
-	"github.com/sipeed/picoclaw/pkg/session"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/session"
 )
 
 // Compile-time interface satisfaction checks.

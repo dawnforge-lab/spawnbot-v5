@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/sipeed/picoclaw/pkg/memory"
-	"github.com/sipeed/picoclaw/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
 // JSONLBackend adapts a memory.Store into the SessionStore interface.
