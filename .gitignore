@@ -26,7 +26,8 @@ build/
 .env
 config/config.json
 .security.yml
-onboard
+# Ignore generated onboard workspace copy (from go:generate), not the templates
+cmd/spawnbot/internal/onboard/workspace
 
 
 # Test
