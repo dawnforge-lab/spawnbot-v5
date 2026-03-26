@@ -142,7 +142,10 @@ func (cb *ContextBuilder) BuildSystemPrompt() string {
 	parts = append(parts, cb.getIdentity())
 
 	// Bootstrap files
-	bootstrapContent := cb.LoadBootstrapFiles()
+	bootstrapContent, err := cb.LoadBootstrapFiles()
+	if err != nil {
+		logger.WarnCF("agent", "Failed to load SOUL.md", map[string]any{"error": err.Error()})
+	}
 	if bootstrapContent != "" {
 		parts = append(parts, bootstrapContent)
 	}
@@ -237,9 +240,10 @@ func (cb *ContextBuilder) InvalidateCache() {
 // invalidation (bootstrap files + memory). Skill roots are handled separately
 // because they require both directory-level and recursive file-level checks.
 func (cb *ContextBuilder) sourcePaths() []string {
-	agentDefinition := cb.LoadAgentDefinition()
-	paths := agentDefinition.trackedPaths(cb.workspace)
-	paths = append(paths, filepath.Join(cb.workspace, "memory", "MEMORY.md"))
+	paths := []string{
+		filepath.Join(cb.workspace, "SOUL.md"),
+		filepath.Join(cb.workspace, "memory", "MEMORY.md"),
+	}
 	return uniquePaths(paths)
 }
 
@@ -443,37 +447,13 @@ func skillFilesChangedSince(skillRoots []string, filesAtCache map[string]time.Ti
 	return false
 }
 
-func (cb *ContextBuilder) LoadBootstrapFiles() string {
-	var sb strings.Builder
-
-	agentDefinition := cb.LoadAgentDefinition()
-	if agentDefinition.Agent != nil {
-		label := string(agentDefinition.Source)
-		if label == "" {
-			label = relativeWorkspacePath(cb.workspace, agentDefinition.Agent.Path)
-		}
-		fmt.Fprintf(&sb, "## %s\n\n%s\n\n", label, agentDefinition.Agent.Body)
+func (cb *ContextBuilder) LoadBootstrapFiles() (string, error) {
+	soulPath := filepath.Join(cb.workspace, "SOUL.md")
+	data, err := os.ReadFile(soulPath)
+	if err != nil {
+		return "", fmt.Errorf("SOUL.md not found at %s — run 'spawnbot onboard' to create it: %w", soulPath, err)
 	}
-	if agentDefinition.Soul != nil {
-		fmt.Fprintf(
-			&sb,
-			"## %s\n\n%s\n\n",
-			relativeWorkspacePath(cb.workspace, agentDefinition.Soul.Path),
-			agentDefinition.Soul.Content,
-		)
-	}
-	if agentDefinition.User != nil {
-		fmt.Fprintf(&sb, "## %s\n\n%s\n\n", "USER.md", agentDefinition.User.Content)
-	}
-
-	if agentDefinition.Source != AgentDefinitionSourceAgent {
-		filePath := filepath.Join(cb.workspace, "IDENTITY.md")
-		if data, err := os.ReadFile(filePath); err == nil {
-			fmt.Fprintf(&sb, "## %s\n\n%s\n\n", "IDENTITY.md", data)
-		}
-	}
-
-	return sb.String()
+	return fmt.Sprintf("## SOUL.md\n\n%s\n\n", string(data)), nil
 }
 
 // buildDynamicContext returns a short dynamic context string with per-request info.
@@ -856,4 +836,19 @@ func (cb *ContextBuilder) GetSkillsInfo() map[string]any {
 		"available": len(allSkills),
 		"names":     skillNames,
 	}
+}
+
+func uniquePaths(paths []string) []string {
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.TrimSpace(path) == "" {
+			continue
+		}
+		cleaned := filepath.Clean(path)
+		if slices.Contains(result, cleaned) {
+			continue
+		}
+		result = append(result, cleaned)
+	}
+	return result
 }

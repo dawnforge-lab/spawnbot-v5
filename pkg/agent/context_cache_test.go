@@ -202,10 +202,10 @@ func TestMtimeAutoInvalidation(t *testing.T) {
 	}{
 		{
 			name:       "bootstrap file change",
-			file:       "AGENT.md",
-			contentV1:  "# Original Agent",
-			contentV2:  "# Updated Agent",
-			checkField: "Updated Agent",
+			file:       "SOUL.md",
+			contentV1:  "# Original Soul",
+			contentV2:  "# Updated Soul",
+			checkField: "Updated Soul",
 		},
 		{
 			name:       "memory file change",
