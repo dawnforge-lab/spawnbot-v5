@@ -145,7 +145,7 @@ func TestLoadSaveGetUpdatesBuf(t *testing.T) {
 	}
 }
 
-func TestBuildWeixinSyncBufPathUsesPicoclawHome(t *testing.T) {
+func TestBuildWeixinSyncBufPathUsesSpawnbotHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(config.EnvHome, home)
 

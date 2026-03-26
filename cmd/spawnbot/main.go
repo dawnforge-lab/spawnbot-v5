@@ -26,7 +26,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 )
 
-func NewPicoclawCommand() *cobra.Command {
+func NewSpawnbotCommand() *cobra.Command {
 	short := fmt.Sprintf("%s spawnbot - Personal AI Assistant v%s\n\n", internal.Logo, config.GetVersion())
 
 	cmd := &cobra.Command{
@@ -66,7 +66,7 @@ const (
 
 func main() {
 	fmt.Printf("%s", banner)
-	cmd := NewPicoclawCommand()
+	cmd := NewSpawnbotCommand()
 	if err := cmd.Execute(); err != nil {
 		os.Exit(1)
 	}

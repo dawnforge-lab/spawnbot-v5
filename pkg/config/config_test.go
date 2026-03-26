@@ -799,7 +799,7 @@ func TestDefaultConfig_WorkspacePath_Default(t *testing.T) {
 	}
 }
 
-func TestDefaultConfig_WorkspacePath_WithPicoclawHome(t *testing.T) {
+func TestDefaultConfig_WorkspacePath_WithSpawnbotHome(t *testing.T) {
 	t.Setenv("SPAWNBOT_HOME", "/custom/spawnbot/home")
 
 	cfg := DefaultConfig()
