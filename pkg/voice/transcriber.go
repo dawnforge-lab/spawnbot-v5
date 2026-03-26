@@ -33,8 +33,13 @@ func supportsAudioTranscription(model string) bool {
 		// providers.CreateProviderFromConfig, so they are the only ones that can supply
 		// the audio media payload shape expected by NewAudioModelTranscriber.
 
-		// TODO: Further restrict this by modelID, since not every model under these
-		// protocols supports audio transcription.
+		// Technical debt: this allows any model string under these protocols, but not
+		// every model actually supports the audio transcription endpoint. For example,
+		// under "openai" only whisper-1 / gpt-4o-audio-preview support it, while
+		// chat-only models (gpt-4o, o1, etc.) will fail at the provider call site.
+		// Restriction by modelID is deferred because it requires maintaining a
+		// per-protocol allowlist that would need to be updated whenever providers
+		// add or rename audio-capable models.
 		return true
 	default:
 		return false

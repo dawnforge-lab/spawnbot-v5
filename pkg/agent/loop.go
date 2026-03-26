@@ -425,18 +425,22 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 						al.channelManager.InvokeTypingStop(msg.Channel, msg.ChatID)
 					}
 				}()
-				// TODO: Re-enable media cleanup after inbound media is properly consumed by the agent.
-				// Currently disabled because files are deleted before the LLM can access their content.
-				// defer func() {
-				// 	if al.mediaStore != nil && msg.MediaScope != "" {
-				// 		if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
-				// 			logger.WarnCF("agent", "Failed to release media", map[string]any{
-				// 				"scope": msg.MediaScope,
-				// 				"error": releaseErr.Error(),
-				// 			})
-				// 		}
-				// 	}
-				// }()
+				// Release inbound media files after the turn completes. This defer fires after
+				// processMessage returns, at which point all media has been fully consumed:
+				// - Images are base64-encoded into data URLs in resolveMediaRefs before the LLM call.
+				// - Audio is read from disk by transcribeAudioInMessage before the turn loop.
+				// - Non-image/audio files have their path injected into message content; any tool
+				//   reads happen synchronously inside runTurn before processMessage returns.
+				defer func() {
+					if al.mediaStore != nil && msg.MediaScope != "" {
+						if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
+							logger.WarnCF("agent", "Failed to release media", map[string]any{
+								"scope": msg.MediaScope,
+								"error": releaseErr.Error(),
+							})
+						}
+					}
+				}()
 
 				drainCanceled := false
 				cancelDrain := func() {
@@ -584,7 +588,11 @@ func (al *AgentLoop) drainBusToSteering(ctx context.Context, activeScope, active
 		}
 
 		// Transcribe audio if needed before steering, so the agent sees text.
-		msg, _ = al.transcribeAudioInMessage(ctx, msg)
+		var transcribeErr error
+		msg, _, transcribeErr = al.transcribeAudioInMessage(ctx, msg)
+		if transcribeErr != nil {
+			logger.WarnCF("agent", "Audio transcription error in steering path", map[string]any{"error": transcribeErr.Error()})
+		}
 
 		logger.InfoCF("agent", "Redirecting inbound message to steering queue",
 			map[string]any{
@@ -1068,18 +1076,22 @@ var audioAnnotationRe = regexp.MustCompile(`\[(voice|audio)(?::[^\]]*)?\]`)
 
 // transcribeAudioInMessage resolves audio media refs, transcribes them, and
 // replaces audio annotations in msg.Content with the transcribed text.
-// Returns the (possibly modified) message and true if audio was transcribed.
-func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.InboundMessage) (bus.InboundMessage, bool) {
+// Returns the (possibly modified) message, true if audio was transcribed, and
+// any transcription error encountered (non-nil means at least one ref failed).
+func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.InboundMessage) (bus.InboundMessage, bool, error) {
 	if al.transcriber == nil || al.mediaStore == nil || len(msg.Media) == 0 {
-		return msg, false
+		return msg, false, nil
 	}
 
 	// Transcribe each audio media ref in order.
 	var transcriptions []string
+	var firstErr error
 	for _, ref := range msg.Media {
 		path, meta, err := al.mediaStore.ResolveWithMeta(ref)
 		if err != nil {
-			logger.WarnCF("voice", "Failed to resolve media ref", map[string]any{"ref": ref, "error": err})
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		if !utils.IsAudioFile(meta.Filename, meta.ContentType) {
@@ -1087,7 +1099,9 @@ func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.Inbou
 		}
 		result, err := al.transcriber.Transcribe(ctx, path)
 		if err != nil {
-			logger.WarnCF("voice", "Transcription failed", map[string]any{"ref": ref, "error": err})
+			if firstErr == nil {
+				firstErr = err
+			}
 			transcriptions = append(transcriptions, "")
 			continue
 		}
@@ -1095,7 +1109,7 @@ func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.Inbou
 	}
 
 	if len(transcriptions) == 0 {
-		return msg, false
+		return msg, false, firstErr
 	}
 
 	al.sendTranscriptionFeedback(ctx, msg.Channel, msg.ChatID, msg.MessageID, transcriptions)
@@ -1117,7 +1131,7 @@ func (al *AgentLoop) transcribeAudioInMessage(ctx context.Context, msg bus.Inbou
 	}
 
 	msg.Content = newContent
-	return msg, true
+	return msg, true, firstErr
 }
 
 // sendTranscriptionFeedback sends feedback to the user with the result of
@@ -1288,7 +1302,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	)
 
 	var hadAudio bool
-	msg, hadAudio = al.transcribeAudioInMessage(ctx, msg)
+	var transcribeErr error
+	msg, hadAudio, transcribeErr = al.transcribeAudioInMessage(ctx, msg)
+	if transcribeErr != nil {
+		logger.WarnCF("agent", "Audio transcription error", map[string]any{"error": transcribeErr.Error()})
+	}
 
 	// For audio messages the placeholder was deferred by the channel.
 	// Now that transcription (and optional feedback) is done, send it.

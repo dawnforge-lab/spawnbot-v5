@@ -46,7 +46,11 @@ func init() {
 
 		consoleWriter := zerolog.ConsoleWriter{
 			Out:        os.Stdout,
-			TimeFormat: "15:04:05", // TODO: make it configurable???
+			// TimeFormat uses "15:04:05" (HH:MM:SS wall clock) for concise console output.
+			// The file logger writes RFC3339 timestamps via zerolog's default JSON marshalling.
+			// Changing the console format would require threading a config value into the
+			// init() function or converting to an explicit constructor call.
+			TimeFormat: "15:04:05",
 
 			// Custom formatter to handle multiline strings and JSON objects
 			FormatFieldValue: formatFieldValue,

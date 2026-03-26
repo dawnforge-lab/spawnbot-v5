@@ -154,9 +154,14 @@ func (sm *SubagentManager) runTask(
 ) {
 	task.Status = "running"
 	task.Created = time.Now().UnixMilli()
-	// TODO(eventbus): once subagents are modeled as child turns inside
-	// pkg/agent, emit SubTurnEnd and SubTurnResultDelivered from the parent
-	// AgentLoop instead of this legacy manager.
+	// Technical debt: SubagentManager is a legacy execution path that runs
+	// subagents as independent goroutines outside the main AgentLoop in pkg/agent.
+	// The proper model is to represent each subagent as a child SubTurn so that
+	// the parent AgentLoop can emit SubTurnEnd and SubTurnResultDelivered events
+	// in a unified event stream. This is deferred because it requires migrating
+	// callers off SubagentManager.Spawn onto SubTurnSpawner.SpawnSubTurn (Async=true)
+	// and wiring callback delivery through AgentLoop rather than the ad-hoc
+	// AsyncCallback mechanism here.
 
 	// Check if context is already canceled before starting
 	select {
