@@ -1,5 +1,6 @@
 import { atom, getDefaultStore } from "jotai"
 
+import type { ToolCall } from "@/components/chat/tool-call-card"
 import {
   getInitialActiveSessionId,
   writeStoredSessionId,
@@ -10,6 +11,18 @@ export interface ChatMessage {
   role: "user" | "assistant"
   content: string
   timestamp: number | string
+  toolCalls?: ToolCall[]
+}
+
+export type TypingStatus = "thinking" | "tool" | "spawn"
+
+export interface ChatStoreState {
+  messages: ChatMessage[]
+  connectionState: ConnectionState
+  isTyping: boolean
+  typingStatus: TypingStatus
+  activeSessionId: string
+  hasHydratedActiveSession: boolean
 }
 
 export type ConnectionState =
@@ -18,20 +31,13 @@ export type ConnectionState =
   | "connected"
   | "error"
 
-export interface ChatStoreState {
-  messages: ChatMessage[]
-  connectionState: ConnectionState
-  isTyping: boolean
-  activeSessionId: string
-  hasHydratedActiveSession: boolean
-}
-
 type ChatStorePatch = Partial<ChatStoreState>
 
 const DEFAULT_CHAT_STATE: ChatStoreState = {
   messages: [],
   connectionState: "disconnected",
   isTyping: false,
+  typingStatus: "thinking",
   activeSessionId: getInitialActiveSessionId(),
   hasHydratedActiveSession: false,
 }

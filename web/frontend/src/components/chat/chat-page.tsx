@@ -27,6 +27,7 @@ export function ChatPage() {
     messages,
     connectionState,
     isTyping,
+    typingStatus,
     activeSessionId,
     sendMessage,
     switchSession,
@@ -152,6 +153,7 @@ export function ChatPage() {
                 <AssistantMessage
                   content={msg.content}
                   timestamp={msg.timestamp}
+                  toolCalls={msg.toolCalls}
                 />
               ) : (
                 <UserMessage content={msg.content} />
@@ -159,7 +161,7 @@ export function ChatPage() {
             </div>
           ))}
 
-          {isTyping && <TypingIndicator />}
+          {isTyping && <TypingIndicator typingStatus={typingStatus} />}
         </div>
       </div>
 

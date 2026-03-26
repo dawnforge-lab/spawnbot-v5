@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
-export function TypingIndicator() {
+import type { TypingStatus } from "@/store/chat"
+
+interface TypingIndicatorProps {
+  typingStatus?: TypingStatus
+}
+
+export function TypingIndicator({
+  typingStatus = "thinking",
+}: TypingIndicatorProps) {
   const { t } = useTranslation()
   const thinkingSteps = [
     t("chat.thinking.step1"),
@@ -18,6 +26,13 @@ export function TypingIndicator() {
     }, 3000)
     return () => clearInterval(interval)
   }, [thinkingSteps.length])
+
+  const statusText =
+    typingStatus === "tool"
+      ? t("chat.thinking.tool")
+      : typingStatus === "spawn"
+        ? t("chat.thinking.spawn")
+        : thinkingSteps[stepIndex]
 
   return (
     <div className="flex w-full flex-col gap-1.5">
@@ -36,10 +51,10 @@ export function TypingIndicator() {
         </div>
 
         <p
-          key={stepIndex}
+          key={typingStatus === "thinking" ? stepIndex : typingStatus}
           className="text-muted-foreground animate-[fadeSlideIn_0.4s_ease-out] text-xs"
         >
-          {thinkingSteps[stepIndex]}
+          {statusText}
         </p>
       </div>
     </div>

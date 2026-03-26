@@ -24,7 +24,20 @@
       "step1": "Thinking...",
       "step2": "Analyzing your request...",
       "step3": "Preparing response...",
-      "step4": "Almost there..."
+      "step4": "Almost there...",
+      "tool": "Executing tool...",
+      "spawn": "Sub-agent spawned..."
+    },
+    "toolCall": {
+      "input": "Input",
+      "output": "Output",
+      "error": "Error",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "completed": "Done",
+        "error": "Failed"
+      }
     },
     "history": "History",
     "noHistory": "No chat history yet",
