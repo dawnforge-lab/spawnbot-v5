@@ -15,6 +15,7 @@ import (
 	anthropicmessages "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/anthropic_messages"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/azure"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/bedrock"
+	geminiProvider "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/gemini"
 	openai_compat "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/openai_compat"
 )
 
@@ -156,24 +157,19 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		return provider, modelID, nil
 
 	case "gemini":
-		// Gemini's OpenAI-compatible endpoint does not support safetySettings
-		// in the request body. Safety configuration must be done in Google AI
-		// Studio project settings instead.
-		if cfg.APIKey() == "" && cfg.APIBase == "" {
-			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
+		// Native Gemini provider via official google.golang.org/genai SDK.
+		// Provides full access to safety settings (BLOCK_NONE by default),
+		// native tool calling, and streaming.
+		if cfg.APIKey() == "" {
+			return nil, "", fmt.Errorf("api_key is required for gemini protocol")
 		}
-		apiBase := cfg.APIBase
-		if apiBase == "" {
-			apiBase = getDefaultAPIBase(protocol)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		provider, err := geminiProvider.NewProviderWithTimeout(ctx, cfg.APIKey(), cfg.RequestTimeout)
+		if err != nil {
+			return nil, "", fmt.Errorf("creating gemini provider: %w", err)
 		}
-		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
-			cfg.APIKey(),
-			apiBase,
-			cfg.Proxy,
-			cfg.MaxTokensField,
-			cfg.RequestTimeout,
-			cfg.ExtraBody,
-		), modelID, nil
+		return provider, modelID, nil
 
 	case "qwen", "qwen-intl", "qwen-international", "dashscope-intl",
 		"qwen-us", "dashscope-us", "coding-plan", "alibaba-coding", "qwen-coding":
