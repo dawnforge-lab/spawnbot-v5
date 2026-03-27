@@ -33,9 +33,10 @@ type (
 type Provider struct {
 	apiKey         string
 	apiBase        string
-	maxTokensField string // Field name for max tokens (e.g., "max_completion_tokens" for o1/glm models)
+	maxTokensField string         // Field name for max tokens (e.g., "max_completion_tokens" for o1/glm models)
 	httpClient     *http.Client
 	extraBody      map[string]any // Additional fields to inject into request body
+	extraHeaders   map[string]string // Additional headers to send with every request
 }
 
 type Option func(*Provider)
@@ -62,6 +63,12 @@ func WithExtraBody(extraBody map[string]any) Option {
 	}
 }
 
+func WithExtraHeaders(headers map[string]string) Option {
+	return func(p *Provider) {
+		p.extraHeaders = headers
+	}
+}
+
 func NewProvider(apiKey, apiBase, proxy string, opts ...Option) *Provider {
 	p := &Provider{
 		apiKey:     apiKey,
@@ -76,6 +83,13 @@ func NewProvider(apiKey, apiBase, proxy string, opts ...Option) *Provider {
 	}
 
 	return p
+}
+
+// applyExtraHeaders sets provider-specific headers on the request.
+func (p *Provider) applyExtraHeaders(req *http.Request) {
+	for k, v := range p.extraHeaders {
+		req.Header.Set(k, v)
+	}
 }
 
 func NewProviderWithMaxTokensField(apiKey, apiBase, proxy, maxTokensField string) *Provider {
@@ -183,6 +197,7 @@ func (p *Provider) Chat(
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+	p.applyExtraHeaders(req)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -229,6 +244,7 @@ func (p *Provider) ChatStream(
 	if p.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
+	p.applyExtraHeaders(req)
 
 	// Use a client without Timeout for streaming — the http.Client.Timeout covers
 	// the entire request lifecycle including body reads, which would kill long streams.

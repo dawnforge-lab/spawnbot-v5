@@ -50,6 +50,7 @@ var Providers = []Provider{
 	{Key: "volcengine", Name: "VolcEngine (ByteDance)", APIBase: "https://ark.cn-beijing.volces.com/api/v3"},
 	{Key: "qwen", Name: "Qwen (Alibaba)", APIBase: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 	{Key: "zhipu", Name: "Zhipu AI (GLM)", APIBase: "https://open.bigmodel.cn/api/paas/v4"},
+	{Key: "qwen-intl", Name: "Qwen International (Alibaba)", APIBase: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
 	{Key: "vivgrid", Name: "VivGrid", APIBase: "https://api.vivgrid.com/v1"},
 	{Key: "modelscope", Name: "ModelScope", APIBase: "https://api-inference.modelscope.cn/v1"},
 	{Key: "mimo", Name: "Xiaomi MiMo", APIBase: "https://api.xiaomimimo.com/v1"},

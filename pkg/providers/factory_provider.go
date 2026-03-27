@@ -15,6 +15,7 @@ import (
 	anthropicmessages "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/anthropic_messages"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/azure"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/bedrock"
+	openai_compat "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/openai_compat"
 )
 
 // createClaudeAuthProvider creates a Claude provider using OAuth credentials from auth store.
@@ -154,11 +155,65 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		}
 		return provider, modelID, nil
 
-	case "litellm", "openrouter", "groq", "zhipu", "gemini", "nvidia",
+	case "gemini":
+		// Gemini: auto-set safety settings to BLOCK_NONE so the agent can
+		// operate without content filters interrupting tool use.
+		if cfg.APIKey() == "" && cfg.APIBase == "" {
+			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
+		}
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = getDefaultAPIBase(protocol)
+		}
+		extraBody := cfg.ExtraBody
+		if extraBody == nil {
+			extraBody = make(map[string]any)
+		}
+		if _, ok := extraBody["safetySettings"]; !ok {
+			extraBody["safetySettings"] = []map[string]string{
+				{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+				{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+				{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+				{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+				{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+			}
+		}
+		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+			cfg.APIKey(),
+			apiBase,
+			cfg.Proxy,
+			cfg.MaxTokensField,
+			cfg.RequestTimeout,
+			extraBody,
+		), modelID, nil
+
+	case "qwen", "qwen-intl", "qwen-international", "dashscope-intl",
+		"qwen-us", "dashscope-us", "coding-plan", "alibaba-coding", "qwen-coding":
+		// Alibaba/DashScope: disable data inspection so requests are not
+		// logged or filtered by the platform.
+		if cfg.APIKey() == "" && cfg.APIBase == "" {
+			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
+		}
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = getDefaultAPIBase(protocol)
+		}
+		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+			cfg.APIKey(),
+			apiBase,
+			cfg.Proxy,
+			cfg.MaxTokensField,
+			cfg.RequestTimeout,
+			cfg.ExtraBody,
+			openai_compat.WithExtraHeaders(map[string]string{
+				"X-DashScope-DataInspection": `{"input":"disable","output":"disable"}`,
+			}),
+		), modelID, nil
+
+	case "litellm", "openrouter", "groq", "zhipu", "nvidia",
 		"ollama", "moonshot", "shengsuanyun", "deepseek", "cerebras",
-		"vivgrid", "volcengine", "vllm", "qwen", "qwen-intl", "qwen-international", "dashscope-intl",
-		"qwen-us", "dashscope-us", "mistral", "avian", "longcat", "modelscope", "novita",
-		"coding-plan", "alibaba-coding", "qwen-coding", "mimo":
+		"vivgrid", "volcengine", "vllm", "mistral", "avian", "longcat", "modelscope", "novita",
+		"mimo":
 		// All other OpenAI-compatible HTTP providers
 		if cfg.APIKey() == "" && cfg.APIBase == "" {
 			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
