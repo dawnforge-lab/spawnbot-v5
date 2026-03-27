@@ -48,6 +48,10 @@ type AgentInstance struct {
 	// LightCandidates holds the resolved provider candidates for the light model.
 	// Pre-computed at agent creation to avoid repeated model_list lookups at runtime.
 	LightCandidates []providers.FallbackCandidate
+
+	// MemoryStore provides persistent daily-notes and long-term memory.
+	// Used by the memory flush system to preserve key facts before compaction.
+	MemoryStore *MemoryStore
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -101,6 +105,8 @@ func NewAgentInstance(
 
 	sessionsDir := filepath.Join(workspace, "sessions")
 	sessions := initSessionStore(sessionsDir)
+
+	memStore := NewMemoryStore(workspace)
 
 	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
@@ -211,6 +217,7 @@ func NewAgentInstance(
 		Candidates:                candidates,
 		Router:                    router,
 		LightCandidates:           lightCandidates,
+		MemoryStore:               memStore,
 	}
 }
 

@@ -2649,6 +2649,9 @@ turnLoop:
 			if ts.opts.EnableSummary {
 				al.maybeSummarize(ts.agent, ts.sessionKey, ts.scope)
 			}
+			if !ts.opts.NoHistory {
+				al.maybePeriodicFlush(ts.agent, ts.sessionKey)
+			}
 
 			ts.setPhase(TurnPhaseCompleted)
 			ts.setFinalContent("")
@@ -2718,6 +2721,12 @@ turnLoop:
 
 	if ts.opts.EnableSummary {
 		al.maybeSummarize(ts.agent, ts.sessionKey, ts.scope)
+	}
+
+	// Periodic memory flush: persist key facts every N messages
+	// so context survives across sessions and unexpected termination.
+	if !ts.opts.NoHistory {
+		al.maybePeriodicFlush(ts.agent, ts.sessionKey)
 	}
 
 	ts.setPhase(TurnPhaseCompleted)
@@ -3024,6 +3033,9 @@ func (al *AgentLoop) summarizeSession(agent *AgentInstance, sessionKey string, t
 	if len(validMessages) == 0 {
 		return
 	}
+
+	// Flush key facts to daily notes before these messages are dropped.
+	al.flushMemoryPreCompaction(agent, validMessages)
 
 	const (
 		maxSummarizationMessages = 10
