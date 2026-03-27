@@ -156,8 +156,9 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		return provider, modelID, nil
 
 	case "gemini":
-		// Gemini: auto-set safety settings to BLOCK_NONE so the agent can
-		// operate without content filters interrupting tool use.
+		// Gemini's OpenAI-compatible endpoint does not support safetySettings
+		// in the request body. Safety configuration must be done in Google AI
+		// Studio project settings instead.
 		if cfg.APIKey() == "" && cfg.APIBase == "" {
 			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
 		}
@@ -165,26 +166,13 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		if apiBase == "" {
 			apiBase = getDefaultAPIBase(protocol)
 		}
-		extraBody := cfg.ExtraBody
-		if extraBody == nil {
-			extraBody = make(map[string]any)
-		}
-		if _, ok := extraBody["safetySettings"]; !ok {
-			extraBody["safetySettings"] = []map[string]string{
-				{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-				{"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-				{"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-				{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-				{"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-			}
-		}
 		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
 			cfg.APIKey(),
 			apiBase,
 			cfg.Proxy,
 			cfg.MaxTokensField,
 			cfg.RequestTimeout,
-			extraBody,
+			cfg.ExtraBody,
 		), modelID, nil
 
 	case "qwen", "qwen-intl", "qwen-international", "dashscope-intl",
