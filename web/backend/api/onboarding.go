@@ -11,6 +11,7 @@ import (
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/workspace"
 )
 
 // providerInfo holds the configuration details for a chosen LLM provider.
@@ -264,9 +265,9 @@ func (h *Handler) handleOnboardingComplete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Create workspace templates
-	workspace := cfg.WorkspacePath()
-	if err := createWorkspaceDir(workspace, req.UserName); err != nil {
+	// Create workspace templates (same as CLI onboard)
+	ws := cfg.WorkspacePath()
+	if err := workspace.Deploy(ws, workspace.TemplateData{UserName: req.UserName}); err != nil {
 		logger.Warn(fmt.Sprintf("failed to create workspace templates: %v", err))
 		// Non-fatal — config was saved successfully
 	}
@@ -315,68 +316,3 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 	}
 }
 
-// createWorkspaceDir creates the workspace directory and writes the default
-// template files (SOUL.md, USER.md, etc.) with the user's name substituted.
-func createWorkspaceDir(workspace, userName string) error {
-	if userName == "" {
-		userName = "friend"
-	}
-
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		return fmt.Errorf("failed to create workspace directory: %w", err)
-	}
-
-	// Create subdirectories
-	for _, sub := range []string{"memory", "skills"} {
-		if err := os.MkdirAll(filepath.Join(workspace, sub), 0o755); err != nil {
-			return fmt.Errorf("failed to create %s directory: %w", sub, err)
-		}
-	}
-
-	// Write SOUL.md if it doesn't exist
-	soulPath := filepath.Join(workspace, "SOUL.md")
-	if _, err := os.Stat(soulPath); os.IsNotExist(err) {
-		content := fmt.Sprintf("# Spawnbot\n\nYou are Spawnbot, a personal AI assistant for %s.\n\nBe helpful, concise, and proactive.\n", userName)
-		if err := os.WriteFile(soulPath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write SOUL.md: %w", err)
-		}
-	}
-
-	// Write USER.md if it doesn't exist
-	userPath := filepath.Join(workspace, "USER.md")
-	if _, err := os.Stat(userPath); os.IsNotExist(err) {
-		content := fmt.Sprintf("# User Profile\n\nName: %s\n", userName)
-		if err := os.WriteFile(userPath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write USER.md: %w", err)
-		}
-	}
-
-	// Write GOALS.md if it doesn't exist
-	goalsPath := filepath.Join(workspace, "GOALS.md")
-	if _, err := os.Stat(goalsPath); os.IsNotExist(err) {
-		content := "# Goals\n\n## Active\n<!-- Spawnbot will track your objectives here -->\n\n## Completed\n<!-- Finished goals move here -->\n"
-		if err := os.WriteFile(goalsPath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write GOALS.md: %w", err)
-		}
-	}
-
-	// Write PLAYBOOK.md if it doesn't exist
-	playbookPath := filepath.Join(workspace, "PLAYBOOK.md")
-	if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
-		content := "# Playbook\n\n## Communication Style\n- Be direct and concise\n- Lead with the answer, not the reasoning\n- Ask for clarification when instructions are ambiguous\n\n## Tool Usage\n- Always use tools when action is needed — never pretend to do something\n- Use memory_store when learning something worth remembering\n- Use memory_search before answering questions that might be in memory\n\n## Autonomy\n- Check GOALS.md when idle to find proactive work\n- Notify the user of important feed updates\n- Store interesting observations in memory for future reference\n"
-		if err := os.WriteFile(playbookPath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write PLAYBOOK.md: %w", err)
-		}
-	}
-
-	// Write HEARTBEAT.md if it doesn't exist
-	heartbeatPath := filepath.Join(workspace, "HEARTBEAT.md")
-	if _, err := os.Stat(heartbeatPath); os.IsNotExist(err) {
-		content := "# Heartbeat\n\n## Idle Triggers\nWhen idle for extended periods, check:\n- GOALS.md for pending objectives\n- Recent memory for follow-ups\n- Feed updates that need attention\n\n## Proactive Behaviors\n- Summarize important feed items for the user\n- Flag upcoming deadlines from GOALS.md\n- Offer help when context suggests the user might need it\n"
-		if err := os.WriteFile(heartbeatPath, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("failed to write HEARTBEAT.md: %w", err)
-		}
-	}
-
-	return nil
-}

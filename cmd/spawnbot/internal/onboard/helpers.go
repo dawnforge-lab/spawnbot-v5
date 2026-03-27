@@ -1,13 +1,8 @@
 package onboard
 
 import (
-	"bytes"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
-	"strings"
-	"text/template"
 
 	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
@@ -15,6 +10,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/credential"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/workspace"
 )
 
 // providerInfo holds the configuration details for a chosen LLM provider.
@@ -399,11 +395,6 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 	}
 }
 
-// templateData is the data passed to workspace templates for rendering.
-type templateData struct {
-	UserName string
-}
-
 // promptPassphrase reads the encryption passphrase twice from the terminal
 // (with echo disabled) and returns it. Returns an error if the passphrase is
 // empty or if the two inputs do not match.
@@ -459,80 +450,8 @@ func setupSSHKey() error {
 	return nil
 }
 
-func createWorkspaceTemplates(workspace string, userName string) {
-	err := copyEmbeddedToTarget(workspace, userName)
-	if err != nil {
+func createWorkspaceTemplates(ws string, userName string) {
+	if err := workspace.Deploy(ws, workspace.TemplateData{UserName: userName}); err != nil {
 		fmt.Printf("Error copying workspace templates: %v\n", err)
 	}
-}
-
-func copyEmbeddedToTarget(targetDir string, userName string) error {
-	// Ensure target directory exists
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
-		return fmt.Errorf("Failed to create target directory: %w", err)
-	}
-
-	td := templateData{UserName: userName}
-
-	// Walk through all files in embed.FS
-	err := fs.WalkDir(embeddedFiles, "workspace", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories
-		if d.IsDir() {
-			return nil
-		}
-
-		// Read embedded file
-		data, err := embeddedFiles.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("Failed to read embedded file %s: %w", path, err)
-		}
-
-		new_path, err := filepath.Rel("workspace", path)
-		if err != nil {
-			return fmt.Errorf("Failed to get relative path for %s: %v\n", path, err)
-		}
-
-		// Build target file path
-		targetPath := filepath.Join(targetDir, new_path)
-
-		// Ensure target file's directory exists
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return fmt.Errorf("Failed to create directory %s: %w", filepath.Dir(targetPath), err)
-		}
-
-		// Render templates for markdown files that contain template syntax
-		if strings.HasSuffix(path, ".md") && bytes.Contains(data, []byte("{{")) {
-			rendered, tErr := renderTemplate(string(data), td)
-			if tErr != nil {
-				return fmt.Errorf("Failed to render template %s: %w", path, tErr)
-			}
-			data = []byte(rendered)
-		}
-
-		// Write file
-		if err := os.WriteFile(targetPath, data, 0o644); err != nil {
-			return fmt.Errorf("Failed to write file %s: %w", targetPath, err)
-		}
-
-		return nil
-	})
-
-	return err
-}
-
-// renderTemplate renders a text/template string with the given data.
-func renderTemplate(text string, data templateData) (string, error) {
-	tmpl, err := template.New("workspace").Parse(text)
-	if err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
