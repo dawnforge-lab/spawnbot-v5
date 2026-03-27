@@ -6,6 +6,7 @@ package gemini
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -148,20 +149,30 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			if msg.Content != "" {
 				parts = append(parts, &genai.Part{Text: msg.Content})
 			}
-			// Convert tool calls to Gemini function calls
+			// Convert tool calls to Gemini function calls, preserving thought signatures
 			for _, tc := range msg.ToolCalls {
 				args := tc.Arguments
 				if args == nil && tc.Function != nil {
-					// Parse from JSON string
 					args = make(map[string]any)
 					_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
 				}
-				parts = append(parts, &genai.Part{
+				part := &genai.Part{
 					FunctionCall: &genai.FunctionCall{
 						Name: toolCallName(tc),
 						Args: args,
 					},
-				})
+				}
+				// Restore thought signature from base64
+				sig := tc.ThoughtSignature
+				if sig == "" && tc.Function != nil {
+					sig = tc.Function.ThoughtSignature
+				}
+				if sig != "" {
+					if decoded, err := base64.StdEncoding.DecodeString(sig); err == nil {
+						part.ThoughtSignature = decoded
+					}
+				}
+				parts = append(parts, part)
 			}
 			if len(parts) > 0 {
 				contents = append(contents, &genai.Content{
@@ -338,17 +349,24 @@ func convertResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 
 	if candidate.Content != nil {
 		for _, part := range candidate.Content.Parts {
-			if part.Text != "" {
+			if part.Text != "" && !part.Thought {
 				textParts = append(textParts, part.Text)
 			}
 			if part.FunctionCall != nil {
 				argsJSON, _ := json.Marshal(part.FunctionCall.Args)
+				// Encode thought signature as base64 string for storage
+				var sigStr string
+				if len(part.ThoughtSignature) > 0 {
+					sigStr = base64.StdEncoding.EncodeToString(part.ThoughtSignature)
+				}
 				toolCalls = append(toolCalls, ToolCall{
-					ID:   fmt.Sprintf("call_%s", part.FunctionCall.Name),
-					Type: "function",
+					ID:               fmt.Sprintf("call_%s", part.FunctionCall.Name),
+					Type:             "function",
+					ThoughtSignature: sigStr,
 					Function: &FunctionCall{
-						Name:      part.FunctionCall.Name,
-						Arguments: string(argsJSON),
+						Name:             part.FunctionCall.Name,
+						Arguments:        string(argsJSON),
+						ThoughtSignature: sigStr,
 					},
 					Name:      part.FunctionCall.Name,
 					Arguments: part.FunctionCall.Args,
