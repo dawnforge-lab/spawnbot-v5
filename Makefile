@@ -57,8 +57,8 @@ PTY_PATCH_LOONG64=pty_dir=$$(go env GOMODCACHE)/github.com/creack/pty@v1.1.9; \
 # Golangci-lint
 GOLANGCI_LINT?=golangci-lint
 
-# Installation
-INSTALL_PREFIX?=$(HOME)/.local
+# Installation — binary goes into ~/.spawnbot/bin/ alongside workspace data
+INSTALL_PREFIX?=$(HOME)/.spawnbot
 INSTALL_BIN_DIR=$(INSTALL_PREFIX)/bin
 INSTALL_MAN_DIR=$(INSTALL_PREFIX)/share/man/man1
 INSTALL_TMP_SUFFIX=.new

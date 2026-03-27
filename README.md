@@ -2,22 +2,20 @@
 
 A lightweight, self-evolving personal AI agent. Single binary, 16 channels, 25+ LLM providers, semantic memory, skills, MCP, and autonomous operation.
 
-## Quickstart
+## Install
 
 ```bash
-# Build from source
-git clone https://github.com/dawnforge-lab/spawnbot-v5.git
-cd spawnbot-v5
-make build
+curl -fsSL https://raw.githubusercontent.com/dawnforge-lab/spawnbot-v5/main/scripts/install.sh | bash
+```
 
-# Setup (interactive wizard)
-./spawnbot onboard
+Requires [Go 1.25+](https://go.dev/dl/). Installs to `~/.spawnbot/bin/` and adds to PATH automatically.
 
-# Chat via CLI
-./spawnbot agent -m "Hello!"
+Then:
 
-# Start all channels (Telegram, Discord, web UI, etc.)
-./spawnbot gateway
+```bash
+spawnbot onboard          # Interactive setup wizard
+spawnbot agent -m "Hello" # Chat via CLI
+spawnbot gateway          # Start all channels
 ```
 
 ## Features
@@ -231,11 +229,14 @@ Channel.Send()
     state/               Persistent state
 ```
 
-## Building
+## Building from Source
 
 ```bash
-# Standard build (no CGO, no semantic memory)
-make build
+git clone https://github.com/dawnforge-lab/spawnbot-v5.git
+cd spawnbot-v5
+
+make build              # Build binary to ./build/
+make install            # Build + install to ~/.spawnbot/bin/
 
 # Full build with semantic memory (requires SQLite dev headers)
 CGO_ENABLED=1 make build
