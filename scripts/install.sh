@@ -73,14 +73,21 @@ chmod +x "$BIN_DIR/spawnbot"
 echo ""
 echo "Spawnbot installed to $BIN_DIR/spawnbot"
 
-# Add to PATH if not already there
+# Add to PATH — detect the user's actual shell, not just which rc files exist
 SHELL_RC=""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    if [[ -f "$HOME/.zshrc" ]]; then
-        SHELL_RC="$HOME/.zshrc"
-    elif [[ -f "$HOME/.bashrc" ]]; then
-        SHELL_RC="$HOME/.bashrc"
-    fi
+    case "${SHELL:-}" in
+        */zsh)  SHELL_RC="$HOME/.zshrc" ;;
+        */bash) SHELL_RC="$HOME/.bashrc" ;;
+        *)
+            # Fallback: check which rc file exists
+            if [[ -f "$HOME/.bashrc" ]]; then
+                SHELL_RC="$HOME/.bashrc"
+            elif [[ -f "$HOME/.zshrc" ]]; then
+                SHELL_RC="$HOME/.zshrc"
+            fi
+            ;;
+    esac
 
     if [[ -n "$SHELL_RC" ]]; then
         if ! grep -q 'spawnbot/bin' "$SHELL_RC" 2>/dev/null; then
