@@ -221,6 +221,38 @@ func NewAgentInstance(
 	}
 }
 
+// CloneForHeartbeat creates a lightweight copy of the agent for heartbeat
+// processing. It shares the same provider, workspace, and tools but has its
+// own session store and context builder so it doesn't pollute the main agent's
+// context window or state.
+func (ai *AgentInstance) CloneForHeartbeat() *AgentInstance {
+	sessionsDir := filepath.Join(ai.Workspace, "sessions", "heartbeat")
+	os.MkdirAll(sessionsDir, 0o755)
+
+	return &AgentInstance{
+		ID:                        ai.ID + "-heartbeat",
+		Name:                      ai.Name + " (heartbeat)",
+		Model:                     ai.Model,
+		Fallbacks:                 ai.Fallbacks,
+		Workspace:                 ai.Workspace,
+		MaxIterations:             5, // Heartbeat is lightweight
+		MaxTokens:                 ai.MaxTokens,
+		Temperature:               ai.Temperature,
+		ThinkingLevel:             ai.ThinkingLevel,
+		ContextWindow:             ai.ContextWindow,
+		SummarizeMessageThreshold: ai.SummarizeMessageThreshold,
+		SummarizeTokenPercent:     ai.SummarizeTokenPercent,
+		Provider:                  ai.Provider,
+		Sessions:                  initSessionStore(sessionsDir),
+		ContextBuilder:            NewContextBuilder(ai.Workspace),
+		Tools:                     ai.Tools.Clone(),
+		Candidates:                ai.Candidates,
+		Router:                    ai.Router,
+		LightCandidates:           ai.LightCandidates,
+		MemoryStore:               ai.MemoryStore,
+	}
+}
+
 // resolveAgentWorkspace determines the workspace directory for an agent.
 func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
 	if agentCfg != nil && strings.TrimSpace(agentCfg.Workspace) != "" {

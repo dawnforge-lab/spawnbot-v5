@@ -1253,10 +1253,10 @@ func (al *AgentLoop) ProcessDirectWithChannel(
 	return al.processMessage(ctx, msg)
 }
 
-// ProcessHeartbeat processes a heartbeat request.
-// The heartbeat doesn't accumulate its own session history but is enriched
-// with the main session's conversation summary so the agent has context about
-// recent user interactions (useful for self-improvement and proactive tasks).
+// ProcessHeartbeat processes a heartbeat request using a dedicated agent clone.
+// The heartbeat agent has its own session store and context window so it never
+// pollutes the main agent's state. It is enriched with the main session's
+// conversation summary for situational awareness.
 func (al *AgentLoop) ProcessHeartbeat(
 	ctx context.Context,
 	content, channel, chatID string,
@@ -1268,29 +1268,31 @@ func (al *AgentLoop) ProcessHeartbeat(
 		return "", err
 	}
 
-	agent := al.GetRegistry().GetDefaultAgent()
-	if agent == nil {
+	mainAgent := al.GetRegistry().GetDefaultAgent()
+	if mainAgent == nil {
 		return "", fmt.Errorf("no default agent for heartbeat")
 	}
 
 	// Inject the main session's conversation summary so the heartbeat agent
 	// knows what the user has been working on recently.
-	mainSessionKey := routing.BuildAgentMainSessionKey(agent.ID)
-	if summary := agent.Sessions.GetSummary(mainSessionKey); summary != "" {
+	mainSessionKey := routing.BuildAgentMainSessionKey(mainAgent.ID)
+	if summary := mainAgent.Sessions.GetSummary(mainSessionKey); summary != "" {
 		content = content + "\n\n## Recent Conversation Context\n\n" + summary
 	}
 
-	return al.runAgentLoop(ctx, agent, processOptions{
-		SessionKey:            "heartbeat",
-		Channel:               channel,
-		ChatID:                chatID,
-		UserMessage:           content,
-		DefaultResponse:       defaultResponse,
-		EnableSummary:         false,
-		SendResponse:          false,
-		SuppressToolFeedback:  true,
-		NoHistory:             true,
-		MaxIterationsOverride: 5, // Heartbeat should be lightweight — cap tool iterations
+	// Create a dedicated agent clone with its own session store and context.
+	heartbeatAgent := mainAgent.CloneForHeartbeat()
+
+	return al.runAgentLoop(ctx, heartbeatAgent, processOptions{
+		SessionKey:           "heartbeat",
+		Channel:              channel,
+		ChatID:               chatID,
+		UserMessage:          content,
+		DefaultResponse:      defaultResponse,
+		EnableSummary:        false,
+		SendResponse:         false,
+		SuppressToolFeedback: true,
+		NoHistory:            true,
 	})
 }
 
