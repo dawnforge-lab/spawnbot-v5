@@ -7,8 +7,19 @@ BIN_DIR="$SPAWNBOT_HOME/bin"
 GO_VERSION="1.25.8"
 TMP_DIR="$(mktemp -d)"
 
-cleanup() { chmod -R u+w "$TMP_DIR" 2>/dev/null; rm -rf "$TMP_DIR"; }
+# Go stores modules as read-only; must fix perms before rm.
+cleanup() {
+    if [[ -d "$TMP_DIR" ]]; then
+        find "$TMP_DIR" -type d -exec chmod u+wx {} + 2>/dev/null || true
+        rm -rf "$TMP_DIR"
+    fi
+}
 trap cleanup EXIT
+
+# Keep all Go caches inside TMP_DIR so cleanup is self-contained.
+export GOPATH="$TMP_DIR/gopath"
+export GOMODCACHE="$TMP_DIR/gomod"
+export GOCACHE="$TMP_DIR/gobuild"
 
 echo "Installing Spawnbot to $SPAWNBOT_HOME ..."
 
@@ -43,7 +54,6 @@ if ! command -v go &>/dev/null; then
     tar -C "$SPAWNBOT_HOME" -xzf "$TMP_DIR/$GO_TAR"
 
     export PATH="$GO_LOCAL/bin:$PATH"
-    export GOPATH="$TMP_DIR/gopath"
     GO_CMD="$GO_LOCAL/bin/go"
     echo "Go $GO_VERSION installed to $GO_LOCAL"
 fi
@@ -64,8 +74,8 @@ echo ""
 echo "Spawnbot installed to $BIN_DIR/spawnbot"
 
 # Add to PATH if not already there
+SHELL_RC=""
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    SHELL_RC=""
     if [[ -f "$HOME/.zshrc" ]]; then
         SHELL_RC="$HOME/.zshrc"
     elif [[ -f "$HOME/.bashrc" ]]; then
