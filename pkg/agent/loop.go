@@ -1657,17 +1657,7 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 	}
 	ts.captureRestorePoint(history, summary)
 
-	messages := ts.agent.ContextBuilder.BuildMessages(
-		history,
-		summary,
-		ts.userMessage,
-		ts.media,
-		ts.channel,
-		ts.chatID,
-		ts.opts.SenderID,
-		ts.opts.SenderDisplayName,
-		activeSkillNames(ts.agent, ts.opts)...,
-	)
+	messages := ts.buildMessages(history, summary, ts.userMessage, ts.media)
 
 	cfg := al.GetConfig()
 	maxMediaSize := cfg.Agents.Defaults.GetMaxMediaSize()
@@ -1692,12 +1682,7 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 			}
 			newHistory := ts.agent.Sessions.GetHistory(ts.sessionKey)
 			newSummary := ts.agent.Sessions.GetSummary(ts.sessionKey)
-			messages = ts.agent.ContextBuilder.BuildMessages(
-				newHistory, newSummary, ts.userMessage,
-				ts.media, ts.channel, ts.chatID,
-				ts.opts.SenderID, ts.opts.SenderDisplayName,
-				activeSkillNames(ts.agent, ts.opts)...,
-			)
+			messages = ts.buildMessages(newHistory, newSummary, ts.userMessage, ts.media)
 			messages = resolveMediaRefs(messages, al.mediaStore, maxMediaSize)
 		}
 	}
@@ -2061,11 +2046,7 @@ turnLoop:
 
 				newHistory := ts.agent.Sessions.GetHistory(ts.sessionKey)
 				newSummary := ts.agent.Sessions.GetSummary(ts.sessionKey)
-				messages = ts.agent.ContextBuilder.BuildMessages(
-					newHistory, newSummary, "",
-					nil, ts.channel, ts.chatID, ts.opts.SenderID, ts.opts.SenderDisplayName,
-					activeSkillNames(ts.agent, ts.opts)...,
-				)
+				messages = ts.buildMessages(newHistory, newSummary, "", nil)
 				callMessages = messages
 				if gracefulTerminal {
 					callMessages = append(append([]providers.Message(nil), messages...), ts.interruptHintMessage())

@@ -10,6 +10,11 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 )
 
+// subagentSystemPrompt is the default system prompt for all subagents.
+// Lean and focused — subagents don't get the main agent's identity, memory,
+// or skills. They get a task and tools to complete it.
+const subagentSystemPrompt = `You are a subagent of spawnbot. Complete the given task using available tools and report a clear result. Be concise.`
+
 // SubTurnSpawner is an interface for spawning sub-turns.
 // This avoids circular dependency between tools and agent packages.
 type SubTurnSpawner interface {
@@ -201,9 +206,7 @@ func (sm *SubagentManager) runTask(
 		)
 	} else {
 		// Fallback to legacy RunToolLoop
-		systemPrompt := `You are a subagent. Complete the given task independently and report the result.
-You have access to tools - use them as needed to complete your task.
-After completing the task, provide a clear summary of what was done.`
+		systemPrompt := subagentSystemPrompt
 
 		messages := []providers.Message{
 			{Role: "system", Content: systemPrompt},
@@ -378,33 +381,22 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 
 	label, _ := args["label"].(string)
 
-	// Build system prompt for subagent
-	systemPrompt := fmt.Sprintf(
-		`You are a subagent. Complete the given task independently and provide a clear, concise result.
-
-Task: %s`,
-		task,
-	)
-
+	// Task description becomes the first user message.
+	taskMessage := task
 	if label != "" {
-		systemPrompt = fmt.Sprintf(
-			`You are a subagent labeled "%s". Complete the given task independently and provide a clear, concise result.
-
-Task: %s`,
-			label,
-			task,
-		)
+		taskMessage = fmt.Sprintf("[%s] %s", label, task)
 	}
 
 	// Use spawner if available (direct SpawnSubTurn call)
 	if t.spawner != nil {
 		result, err := t.spawner.SpawnSubTurn(ctx, SubTurnConfig{
-			Model:        t.defaultModel,
-			Tools:        nil, // Will inherit from parent via context
-			SystemPrompt: systemPrompt,
-			MaxTokens:    t.maxTokens,
-			Temperature:  t.temperature,
-			Async:        false, // Synchronous execution
+			Model:              t.defaultModel,
+			Tools:              nil, // Will inherit from parent via context
+			SystemPrompt:       taskMessage,
+			ActualSystemPrompt: subagentSystemPrompt,
+			MaxTokens:          t.maxTokens,
+			Temperature:        t.temperature,
+			Async:              false, // Synchronous execution
 		})
 		if err != nil {
 			return ErrorResult(fmt.Sprintf("Subagent execution failed: %v", err)).WithError(err)

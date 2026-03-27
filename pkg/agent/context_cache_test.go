@@ -37,7 +37,7 @@ func setupWorkspace(t *testing.T, files map[string]string) string {
 // Codex (only reads last system message as instructions).
 func TestSingleSystemMessage(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
-		"AGENT.md": "# Agent\nTest agent.",
+		"SOUL.md": "# Soul\nTest spawnbot agent.",
 	})
 	defer os.RemoveAll(tmpDir)
 
@@ -128,7 +128,7 @@ func TestSingleSystemMessage(t *testing.T) {
 
 func TestBuildMessages_CurrentSenderDynamicContext(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
-		"IDENTITY.md": "# Identity\nTest agent.",
+		"SOUL.md": "# Soul\nTest spawnbot agent.",
 	})
 	defer os.RemoveAll(tmpDir)
 
@@ -207,13 +207,6 @@ func TestMtimeAutoInvalidation(t *testing.T) {
 			contentV2:  "# Updated Soul",
 			checkField: "Updated Soul",
 		},
-		{
-			name:       "memory file change",
-			file:       "memory/MEMORY.md",
-			contentV1:  "# Memory\nUser likes Go.",
-			contentV2:  "# Memory\nUser likes Rust.",
-			checkField: "User likes Rust",
-		},
 	}
 
 	for _, tt := range tests {
@@ -280,7 +273,7 @@ func TestMtimeAutoInvalidation(t *testing.T) {
 // even when source files haven't changed (useful for tests and reload commands).
 func TestExplicitInvalidateCache(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
-		"AGENT.md": "# Test Agent",
+		"SOUL.md": "# Soul\nTest spawnbot agent.",
 	})
 	defer os.RemoveAll(tmpDir)
 
@@ -307,8 +300,7 @@ func TestExplicitInvalidateCache(t *testing.T) {
 // when no files change (regression test for issue #607).
 func TestCacheStability(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
-		"AGENT.md": "# Agent\nContent",
-		"SOUL.md":  "# Soul\nContent",
+		"SOUL.md": "# Soul\nContent",
 	})
 	defer os.RemoveAll(tmpDir)
 
@@ -346,12 +338,6 @@ func TestNewFileCreationInvalidatesCache(t *testing.T) {
 			file:       "SOUL.md",
 			content:    "# Soul\nBe kind and helpful.",
 			checkField: "Be kind and helpful",
-		},
-		{
-			name:       "new memory file",
-			file:       "memory/MEMORY.md",
-			content:    "# Memory\nUser prefers dark mode.",
-			checkField: "User prefers dark mode",
 		},
 	}
 
@@ -607,7 +593,6 @@ description: delete-me-v1
 // Run with: go test -race ./pkg/agent/ -run TestConcurrentBuildSystemPromptWithCache
 func TestConcurrentBuildSystemPromptWithCache(t *testing.T) {
 	tmpDir := setupWorkspace(t, map[string]string{
-		"AGENT.md":             "# Agent\nConcurrency test agent.",
 		"SOUL.md":              "# Soul\nBe helpful.",
 		"memory/MEMORY.md":     "# Memory\nUser prefers Go.",
 		"skills/demo/SKILL.md": "---\nname: demo\ndescription: \"demo skill\"\n---\n# Demo",
@@ -707,6 +692,84 @@ func TestEmptyWorkspaceBaselineDetectsNewFiles(t *testing.T) {
 	}
 }
 
+// TestBuildMessagesWithSystemOverride verifies that system prompt override
+// replaces the full static prompt (identity, SOUL.md, skills, memory) while
+// preserving dynamic context (time, runtime).
+func TestBuildMessagesWithSystemOverride(t *testing.T) {
+	tmpDir := setupWorkspace(t, map[string]string{
+		"SOUL.md":           "# Soul\nYou are the main agent.",
+		"memory/MEMORY.md":  "# Memory\nUser likes Go.",
+	})
+	defer os.RemoveAll(tmpDir)
+
+	cb := NewContextBuilder(tmpDir)
+
+	override := "You are a code reviewer. Focus only on reviewing the provided code."
+	msgs := cb.BuildMessagesWithSystemOverride(
+		override,
+		nil, "", "Review this code", nil,
+		"cli", "chat1", "", "",
+	)
+
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least 2 messages, got %d", len(msgs))
+	}
+	if msgs[0].Role != "system" {
+		t.Fatalf("first message should be system, got %s", msgs[0].Role)
+	}
+
+	sys := msgs[0].Content
+
+	// Override content should be present
+	if !strings.Contains(sys, "code reviewer") {
+		t.Error("system message should contain the override prompt")
+	}
+
+	// Dynamic context should still be present
+	if !strings.Contains(sys, "Current Time") {
+		t.Error("system message should contain dynamic time context")
+	}
+
+	// Main agent identity should NOT be present
+	if strings.Contains(sys, "main agent") {
+		t.Error("system message should not contain SOUL.md content")
+	}
+	if strings.Contains(sys, "User likes Go") {
+		t.Error("system message should not contain memory context")
+	}
+	if strings.Contains(sys, "spawnbot") {
+		t.Error("system message should not contain identity block")
+	}
+
+	// User message should be the last message
+	if msgs[len(msgs)-1].Content != "Review this code" {
+		t.Errorf("last message should be user message, got %q", msgs[len(msgs)-1].Content)
+	}
+}
+
+// TestBuildMessagesWithSystemOverride_IncludesSummary verifies that conversation
+// summaries are still appended when using a system prompt override.
+func TestBuildMessagesWithSystemOverride_IncludesSummary(t *testing.T) {
+	tmpDir := setupWorkspace(t, nil)
+	defer os.RemoveAll(tmpDir)
+
+	cb := NewContextBuilder(tmpDir)
+
+	msgs := cb.BuildMessagesWithSystemOverride(
+		"You are a summarizer.",
+		nil, "Previously discussed testing strategies", "Summarize", nil,
+		"cli", "chat1", "", "",
+	)
+
+	sys := msgs[0].Content
+	if !strings.Contains(sys, "CONTEXT_SUMMARY:") {
+		t.Error("system message should contain summary when provided")
+	}
+	if !strings.Contains(sys, "testing strategies") {
+		t.Error("system message should contain actual summary content")
+	}
+}
+
 // BenchmarkBuildMessagesWithCache measures caching performance.
 func BenchmarkBuildMessagesWithCache(b *testing.B) {
 	tmpDir, _ := os.MkdirTemp("", "spawnbot-bench-*")
@@ -714,7 +777,7 @@ func BenchmarkBuildMessagesWithCache(b *testing.B) {
 
 	os.MkdirAll(filepath.Join(tmpDir, "memory"), 0o755)
 	os.MkdirAll(filepath.Join(tmpDir, "skills"), 0o755)
-	for _, name := range []string{"AGENT.md", "SOUL.md"} {
+	for _, name := range []string{"SOUL.md"} {
 		os.WriteFile(filepath.Join(tmpDir, name), []byte(strings.Repeat("Content.\n", 10)), 0o644)
 	}
 

@@ -121,9 +121,7 @@ func NewAgentInstance(
 			logger.ErrorCF("agent", "Failed to initialize semantic memory store; continuing without semantic memory",
 				map[string]any{"error": err.Error()})
 		} else {
-			contextBuilder.WithSQLiteMemory(sqliteStore)
-
-			// Create embedding provider (may be nil on error — tools degrade to FTS-only).
+				// Create embedding provider (may be nil on error — tools degrade to FTS-only).
 			var embedder memory.EmbeddingProvider
 			embCfg := memory.EmbeddingConfig{
 				Provider:   cfg.Embeddings.Provider,

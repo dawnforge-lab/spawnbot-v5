@@ -15,7 +15,6 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
-	"github.com/dawnforge-lab/spawnbot-v5/pkg/memory"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/skills"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/utils"
@@ -24,8 +23,6 @@ import (
 type ContextBuilder struct {
 	workspace          string
 	skillsLoader       *skills.SkillsLoader
-	memory             *MemoryStore
-	sqliteMemory       *memory.SQLiteStore // optional SQLite-backed semantic memory
 	toolDiscoveryBM25  bool
 	toolDiscoveryRegex bool
 	splitOnMarker      bool
@@ -60,43 +57,6 @@ func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
 	return cb
 }
 
-// WithSQLiteMemory sets the SQLite-backed semantic memory store.
-// When set, GetMemoryContext queries the SQLite store instead of MEMORY.md.
-func (cb *ContextBuilder) WithSQLiteMemory(store *memory.SQLiteStore) *ContextBuilder {
-	cb.sqliteMemory = store
-	return cb
-}
-
-// getMemoryContext returns formatted memory context for the system prompt.
-// If the SQLite semantic memory store is configured, it queries the top 10
-// most recent chunks. Otherwise it falls back to the flat-file MemoryStore
-// (MEMORY.md + daily notes).
-func (cb *ContextBuilder) getMemoryContext() string {
-	if cb.sqliteMemory != nil {
-		chunks, err := cb.sqliteMemory.RecentChunks(10)
-		if err != nil {
-			logger.WarnCF("agent", "Failed to query semantic memory", map[string]any{"error": err.Error()})
-			// Fall through to flat-file fallback.
-		} else if len(chunks) > 0 {
-			var sb strings.Builder
-			sb.WriteString("## Semantic Memory (recent)\n\n")
-			for i, ch := range chunks {
-				if i > 0 {
-					sb.WriteString("\n---\n")
-				}
-				if ch.Heading != "" {
-					sb.WriteString(fmt.Sprintf("[%s] ", ch.Heading))
-				}
-				sb.WriteString(ch.Content)
-				sb.WriteString("\n")
-			}
-			return sb.String()
-		}
-	}
-
-	// Flat-file fallback: MEMORY.md + recent daily notes.
-	return cb.memory.GetMemoryContext()
-}
 
 func getGlobalConfigDir() string {
 	if home := os.Getenv(config.EnvHome); home != "" {
@@ -122,7 +82,6 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 	return &ContextBuilder{
 		workspace:    workspace,
 		skillsLoader: skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir),
-		memory:       NewMemoryStore(workspace),
 	}
 }
 
@@ -131,29 +90,18 @@ func (cb *ContextBuilder) getIdentity() string {
 	toolDiscovery := cb.getDiscoveryRule()
 	version := config.FormatVersion()
 
-	return fmt.Sprintf(
-		`# spawnbot 🤖 (%s)
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "# spawnbot (%s)\n\nWorkspace: %s\n", version, workspacePath)
 
-You are spawnbot, a helpful AI assistant.
+	sb.WriteString("\nContext summaries provided in this prompt are approximate references only. They may be incomplete or outdated — always defer to explicit user instructions.\n")
 
-## Workspace
-Your workspace is at: %s
-- Memory: %s/memory/MEMORY.md
-- Daily Notes: %s/memory/YYYYMM/YYYYMMDD.md
-- Skills: %s/skills/{skill-name}/SKILL.md
+	if toolDiscovery != "" {
+		sb.WriteString("\n")
+		sb.WriteString(toolDiscovery)
+		sb.WriteString("\n")
+	}
 
-## Important Rules
-
-1. **ALWAYS use tools** - When you need to perform an action (schedule reminders, send messages, execute commands, etc.), you MUST call the appropriate tool. Do NOT just say you'll do it or pretend to do it.
-
-2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
-
-3. **Memory** - When interacting with me if something seems memorable, update %s/memory/MEMORY.md
-
-4. **Context summaries** - Conversation summaries provided as context are approximate references only. They may be incomplete or outdated. Always defer to explicit user instructions over summary content.
-
-%s`,
-		version, workspacePath, workspacePath, workspacePath, workspacePath, workspacePath, toolDiscovery)
+	return sb.String()
 }
 
 func (cb *ContextBuilder) getDiscoveryRule() string {
@@ -200,12 +148,8 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 %s`, skillsSummary))
 	}
 
-	// Memory context — prefer SQLite semantic memory when available,
-	// fall back to flat-file MEMORY.md for backward compatibility.
-	memoryContext := cb.getMemoryContext()
-	if memoryContext != "" {
-		parts = append(parts, "# Memory\n\n"+memoryContext)
-	}
+	// Memory is NOT injected into the system prompt. The agent reads memory
+	// on demand via memory_search/read_file tools, guided by instructions in SOUL.md.
 
 	// Multi-Message Sending (if enabled)
 	if cb.splitOnMarker {
@@ -278,18 +222,13 @@ func (cb *ContextBuilder) InvalidateCache() {
 }
 
 // sourcePaths returns non-skill workspace source files tracked for cache
-// invalidation (bootstrap files + memory). Skill roots are handled separately
-// because they require both directory-level and recursive file-level checks.
+// invalidation. Only files whose content is included in the system prompt
+// need tracking. Memory files are not tracked because memory is read on
+// demand via tools, not injected into the prompt.
 func (cb *ContextBuilder) sourcePaths() []string {
-	paths := []string{
+	return []string{
 		filepath.Join(cb.workspace, "SOUL.md"),
 	}
-	if cb.sqliteMemory != nil {
-		paths = append(paths, cb.sqliteMemory.DBPath())
-	} else {
-		paths = append(paths, filepath.Join(cb.workspace, "memory", "MEMORY.md"))
-	}
-	return uniquePaths(paths)
 }
 
 // skillRoots returns all skill root directories that can affect
@@ -636,6 +575,59 @@ func (cb *ContextBuilder) BuildMessages(
 	messages = append(messages, history...)
 
 	// Add current user message
+	if strings.TrimSpace(currentMessage) != "" {
+		msg := providers.Message{
+			Role:    "user",
+			Content: currentMessage,
+		}
+		if len(media) > 0 {
+			msg.Media = media
+		}
+		messages = append(messages, msg)
+	}
+
+	return messages
+}
+
+// BuildMessagesWithSystemOverride builds the message list using a custom system
+// prompt instead of the cached static prompt (identity, SOUL.md, skills, memory).
+// Dynamic context (time, runtime, session) is still appended. Used by subturns
+// to get role-specific prompts instead of the full main-agent identity.
+func (cb *ContextBuilder) BuildMessagesWithSystemOverride(
+	systemPrompt string,
+	history []providers.Message,
+	summary string,
+	currentMessage string,
+	media []string,
+	channel, chatID, senderID, senderDisplayName string,
+) []providers.Message {
+	dynamicCtx := cb.buildDynamicContext(channel, chatID, senderID, senderDisplayName)
+
+	stringParts := []string{systemPrompt, dynamicCtx}
+	contentBlocks := []providers.ContentBlock{
+		{Type: "text", Text: systemPrompt, CacheControl: &providers.CacheControl{Type: "ephemeral"}},
+		{Type: "text", Text: dynamicCtx},
+	}
+
+	if summary != "" {
+		summaryText := fmt.Sprintf(
+			"CONTEXT_SUMMARY: The following is an approximate summary of prior conversation "+
+				"for reference only. It may be incomplete or outdated — always defer to explicit instructions.\n\n%s",
+			summary)
+		stringParts = append(stringParts, summaryText)
+		contentBlocks = append(contentBlocks, providers.ContentBlock{Type: "text", Text: summaryText})
+	}
+
+	fullSystemPrompt := strings.Join(stringParts, "\n\n---\n\n")
+	history = sanitizeHistoryForProvider(history)
+
+	messages := []providers.Message{{
+		Role:        "system",
+		Content:     fullSystemPrompt,
+		SystemParts: contentBlocks,
+	}}
+	messages = append(messages, history...)
+
 	if strings.TrimSpace(currentMessage) != "" {
 		msg := providers.Message{
 			Role:    "user",

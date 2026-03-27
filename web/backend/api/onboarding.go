@@ -351,5 +351,32 @@ func createWorkspaceDir(workspace, userName string) error {
 		}
 	}
 
+	// Write GOALS.md if it doesn't exist
+	goalsPath := filepath.Join(workspace, "GOALS.md")
+	if _, err := os.Stat(goalsPath); os.IsNotExist(err) {
+		content := "# Goals\n\n## Active\n<!-- Spawnbot will track your objectives here -->\n\n## Completed\n<!-- Finished goals move here -->\n"
+		if err := os.WriteFile(goalsPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("failed to write GOALS.md: %w", err)
+		}
+	}
+
+	// Write PLAYBOOK.md if it doesn't exist
+	playbookPath := filepath.Join(workspace, "PLAYBOOK.md")
+	if _, err := os.Stat(playbookPath); os.IsNotExist(err) {
+		content := "# Playbook\n\n## Communication Style\n- Be direct and concise\n- Lead with the answer, not the reasoning\n- Ask for clarification when instructions are ambiguous\n\n## Tool Usage\n- Always use tools when action is needed — never pretend to do something\n- Use memory_store when learning something worth remembering\n- Use memory_search before answering questions that might be in memory\n\n## Autonomy\n- Check GOALS.md when idle to find proactive work\n- Notify the user of important feed updates\n- Store interesting observations in memory for future reference\n"
+		if err := os.WriteFile(playbookPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("failed to write PLAYBOOK.md: %w", err)
+		}
+	}
+
+	// Write HEARTBEAT.md if it doesn't exist
+	heartbeatPath := filepath.Join(workspace, "HEARTBEAT.md")
+	if _, err := os.Stat(heartbeatPath); os.IsNotExist(err) {
+		content := "# Heartbeat\n\n## Idle Triggers\nWhen idle for extended periods, check:\n- GOALS.md for pending objectives\n- Recent memory for follow-ups\n- Feed updates that need attention\n\n## Proactive Behaviors\n- Summarize important feed items for the user\n- Flag upcoming deadlines from GOALS.md\n- Offer help when context suggests the user might need it\n"
+		if err := os.WriteFile(heartbeatPath, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("failed to write HEARTBEAT.md: %w", err)
+		}
+	}
+
 	return nil
 }

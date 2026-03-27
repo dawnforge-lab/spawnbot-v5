@@ -100,22 +100,11 @@ func (t *SpawnTool) execute(
 		}
 	}
 
-	// Build system prompt for spawned subagent
-	systemPrompt := fmt.Sprintf(
-		`You are a spawned subagent running in the background. Complete the given task independently and report back when done.
-
-Task: %s`,
-		task,
-	)
-
+	// Task description becomes the first user message.
+	// ActualSystemPrompt is the lean system prompt for the subagent.
+	taskMessage := task
 	if label != "" {
-		systemPrompt = fmt.Sprintf(
-			`You are a spawned subagent labeled "%s" running in the background. Complete the given task independently and report back when done.
-
-Task: %s`,
-			label,
-			task,
-		)
+		taskMessage = fmt.Sprintf("[%s] %s", label, task)
 	}
 
 	// Use spawner if available (direct SpawnSubTurn call)
@@ -123,12 +112,13 @@ Task: %s`,
 		// Launch async sub-turn in goroutine
 		go func() {
 			result, err := t.spawner.SpawnSubTurn(ctx, SubTurnConfig{
-				Model:        t.defaultModel,
-				Tools:        nil, // Will inherit from parent via context
-				SystemPrompt: systemPrompt,
-				MaxTokens:    t.maxTokens,
-				Temperature:  t.temperature,
-				Async:        true, // Async execution
+				Model:              t.defaultModel,
+				Tools:              nil, // Will inherit from parent via context
+				SystemPrompt:       taskMessage,
+				ActualSystemPrompt: subagentSystemPrompt,
+				MaxTokens:          t.maxTokens,
+				Temperature:        t.temperature,
+				Async:              true, // Async execution
 			})
 			if err != nil {
 				result = ErrorResult(fmt.Sprintf("Spawn failed: %v", err)).WithError(err)

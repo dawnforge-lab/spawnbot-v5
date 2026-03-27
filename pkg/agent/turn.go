@@ -371,6 +371,26 @@ func (ts *turnState) interruptHintMessage() providers.Message {
 	}
 }
 
+// buildMessages routes to BuildMessagesWithSystemOverride when a system prompt
+// override is set (subturns with role-specific prompts), otherwise falls through
+// to the standard BuildMessages with full identity/SOUL/skills/memory.
+func (ts *turnState) buildMessages(history []providers.Message, summary, currentMessage string, media []string) []providers.Message {
+	if ts.opts.SystemPromptOverride != "" {
+		return ts.agent.ContextBuilder.BuildMessagesWithSystemOverride(
+			ts.opts.SystemPromptOverride,
+			history, summary, currentMessage, media,
+			ts.channel, ts.chatID,
+			ts.opts.SenderID, ts.opts.SenderDisplayName,
+		)
+	}
+	return ts.agent.ContextBuilder.BuildMessages(
+		history, summary, currentMessage, media,
+		ts.channel, ts.chatID,
+		ts.opts.SenderID, ts.opts.SenderDisplayName,
+		activeSkillNames(ts.agent, ts.opts)...,
+	)
+}
+
 // SubTurn-related methods
 
 // Finish marks the turn as finished and closes the pendingResults channel
