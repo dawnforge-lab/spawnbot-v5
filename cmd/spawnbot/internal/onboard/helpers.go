@@ -410,14 +410,13 @@ func onboard(encrypt bool) {
 	fmt.Println("  CLI (interactive):")
 	fmt.Println("    spawnbot agent")
 	fmt.Println()
+	fmt.Println("  Web UI:")
+	fmt.Println("    spawnbot-web")
+	fmt.Println("    http://localhost:18800")
 	if wantTelegram {
-		fmt.Println("  Telegram + Web UI:")
+		fmt.Println()
+		fmt.Println("  Telegram + all channels:")
 		fmt.Println("    spawnbot gateway")
-		fmt.Println("    Web UI: http://localhost:18800")
-	} else {
-		fmt.Println("  Web UI + all channels:")
-		fmt.Println("    spawnbot gateway")
-		fmt.Println("    http://localhost:18800")
 	}
 }
 

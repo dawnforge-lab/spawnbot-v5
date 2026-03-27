@@ -65,13 +65,28 @@ cd "$TMP_DIR/src"
 CGO_ENABLED=0 "$GO_CMD" generate ./pkg/workspace/
 CGO_ENABLED=0 "$GO_CMD" build -tags goolm,stdjson -ldflags "-s -w" -o "$TMP_DIR/spawnbot" ./cmd/spawnbot/
 
-# Install binary
+# Build web UI if node/pnpm available
+if command -v pnpm &>/dev/null && command -v node &>/dev/null; then
+    echo "Building web UI..."
+    (cd web/frontend && pnpm install --silent 2>/dev/null && npx vite build --outDir ../backend/dist --emptyOutDir 2>/dev/null) && \
+    CGO_ENABLED=0 "$GO_CMD" build -tags goolm,stdjson -ldflags "-s -w" -o "$TMP_DIR/spawnbot-web" ./web/backend/ && \
+    echo "Web UI built successfully" || \
+    echo "Web UI build skipped (optional)"
+else
+    echo "Note: install pnpm + node for the web UI (optional)"
+fi
+
+# Install binaries
 mkdir -p "$BIN_DIR"
 mv "$TMP_DIR/spawnbot" "$BIN_DIR/spawnbot"
 chmod +x "$BIN_DIR/spawnbot"
+if [[ -f "$TMP_DIR/spawnbot-web" ]]; then
+    mv "$TMP_DIR/spawnbot-web" "$BIN_DIR/spawnbot-web"
+    chmod +x "$BIN_DIR/spawnbot-web"
+fi
 
 echo ""
-echo "Spawnbot installed to $BIN_DIR/spawnbot"
+echo "Spawnbot installed to $BIN_DIR/"
 
 # Add to PATH — detect the user's actual shell, not just which rc files exist
 SHELL_RC=""
