@@ -7,7 +7,7 @@ BIN_DIR="$SPAWNBOT_HOME/bin"
 GO_VERSION="1.25.8"
 TMP_DIR="$(mktemp -d)"
 
-cleanup() { rm -rf "$TMP_DIR"; }
+cleanup() { chmod -R u+w "$TMP_DIR" 2>/dev/null; rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 
 echo "Installing Spawnbot to $SPAWNBOT_HOME ..."
