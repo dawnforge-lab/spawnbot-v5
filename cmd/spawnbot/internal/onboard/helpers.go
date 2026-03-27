@@ -10,39 +10,9 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/credential"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/discovery"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/workspace"
 )
-
-// providerInfo holds the configuration details for a chosen LLM provider.
-type providerInfo struct {
-	modelName string
-	model     string
-	apiBase   string
-}
-
-// providerDefaults maps provider selection keys to their default model config.
-var providerDefaults = map[string]providerInfo{
-	"openrouter": {
-		modelName: "anthropic/claude-sonnet-4",
-		model:     "openrouter/anthropic/claude-sonnet-4",
-		apiBase:   "https://openrouter.ai/api/v1",
-	},
-	"anthropic": {
-		modelName: "claude-sonnet-4-20250514",
-		model:     "anthropic/claude-sonnet-4-20250514",
-		apiBase:   "https://api.anthropic.com/v1",
-	},
-	"openai": {
-		modelName: "gpt-4o",
-		model:     "openai/gpt-4o",
-		apiBase:   "https://api.openai.com/v1",
-	},
-	"custom": {
-		modelName: "custom-model",
-		model:     "openai/custom-model",
-		apiBase:   "http://localhost:8080/v1",
-	},
-}
 
 // embeddingDefaults maps embedding choice keys to (provider, model, baseURL).
 type embeddingInfo struct {
@@ -106,9 +76,10 @@ func onboard(encrypt bool) {
 	// ── Interactive wizard ─────────────────────────────────────────────
 
 	var (
-		provider      string
+		providerKey   string
 		apiKey        string
 		customBaseURL string
+		selectedModel string
 		userName      string
 		approvalMode  string
 		wantTelegram  bool
@@ -117,18 +88,20 @@ func onboard(encrypt bool) {
 		embAPIKey     string
 	)
 
-	// Group 1: Provider selection
+	// Group 1: Provider selection — built from discovery catalog
+	providerOpts := make([]huh.Option[string], 0, len(discovery.Providers)+1)
+	for _, p := range discovery.Providers {
+		providerOpts = append(providerOpts, huh.NewOption(p.Name, p.Key))
+	}
+	providerOpts = append(providerOpts, huh.NewOption("Custom OpenAI-compatible endpoint", "custom"))
+
 	providerForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Which LLM provider?").
-				Options(
-					huh.NewOption("OpenRouter (recommended -- access to 200+ models)", "openrouter"),
-					huh.NewOption("Anthropic (Claude)", "anthropic"),
-					huh.NewOption("OpenAI", "openai"),
-					huh.NewOption("Custom OpenAI-compatible endpoint", "custom"),
-				).
-				Value(&provider),
+				Options(providerOpts...).
+				Value(&providerKey).
+				Height(15),
 		),
 	)
 	if err := providerForm.Run(); err != nil {
@@ -136,13 +109,24 @@ func onboard(encrypt bool) {
 		os.Exit(1)
 	}
 
-	// Group 2: Custom base URL (only for custom provider)
-	if provider == "custom" {
+	// Resolve provider info
+	prov := discovery.FindProvider(providerKey)
+	apiBase := ""
+	if prov != nil {
+		apiBase = prov.APIBase
+	}
+
+	// Group 2: Custom base URL (only for custom or providers without default base)
+	if providerKey == "custom" || apiBase == "" {
+		placeholder := "http://localhost:8080/v1"
+		if providerKey == "azure" {
+			placeholder = "https://your-resource.openai.azure.com"
+		}
 		customForm := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
 					Title("API base URL").
-					Placeholder("http://localhost:8080/v1").
+					Placeholder(placeholder).
 					Value(&customBaseURL),
 			),
 		)
@@ -150,26 +134,93 @@ func onboard(encrypt bool) {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
-		if customBaseURL == "" {
-			customBaseURL = "http://localhost:8080/v1"
+		if customBaseURL != "" {
+			apiBase = customBaseURL
+		} else if providerKey == "custom" {
+			apiBase = "http://localhost:8080/v1"
 		}
 	}
 
-	// Group 3: API key input (masked)
-	apiKeyForm := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("API Key").
-				EchoMode(huh.EchoModePassword).
-				Value(&apiKey),
-		),
-	)
-	if err := apiKeyForm.Run(); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+	// Group 3: API key input (skip for local providers)
+	isLocal := prov != nil && prov.Local
+	if !isLocal {
+		keyHint := ""
+		if prov != nil && prov.KeyHint != "" {
+			keyHint = fmt.Sprintf("API Key (%s)", prov.KeyHint)
+		} else {
+			keyHint = "API Key"
+		}
+
+		apiKeyForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title(keyHint).
+					EchoMode(huh.EchoModePassword).
+					Value(&apiKey),
+			),
+		)
+		if err := apiKeyForm.Run(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
-	// Group 4: User name
+	// Group 4: Model selection — discover from provider API
+	fmt.Println("\nDiscovering available models...")
+	models, discErr := discovery.DiscoverModels(apiBase, apiKey)
+	if discErr != nil {
+		fmt.Printf("Warning: could not discover models: %v\n", discErr)
+	}
+
+	if len(models) > 0 {
+		modelOpts := make([]huh.Option[string], 0, len(models))
+		for _, m := range models {
+			label := m.ID
+			if m.OwnedBy != "" {
+				label = fmt.Sprintf("%s (%s)", m.ID, m.OwnedBy)
+			}
+			modelOpts = append(modelOpts, huh.NewOption(label, m.ID))
+		}
+
+		modelForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title(fmt.Sprintf("Select model (%d available)", len(models))).
+					Options(modelOpts...).
+					Value(&selectedModel).
+					Height(15),
+			),
+		)
+		if err := modelForm.Run(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		// No discovery — ask the user to type a model name
+		modelInputForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("Model name (e.g., gpt-4o, claude-sonnet-4, llama-3-70b)").
+					Value(&selectedModel),
+			),
+		)
+		if err := modelInputForm.Run(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		if selectedModel == "" {
+			selectedModel = "gpt-4o"
+		}
+	}
+
+	// Build the model string with protocol prefix
+	protocol := providerKey
+	if providerKey == "custom" {
+		protocol = "openai"
+	}
+	fullModel := protocol + "/" + selectedModel
+
+	// Group 5: User name
 	nameForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
@@ -186,7 +237,7 @@ func onboard(encrypt bool) {
 		userName = "friend"
 	}
 
-	// Group 5: Approval mode
+	// Group 6: Approval mode
 	approvalForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
@@ -203,7 +254,7 @@ func onboard(encrypt bool) {
 		os.Exit(1)
 	}
 
-	// Group 6: Telegram (optional)
+	// Group 7: Telegram (optional)
 	telegramForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -233,7 +284,7 @@ func onboard(encrypt bool) {
 		}
 	}
 
-	// Group 7: Embedding provider
+	// Group 8: Embedding provider
 	embForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
@@ -251,15 +302,12 @@ func onboard(encrypt bool) {
 		os.Exit(1)
 	}
 
-	// Anthropic and OpenRouter don't provide embeddings. If "same" was
-	// selected, auto-switch to Gemini and prompt for a key so the user
-	// doesn't have to edit config.json manually afterward.
-	if embChoice == "same" && (provider == "anthropic" || provider == "openrouter") {
-		fmt.Printf("\nNote: %s does not provide embeddings. Switching to Gemini (free tier).\n", provider)
+	// Anthropic and OpenRouter don't provide embeddings.
+	if embChoice == "same" && (providerKey == "anthropic" || providerKey == "openrouter") {
+		fmt.Printf("\nNote: %s does not provide embeddings. Switching to Gemini (free tier).\n", providerKey)
 		embChoice = "gemini"
 	}
 
-	// If embedding provider differs from chat provider, ask for a separate API key
 	if embChoice != "same" {
 		embKeyForm := huh.NewForm(
 			huh.NewGroup(
@@ -288,38 +336,25 @@ func onboard(encrypt bool) {
 		cfg = config.DefaultConfig()
 	}
 
-	// Set approval mode
 	cfg.Agents.Defaults.ApprovalMode = approvalMode
 
-	// Set up the selected provider model entry
-	pi := providerDefaults[provider]
-	if provider == "custom" && customBaseURL != "" {
-		pi.apiBase = customBaseURL
-	}
-
 	newModel := &config.ModelConfig{
-		ModelName: pi.modelName,
-		Model:     pi.model,
-		APIBase:   pi.apiBase,
+		ModelName: selectedModel,
+		Model:     fullModel,
+		APIBase:   apiBase,
 	}
 	newModel.SetAPIKey(apiKey)
 
-	// Prepend the user's chosen model so it becomes the default (first entry)
 	cfg.ModelList = append([]*config.ModelConfig{newModel}, cfg.ModelList...)
+	cfg.Agents.Defaults.Provider = selectedModel
 
-	// Set the default agent to use this model
-	cfg.Agents.Defaults.Provider = pi.modelName
-
-	// Configure Telegram if requested
 	if wantTelegram && telegramToken != "" {
 		cfg.Channels.Telegram.Enabled = true
 		cfg.Channels.Telegram.SetToken(telegramToken)
 	}
 
-	// Configure embeddings
-	configureEmbeddings(cfg, embChoice, embAPIKey, apiKey, provider)
+	configureEmbeddings(cfg, embChoice, embAPIKey, apiKey, providerKey, apiBase)
 
-	// Save config (this writes both config.json and .security.yml)
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		fmt.Printf("Error saving config: %v\n", err)
 		os.Exit(1)
@@ -327,15 +362,15 @@ func onboard(encrypt bool) {
 
 	// ── Workspace templates ────────────────────────────────────────────
 
-	workspace := cfg.WorkspacePath()
-	createWorkspaceTemplates(workspace, userName)
+	ws := cfg.WorkspacePath()
+	createWorkspaceTemplates(ws, userName)
 
 	// ── Success message ────────────────────────────────────────────────
 
 	fmt.Printf("\n%s spawnbot is ready!\n", internal.Logo)
 	fmt.Println()
-	fmt.Printf("  Provider:  %s\n", provider)
-	fmt.Printf("  Model:     %s\n", pi.modelName)
+	fmt.Printf("  Provider:  %s\n", providerKey)
+	fmt.Printf("  Model:     %s\n", selectedModel)
 	fmt.Printf("  Mode:      %s\n", approvalMode)
 	fmt.Printf("  User:      %s\n", userName)
 	if wantTelegram {
@@ -356,7 +391,7 @@ func onboard(encrypt bool) {
 
 // configureEmbeddings sets up the embeddings section of the config based on the
 // user's choice during onboarding.
-func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, chatProvider string) {
+func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, chatProvider, chatAPIBase string) {
 	if embChoice == "same" {
 		switch chatProvider {
 		case "openai":
@@ -365,10 +400,6 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 			cfg.Embeddings.BaseURL = "https://api.openai.com/v1"
 			cfg.Embeddings.APIKey = chatAPIKey
 		case "anthropic", "openrouter":
-			// These don't provide embeddings — fall back to Gemini.
-			// The CLI auto-switches embChoice before reaching here, but the
-			// web backend may still send "same". Use Gemini with embAPIKey
-			// if provided, otherwise embeddings are left without a key.
 			cfg.Embeddings.Provider = "gemini"
 			cfg.Embeddings.Model = "text-embedding-004"
 			cfg.Embeddings.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
@@ -376,12 +407,9 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 				cfg.Embeddings.APIKey = embAPIKey
 			}
 		default:
-			// Custom provider — try OpenAI-compatible embedding
 			cfg.Embeddings.Provider = "openai"
 			cfg.Embeddings.Model = "text-embedding-3-small"
-			if pi, ok := providerDefaults[chatProvider]; ok {
-				cfg.Embeddings.BaseURL = pi.apiBase
-			}
+			cfg.Embeddings.BaseURL = chatAPIBase
 			cfg.Embeddings.APIKey = chatAPIKey
 		}
 		return
@@ -399,9 +427,6 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 	}
 }
 
-// promptPassphrase reads the encryption passphrase twice from the terminal
-// (with echo disabled) and returns it. Returns an error if the passphrase is
-// empty or if the two inputs do not match.
 func promptPassphrase() (string, error) {
 	fmt.Print("Enter passphrase for credential encryption: ")
 	p1, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -426,9 +451,6 @@ func promptPassphrase() (string, error) {
 	return string(p1), nil
 }
 
-// setupSSHKey generates the spawnbot-specific SSH key at ~/.ssh/spawnbot_ed25519.key.
-// If the key already exists the user is warned and asked to confirm overwrite.
-// Answering anything other than "y" keeps the existing key (not an error).
 func setupSSHKey() error {
 	keyPath, err := credential.DefaultSSHKeyPath()
 	if err != nil {

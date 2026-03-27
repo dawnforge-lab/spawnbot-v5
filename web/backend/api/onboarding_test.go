@@ -119,6 +119,7 @@ func TestOnboardingComplete_WritesConfig(t *testing.T) {
 
 	payload := `{
 		"provider": "openrouter",
+		"model": "anthropic/claude-sonnet-4",
 		"api_key": "sk-test-key-12345",
 		"user_name": "TestUser",
 		"approval_mode": "yolo",
@@ -189,6 +190,7 @@ func TestOnboardingComplete_WithTelegram(t *testing.T) {
 
 	payload := `{
 		"provider": "openai",
+		"model": "gpt-4o",
 		"api_key": "sk-openai-key",
 		"user_name": "Alice",
 		"approval_mode": "approval",
@@ -247,6 +249,7 @@ func TestOnboardingComplete_RejectsMissingProvider(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
+	// Missing both provider and model
 	req := httptest.NewRequest(http.MethodPost, "/api/onboarding/complete", bytes.NewBufferString(`{"api_key":"sk-test"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -267,6 +270,7 @@ func TestOnboardingComplete_WorkspaceCreated(t *testing.T) {
 
 	payload := `{
 		"provider": "openrouter",
+		"model": "anthropic/claude-sonnet-4",
 		"api_key": "sk-test-key",
 		"user_name": "Bob",
 		"approval_mode": "yolo",
