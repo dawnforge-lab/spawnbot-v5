@@ -8,7 +8,7 @@ A lightweight, self-evolving personal AI agent. Single binary, 16 channels, 25+ 
 curl -fsSL https://raw.githubusercontent.com/dawnforge-lab/spawnbot-v5/main/scripts/install.sh | bash
 ```
 
-Requires [Go 1.25+](https://go.dev/dl/). Installs to `~/.spawnbot/bin/` and adds to PATH automatically.
+Installs to `~/.spawnbot/bin/` and adds to PATH automatically. Go is installed locally if not found.
 
 Then:
 
