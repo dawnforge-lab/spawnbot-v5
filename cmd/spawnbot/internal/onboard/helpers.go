@@ -3,6 +3,7 @@ package onboard
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"golang.org/x/term"
@@ -84,6 +85,7 @@ func onboard(encrypt bool) {
 		approvalMode  string
 		wantTelegram  bool
 		telegramToken string
+		telegramUsers string
 		embChoice     string
 		embAPIKey     string
 	)
@@ -276,6 +278,11 @@ func onboard(encrypt bool) {
 					Title("Telegram Bot Token").
 					EchoMode(huh.EchoModePassword).
 					Value(&telegramToken),
+				huh.NewInput().
+					Title("Allowed Telegram user IDs (comma-separated, or * for all)").
+					Description("Send /start to @userinfobot to find your ID").
+					Placeholder("123456789").
+					Value(&telegramUsers),
 			),
 		)
 		if err := tgForm.Run(); err != nil {
@@ -352,6 +359,18 @@ func onboard(encrypt bool) {
 	if wantTelegram && telegramToken != "" {
 		cfg.Channels.Telegram.Enabled = true
 		cfg.Channels.Telegram.SetToken(telegramToken)
+		if telegramUsers != "" {
+			var users []string
+			for _, u := range strings.Split(telegramUsers, ",") {
+				u = strings.TrimSpace(u)
+				if u != "" {
+					users = append(users, u)
+				}
+			}
+			if len(users) > 0 {
+				cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice(users)
+			}
+		}
 	}
 
 	configureEmbeddings(cfg, embChoice, embAPIKey, apiKey, providerKey, apiBase)
@@ -376,18 +395,30 @@ func onboard(encrypt bool) {
 	fmt.Printf("  User:      %s\n", userName)
 	if wantTelegram {
 		fmt.Println("  Telegram:  enabled")
+		if telegramUsers != "" && telegramUsers != "*" {
+			fmt.Printf("  Allowed:   %s\n", telegramUsers)
+		}
 	}
 	fmt.Println()
-	fmt.Println("Next steps:")
 	if encrypt {
-		fmt.Println("  1. Set your encryption passphrase before starting spawnbot:")
-		fmt.Println("       export SPAWNBOT_KEY_PASSPHRASE=<your-passphrase>")
+		fmt.Println("Set your encryption passphrase before starting:")
+		fmt.Println("  export SPAWNBOT_KEY_PASSPHRASE=<your-passphrase>")
 		fmt.Println()
-		fmt.Println("  2. Start chatting:")
-	} else {
-		fmt.Println("  1. Start chatting:")
 	}
-	fmt.Println("       spawnbot agent -m \"Hello!\"")
+	fmt.Println("Start chatting:")
+	fmt.Println()
+	fmt.Println("  CLI (interactive):")
+	fmt.Println("    spawnbot agent")
+	fmt.Println()
+	if wantTelegram {
+		fmt.Println("  Telegram + Web UI:")
+		fmt.Println("    spawnbot gateway")
+		fmt.Println("    Web UI: http://localhost:18800")
+	} else {
+		fmt.Println("  Web UI + all channels:")
+		fmt.Println("    spawnbot gateway")
+		fmt.Println("    http://localhost:18800")
+	}
 }
 
 // configureEmbeddings sets up the embeddings section of the config based on the

@@ -43,9 +43,10 @@ type onboardingCompleteRequest struct {
 	APIBase           string `json:"api_base,omitempty"`
 	UserName          string `json:"user_name"`
 	ApprovalMode      string `json:"approval_mode"`
-	TelegramEnabled   bool   `json:"telegram_enabled"`
-	TelegramToken     string `json:"telegram_token"`
-	EmbeddingProvider string `json:"embedding_provider"`
+	TelegramEnabled   bool     `json:"telegram_enabled"`
+	TelegramToken     string   `json:"telegram_token"`
+	TelegramAllowFrom []string `json:"telegram_allow_from,omitempty"`
+	EmbeddingProvider string   `json:"embedding_provider"`
 	EmbeddingAPIKey   string `json:"embedding_api_key"`
 }
 
@@ -241,6 +242,9 @@ func (h *Handler) handleOnboardingComplete(w http.ResponseWriter, r *http.Reques
 	if req.TelegramEnabled && req.TelegramToken != "" {
 		cfg.Channels.Telegram.Enabled = true
 		cfg.Channels.Telegram.SetToken(req.TelegramToken)
+		if len(req.TelegramAllowFrom) > 0 {
+			cfg.Channels.Telegram.AllowFrom = config.FlexibleStringSlice(req.TelegramAllowFrom)
+		}
 	}
 
 	configureEmbeddings(cfg, req.EmbeddingProvider, req.EmbeddingAPIKey, req.APIKey, req.Provider, apiBase)
