@@ -5,10 +5,7 @@ A lightweight, self-evolving personal AI agent. Single binary, 16 channels, 25+ 
 ## Quickstart
 
 ```bash
-# Install
-curl -fsSL https://github.com/dawnforge-lab/spawnbot-v5/releases/latest/download/install.sh | bash
-
-# Or build from source
+# Build from source
 git clone https://github.com/dawnforge-lab/spawnbot-v5.git
 cd spawnbot-v5
 make build
