@@ -100,7 +100,8 @@ type continuationTarget struct {
 
 const (
 	defaultResponse            = "The model returned an empty response. This may indicate a provider error or token limit."
-	toolLimitResponse          = "I've reached `max_tool_iterations` without a final response. Increase `max_tool_iterations` in config.json if this task needs more tool steps."
+	toolLimitResponse          = "I ran out of tool steps for this task. Here's a summary of what I accomplished and what remains to be done."
+	toolWindDownWarning        = "[SYSTEM] You are approaching the tool iteration limit. You have 2 iterations left. Stop calling tools and respond NOW with: (1) what you've completed so far, (2) what still needs to be done. Do NOT call any more tools."
 	handledToolResponseSummary = "Requested output delivered via tool attachment."
 	sessionKeyAgentPrefix      = "agent:"
 	metadataKeyAccountID       = "account_id"
@@ -1816,6 +1817,14 @@ turnLoop:
 				"iteration": iteration,
 				"max":       ts.agent.MaxIterations,
 			})
+
+		// Inject wind-down warning when approaching iteration limit.
+		// This gives the LLM a chance to summarize progress instead of
+		// being cut off mid-task with no useful response.
+		if ts.agent.MaxIterations > 0 && iteration == ts.agent.MaxIterations-2 {
+			windDown := providers.Message{Role: "user", Content: toolWindDownWarning}
+			ts.agent.Sessions.AddFullMessage(ts.sessionKey, windDown)
+		}
 
 		gracefulTerminal, _ := ts.gracefulInterruptRequested()
 		providerToolDefs := ts.agent.Tools.ToProviderDefs()
