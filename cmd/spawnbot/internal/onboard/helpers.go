@@ -347,6 +347,7 @@ func onboard(encrypt bool) {
 
 	cfg.ModelList = append([]*config.ModelConfig{newModel}, cfg.ModelList...)
 	cfg.Agents.Defaults.Provider = selectedModel
+	cfg.Agents.Defaults.ModelName = selectedModel
 
 	if wantTelegram && telegramToken != "" {
 		cfg.Channels.Telegram.Enabled = true

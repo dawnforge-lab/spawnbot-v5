@@ -164,6 +164,9 @@ func TestOnboardingComplete_WritesConfig(t *testing.T) {
 	if cfg.Agents.Defaults.Provider != "anthropic/claude-sonnet-4" {
 		t.Fatalf("provider = %q, want %q", cfg.Agents.Defaults.Provider, "anthropic/claude-sonnet-4")
 	}
+	if cfg.Agents.Defaults.ModelName != "anthropic/claude-sonnet-4" {
+		t.Fatalf("model_name = %q, want %q", cfg.Agents.Defaults.ModelName, "anthropic/claude-sonnet-4")
+	}
 
 	// First model should be the user-selected one
 	if len(cfg.ModelList) == 0 {

@@ -236,6 +236,7 @@ func (h *Handler) handleOnboardingComplete(w http.ResponseWriter, r *http.Reques
 
 	cfg.ModelList = append([]*config.ModelConfig{newModel}, cfg.ModelList...)
 	cfg.Agents.Defaults.Provider = req.Model
+	cfg.Agents.Defaults.ModelName = req.Model
 
 	if req.TelegramEnabled && req.TelegramToken != "" {
 		cfg.Channels.Telegram.Enabled = true
