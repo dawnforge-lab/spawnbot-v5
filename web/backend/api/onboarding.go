@@ -113,7 +113,7 @@ func (h *Handler) handleDiscoverModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	models, err := discovery.DiscoverModels(apiBase, req.APIKey)
+	models, err := discovery.DiscoverModels(req.Provider, apiBase, req.APIKey)
 
 	resp := map[string]any{"models": models}
 	if err != nil {
@@ -172,7 +172,7 @@ func (h *Handler) handleValidateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use discovery to validate — if it returns models, the key works.
-	models, discErr := discovery.DiscoverModels(apiBase, req.APIKey)
+	models, discErr := discovery.DiscoverModels(req.Provider, apiBase, req.APIKey)
 	valid := len(models) > 0
 	resp := map[string]any{"valid": valid}
 	if discErr != nil {

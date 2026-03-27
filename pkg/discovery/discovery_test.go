@@ -79,12 +79,41 @@ func TestDiscoverModels_Integration(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	models, err := DiscoverModels(srv.URL, "test-key")
+	models, err := DiscoverModels("openai", srv.URL, "test-key")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(models) != 2 {
 		t.Fatalf("expected 2 models, got %d", len(models))
+	}
+}
+
+func TestDiscoverModels_AnthropicHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Anthropic uses x-api-key, not Bearer
+		if r.Header.Get("x-api-key") != "sk-ant-test" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Header.Get("anthropic-version") == "" {
+			http.Error(w, "missing version", http.StatusBadRequest)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]string{
+				{"id": "claude-sonnet-4-20250514", "owned_by": "anthropic"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	// Anthropic discovery prepends /v1/models, so base should not include /v1
+	models, err := DiscoverModels("anthropic", srv.URL, "sk-ant-test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(models))
 	}
 }
 
@@ -94,7 +123,7 @@ func TestDiscoverModels_InvalidKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := DiscoverModels(srv.URL, "bad-key")
+	_, err := DiscoverModels("openai", srv.URL, "bad-key")
 	if err == nil {
 		t.Fatal("expected error for invalid key")
 	}
@@ -106,7 +135,7 @@ func TestDiscoverModels_NotSupported(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	models, err := DiscoverModels(srv.URL, "key")
+	models, err := DiscoverModels("openai", srv.URL, "key")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -31,7 +31,7 @@ type Provider struct {
 // Ordered by popularity / ease of setup.
 var Providers = []Provider{
 	{Key: "openrouter", Name: "OpenRouter (200+ models)", APIBase: "https://openrouter.ai/api/v1", KeyHint: "https://openrouter.ai/keys"},
-	{Key: "anthropic", Name: "Anthropic (Claude)", APIBase: "https://api.anthropic.com/v1", KeyHint: "https://console.anthropic.com/settings/keys"},
+	{Key: "anthropic", Name: "Anthropic (Claude)", APIBase: "https://api.anthropic.com", KeyHint: "https://console.anthropic.com/settings/keys"},
 	{Key: "openai", Name: "OpenAI", APIBase: "https://api.openai.com/v1", KeyHint: "https://platform.openai.com/api-keys"},
 	{Key: "gemini", Name: "Google Gemini", APIBase: "https://generativelanguage.googleapis.com/v1beta", KeyHint: "https://aistudio.google.com/apikey"},
 	{Key: "deepseek", Name: "DeepSeek", APIBase: "https://api.deepseek.com/v1", KeyHint: "https://platform.deepseek.com/api_keys"},
@@ -44,7 +44,6 @@ var Providers = []Provider{
 	{Key: "litellm", Name: "LiteLLM (proxy)", APIBase: "http://localhost:4000/v1", Local: true},
 	{Key: "azure", Name: "Azure OpenAI", APIBase: "", KeyHint: "https://portal.azure.com/"},
 	{Key: "bedrock", Name: "AWS Bedrock", APIBase: "", KeyHint: "Uses AWS credentials (env/profile)"},
-	{Key: "openrouter", Name: "OpenRouter", APIBase: "https://openrouter.ai/api/v1"},
 	{Key: "novita", Name: "Novita AI", APIBase: "https://api.novita.ai/openai", KeyHint: "https://novita.ai/"},
 	{Key: "moonshot", Name: "Moonshot (Kimi)", APIBase: "https://api.moonshot.cn/v1"},
 	{Key: "minimax", Name: "MiniMax", APIBase: "https://api.minimaxi.com/v1"},
@@ -56,40 +55,24 @@ var Providers = []Provider{
 	{Key: "mimo", Name: "Xiaomi MiMo", APIBase: "https://api.xiaomimimo.com/v1"},
 }
 
-func init() {
-	// Deduplicate by key (openrouter appears twice above — remove dupe).
-	seen := make(map[string]bool)
-	unique := Providers[:0]
-	for _, p := range Providers {
-		if !seen[p.Key] {
-			seen[p.Key] = true
-			unique = append(unique, p)
-		}
-	}
-	Providers = unique
-}
-
 // Model represents a discovered model from a provider API.
 type Model struct {
 	ID      string `json:"id"`
 	OwnedBy string `json:"owned_by,omitempty"`
 }
 
-// DiscoverModels queries a provider's /models endpoint and returns available models.
-// Works with any OpenAI-compatible API. For providers that don't support /models,
-// returns an empty list and nil error.
-func DiscoverModels(apiBase, apiKey string) ([]Model, error) {
-	url := strings.TrimRight(apiBase, "/") + "/models"
+// DiscoverModels queries a provider's models endpoint and returns available models.
+// The providerKey is used to determine auth headers and URL format.
+// For providers that don't support model listing, returns an empty list and nil error.
+func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
+	url, headers := buildDiscoveryRequest(providerKey, apiBase, apiKey)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
-
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-		// Gemini uses x-goog-api-key
-		req.Header.Set("x-goog-api-key", apiKey)
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
@@ -109,11 +92,37 @@ func DiscoverModels(apiBase, apiKey string) ([]Model, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// Provider doesn't support /models — not an error, just no discovery.
 		return nil, nil
 	}
 
 	return parseModelsResponse(body)
+}
+
+// buildDiscoveryRequest returns the URL and headers for model discovery
+// based on the provider. Each provider has its own auth scheme.
+func buildDiscoveryRequest(providerKey, apiBase, apiKey string) (string, map[string]string) {
+	base := strings.TrimRight(apiBase, "/")
+	headers := make(map[string]string)
+
+	switch providerKey {
+	case "anthropic":
+		// Anthropic uses x-api-key header and has its own models endpoint
+		headers["x-api-key"] = apiKey
+		headers["anthropic-version"] = "2023-06-01"
+		return base + "/v1/models", headers
+
+	case "gemini":
+		// Gemini uses API key as query param or x-goog-api-key header
+		headers["x-goog-api-key"] = apiKey
+		return base + "/models", headers
+
+	default:
+		// OpenAI-compatible: Bearer auth + /models
+		if apiKey != "" {
+			headers["Authorization"] = "Bearer " + apiKey
+		}
+		return base + "/models", headers
+	}
 }
 
 // parseModelsResponse handles multiple response formats from different providers.
@@ -144,9 +153,7 @@ func parseModelsResponse(body []byte) ([]Model, error) {
 	if err := json.Unmarshal(body, &geminiResp); err == nil && len(geminiResp.Models) > 0 {
 		models := make([]Model, 0, len(geminiResp.Models))
 		for _, m := range geminiResp.Models {
-			id := m.Name
-			// Strip "models/" prefix (Gemini returns "models/gemini-pro")
-			id = strings.TrimPrefix(id, "models/")
+			id := strings.TrimPrefix(m.Name, "models/")
 			models = append(models, Model{ID: id, OwnedBy: "google"})
 		}
 		sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })

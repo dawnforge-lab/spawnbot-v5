@@ -167,7 +167,7 @@ func onboard(encrypt bool) {
 
 	// Group 4: Model selection — discover from provider API
 	fmt.Println("\nDiscovering available models...")
-	models, discErr := discovery.DiscoverModels(apiBase, apiKey)
+	models, discErr := discovery.DiscoverModels(providerKey, apiBase, apiKey)
 	if discErr != nil {
 		fmt.Printf("Warning: could not discover models: %v\n", discErr)
 	}
