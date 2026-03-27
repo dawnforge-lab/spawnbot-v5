@@ -251,12 +251,20 @@ func onboard(encrypt bool) {
 		os.Exit(1)
 	}
 
-	// If embedding provider is not "same", ask for a separate API key
+	// Anthropic and OpenRouter don't provide embeddings. If "same" was
+	// selected, auto-switch to Gemini and prompt for a key so the user
+	// doesn't have to edit config.json manually afterward.
+	if embChoice == "same" && (provider == "anthropic" || provider == "openrouter") {
+		fmt.Printf("\nNote: %s does not provide embeddings. Switching to Gemini (free tier).\n", provider)
+		embChoice = "gemini"
+	}
+
+	// If embedding provider differs from chat provider, ask for a separate API key
 	if embChoice != "same" {
 		embKeyForm := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
-					Title("Embedding API Key").
+					Title("Embedding API Key (Gemini: https://aistudio.google.com/apikey)").
 					EchoMode(huh.EchoModePassword).
 					Value(&embAPIKey),
 			),
@@ -350,36 +358,32 @@ func onboard(encrypt bool) {
 // user's choice during onboarding.
 func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, chatProvider string) {
 	if embChoice == "same" {
-		// Derive embedding config from the chat provider
 		switch chatProvider {
 		case "openai":
 			cfg.Embeddings.Provider = "openai"
 			cfg.Embeddings.Model = "text-embedding-3-small"
 			cfg.Embeddings.BaseURL = "https://api.openai.com/v1"
-		case "anthropic":
-			// Anthropic doesn't have an embeddings endpoint; use Gemini as fallback
+			cfg.Embeddings.APIKey = chatAPIKey
+		case "anthropic", "openrouter":
+			// These don't provide embeddings — fall back to Gemini.
+			// The CLI auto-switches embChoice before reaching here, but the
+			// web backend may still send "same". Use Gemini with embAPIKey
+			// if provided, otherwise embeddings are left without a key.
 			cfg.Embeddings.Provider = "gemini"
 			cfg.Embeddings.Model = "text-embedding-004"
 			cfg.Embeddings.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
-			// No API key set — user will need to add one manually
-			fmt.Println("\nNote: Anthropic does not provide embeddings. Using Gemini defaults.")
-			fmt.Println("      You will need to add a Gemini API key to config.json for memory features.")
-			return
-		case "openrouter":
-			// OpenRouter doesn't provide embeddings either; default to Gemini
-			cfg.Embeddings.Provider = "gemini"
-			cfg.Embeddings.Model = "text-embedding-004"
-			cfg.Embeddings.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
-			fmt.Println("\nNote: OpenRouter does not provide embeddings. Using Gemini defaults.")
-			fmt.Println("      You will need to add a Gemini API key to config.json for memory features.")
-			return
+			if embAPIKey != "" {
+				cfg.Embeddings.APIKey = embAPIKey
+			}
 		default:
 			// Custom provider — try OpenAI-compatible embedding
 			cfg.Embeddings.Provider = "openai"
 			cfg.Embeddings.Model = "text-embedding-3-small"
-			cfg.Embeddings.BaseURL = providerDefaults[chatProvider].apiBase
+			if pi, ok := providerDefaults[chatProvider]; ok {
+				cfg.Embeddings.BaseURL = pi.apiBase
+			}
+			cfg.Embeddings.APIKey = chatAPIKey
 		}
-		cfg.Embeddings.APIKey = chatAPIKey
 		return
 	}
 

@@ -287,20 +287,24 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 			cfg.Embeddings.Provider = "openai"
 			cfg.Embeddings.Model = "text-embedding-3-small"
 			cfg.Embeddings.BaseURL = "https://api.openai.com/v1"
+			cfg.Embeddings.APIKey = chatAPIKey
 		case "anthropic", "openrouter":
-			// Neither provides embeddings; fall back to Gemini defaults.
+			// These don't provide embeddings — fall back to Gemini.
+			// Use embAPIKey if the frontend collected it.
 			cfg.Embeddings.Provider = "gemini"
 			cfg.Embeddings.Model = "text-embedding-004"
 			cfg.Embeddings.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
-			return // no API key available
+			if embAPIKey != "" {
+				cfg.Embeddings.APIKey = embAPIKey
+			}
 		default:
 			cfg.Embeddings.Provider = "openai"
 			cfg.Embeddings.Model = "text-embedding-3-small"
 			if pi, ok := providerDefaults[chatProvider]; ok {
 				cfg.Embeddings.BaseURL = pi.apiBase
 			}
+			cfg.Embeddings.APIKey = chatAPIKey
 		}
-		cfg.Embeddings.APIKey = chatAPIKey
 		return
 	}
 

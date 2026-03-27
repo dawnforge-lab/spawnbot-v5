@@ -114,7 +114,7 @@ all: build
 ## generate: Run generate
 generate:
 	@echo "Run generate..."
-	@rm -r ./$(CMD_DIR)/workspace 2>/dev/null || true
+	@rm -rf ./pkg/workspace/files 2>/dev/null || true
 	@$(GO) generate ./...
 	@echo "Run generate complete"
 
