@@ -476,6 +476,31 @@ func (m *Manager) CallTool(
 	return result, nil
 }
 
+// DisconnectServer closes and removes a single server connection.
+func (m *Manager) DisconnectServer(name string) error {
+	m.mu.Lock()
+	conn, ok := m.servers[name]
+	if !ok {
+		m.mu.Unlock()
+		return fmt.Errorf("server %s not found", name)
+	}
+	delete(m.servers, name)
+	m.mu.Unlock()
+
+	if err := conn.Session.Close(); err != nil {
+		logger.ErrorCF("mcp", "Failed to close server connection",
+			map[string]any{
+				"server": name,
+				"error":  err.Error(),
+			})
+		return fmt.Errorf("failed to close server %s: %w", name, err)
+	}
+
+	logger.InfoCF("mcp", "Disconnected MCP server",
+		map[string]any{"server": name})
+	return nil
+}
+
 // Close closes all server connections
 func (m *Manager) Close() error {
 	// Use Swap to atomically set closed=true and get the previous value

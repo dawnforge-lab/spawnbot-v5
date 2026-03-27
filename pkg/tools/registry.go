@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -393,6 +394,39 @@ func (r *ToolRegistry) Clone() *ToolRegistry {
 		}
 	}
 	return clone
+}
+
+// Unregister removes a tool by name. Returns true if the tool was found and removed.
+func (r *ToolRegistry) Unregister(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.tools[name]; !exists {
+		return false
+	}
+	delete(r.tools, name)
+	r.version.Add(1)
+	logger.DebugCF("tools", "Unregistered tool", map[string]any{"name": name})
+	return true
+}
+
+// UnregisterByPrefix removes all tools whose names start with the given prefix.
+// Returns the number of tools removed.
+func (r *ToolRegistry) UnregisterByPrefix(prefix string) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	removed := 0
+	for name := range r.tools {
+		if strings.HasPrefix(name, prefix) {
+			delete(r.tools, name)
+			removed++
+		}
+	}
+	if removed > 0 {
+		r.version.Add(1)
+		logger.DebugCF("tools", "Unregistered tools by prefix",
+			map[string]any{"prefix": prefix, "removed": removed})
+	}
+	return removed
 }
 
 // Count returns the number of registered tools.

@@ -1998,8 +1998,8 @@ func TestAgentLoop_ToolLimitUsesDedicatedFallback(t *testing.T) {
 
 // TestProcessDirectWithChannel_TriggersMCPInitialization verifies that
 // ProcessDirectWithChannel triggers MCP initialization when MCP is enabled.
-// Note: Manager is only initialized when at least one MCP server is configured
-// and successfully connected.
+// The manager is always created when MCP is enabled (even without initial
+// servers) so the agent can connect to servers at runtime via connect_mcp.
 func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "agent-test-*")
 	if err != nil {
@@ -2007,7 +2007,6 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Test with MCP enabled but no servers - should not initialize manager
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
@@ -2022,7 +2021,7 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 				ToolConfig: config.ToolConfig{
 					Enabled: true,
 				},
-				// No servers configured - manager should not be initialized
+				// No servers configured — manager still created for runtime connections
 			},
 		},
 	}
@@ -2047,9 +2046,10 @@ func TestProcessDirectWithChannel_TriggersMCPInitialization(t *testing.T) {
 		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
 	}
 
-	// Manager should not be initialized when no servers are configured
-	if al.mcp.hasManager() {
-		t.Fatal("expected MCP manager to be nil when no servers are configured")
+	// Manager should be created even without initial servers, so runtime
+	// connections via connect_mcp are possible.
+	if !al.mcp.hasManager() {
+		t.Fatal("expected MCP manager to exist after initialization (needed for runtime connect_mcp)")
 	}
 }
 
