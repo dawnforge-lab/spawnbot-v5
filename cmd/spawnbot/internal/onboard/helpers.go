@@ -3,6 +3,8 @@ package onboard
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -385,6 +387,14 @@ func onboard(encrypt bool) {
 	ws := cfg.WorkspacePath()
 	createWorkspaceTemplates(ws, userName)
 
+	// ── Systemd services ──────────────────────────────────────────────
+
+	spawnbotBin := findBinary("spawnbot")
+	webBin := findBinary("spawnbot-web")
+
+	fmt.Println("\nInstalling services...")
+	servicesInstalled := installSystemdServices(spawnbotBin, webBin, encrypt)
+
 	// ── Success message ────────────────────────────────────────────────
 
 	fmt.Printf("\n%s spawnbot is ready!\n", internal.Logo)
@@ -400,24 +410,50 @@ func onboard(encrypt bool) {
 		}
 	}
 	fmt.Println()
-	if encrypt {
-		fmt.Println("Set your encryption passphrase before starting:")
-		fmt.Println("  export SPAWNBOT_KEY_PASSPHRASE=<your-passphrase>")
+
+	if servicesInstalled {
+		fmt.Println("  Services:")
+		fmt.Printf("    Gateway:  %s\n", serviceStatus("spawnbot-gateway.service"))
+		if webBin != "" {
+			fmt.Printf("    Web UI:   %s  ->  http://localhost:18800\n", serviceStatus("spawnbot-web.service"))
+		}
 		fmt.Println()
+		fmt.Println("  Services auto-start on boot. Manage with:")
+		fmt.Println("    systemctl --user status spawnbot-gateway")
+		fmt.Println("    systemctl --user restart spawnbot-gateway")
+		fmt.Println("    journalctl --user -u spawnbot-gateway -f")
+	} else {
+		fmt.Println("  Start manually:")
+		fmt.Println("    spawnbot gateway")
+		if webBin != "" {
+			fmt.Println("    spawnbot-web          ->  http://localhost:18800")
+		}
 	}
-	fmt.Println("Start chatting:")
+
+	if encrypt {
+		fmt.Println()
+		fmt.Println("  Note: set passphrase before services can decrypt credentials:")
+		fmt.Println("    systemctl --user set-environment SPAWNBOT_KEY_PASSPHRASE=<your-passphrase>")
+		fmt.Println("    systemctl --user restart spawnbot-gateway")
+	}
+
 	fmt.Println()
 	fmt.Println("  CLI (interactive):")
 	fmt.Println("    spawnbot agent")
-	fmt.Println()
-	fmt.Println("  Web UI:")
-	fmt.Println("    spawnbot-web")
-	fmt.Println("    http://localhost:18800")
-	if wantTelegram {
-		fmt.Println()
-		fmt.Println("  Telegram + all channels:")
-		fmt.Println("    spawnbot gateway")
+}
+
+// findBinary returns the absolute path to a binary in ~/.spawnbot/bin/ or PATH.
+func findBinary(name string) string {
+	// Check spawnbot bin dir first
+	spawnbotBin := filepath.Join(os.Getenv("HOME"), ".spawnbot", "bin", name)
+	if _, err := os.Stat(spawnbotBin); err == nil {
+		return spawnbotBin
 	}
+	// Fall back to PATH
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+	return name
 }
 
 // configureEmbeddings sets up the embeddings section of the config based on the
