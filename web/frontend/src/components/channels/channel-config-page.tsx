@@ -317,8 +317,8 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
       ""
     ).toLowerCase()
     const base = language.startsWith("zh")
-      ? "https://docs.spawnbot.io/zh-Hans/docs/channels"
-      : "https://docs.spawnbot.io/docs/channels"
+      ? "https://github.com/dawnforge-lab/spawnbot-v5/wiki/channels"
+      : "https://github.com/dawnforge-lab/spawnbot-v5/wiki/channels"
     return `${base}/${getChannelDocSlug(channel.name)}`
   }, [channel, i18n.language, i18n.resolvedLanguage])
 

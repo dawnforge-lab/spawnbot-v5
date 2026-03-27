@@ -186,7 +186,7 @@ export function OnboardingWizard({
           <CardHeader>
             <CardTitle>Setup Complete</CardTitle>
             <CardDescription>
-              Spawnbot is ready. Redirecting to chat...
+              spawnbot is ready. Redirecting to chat...
             </CardDescription>
           </CardHeader>
         </Card>
@@ -198,7 +198,7 @@ export function OnboardingWizard({
     <div className="flex min-h-dvh items-center justify-center bg-background p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>Welcome to Spawnbot</CardTitle>
+          <CardTitle>Welcome to spawnbot</CardTitle>
           <CardDescription>
             Let&apos;s get you set up in a few steps.
           </CardDescription>
@@ -261,7 +261,7 @@ export function OnboardingWizard({
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Your key is stored locally and never sent to Spawnbot servers.
+                Your key is stored locally and never sent to spawnbot servers.
               </p>
             </div>
           )}
