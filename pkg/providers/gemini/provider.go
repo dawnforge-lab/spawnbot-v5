@@ -34,7 +34,8 @@ type Provider struct {
 	timeout time.Duration
 }
 
-const defaultTimeout = 120 * time.Second
+// Gemini thinking models (3.x) need more time than standard models.
+const defaultTimeout = 300 * time.Second
 
 // NewProvider creates a Gemini provider with the given API key.
 func NewProvider(ctx context.Context, apiKey string) (*Provider, error) {

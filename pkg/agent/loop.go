@@ -88,6 +88,7 @@ type processOptions struct {
 	SendResponse            bool                // Whether to send response via bus
 	SuppressToolFeedback    bool                // Whether to suppress inline tool feedback messages
 	NoHistory               bool                // If true, don't load session history (for heartbeat)
+	MaxIterationsOverride   int                 // If > 0, cap tool iterations for this request
 	SkipInitialSteeringPoll bool                // If true, skip the steering poll at loop start (used by Continue)
 }
 
@@ -1280,15 +1281,16 @@ func (al *AgentLoop) ProcessHeartbeat(
 	}
 
 	return al.runAgentLoop(ctx, agent, processOptions{
-		SessionKey:           "heartbeat",
-		Channel:              channel,
-		ChatID:               chatID,
-		UserMessage:          content,
-		DefaultResponse:      defaultResponse,
-		EnableSummary:        false,
-		SendResponse:         false,
-		SuppressToolFeedback: true,
-		NoHistory:            true,
+		SessionKey:            "heartbeat",
+		Channel:               channel,
+		ChatID:                chatID,
+		UserMessage:           content,
+		DefaultResponse:       defaultResponse,
+		EnableSummary:         false,
+		SendResponse:          false,
+		SuppressToolFeedback:  true,
+		NoHistory:             true,
+		MaxIterationsOverride: 5, // Heartbeat should be lightweight — cap tool iterations
 	})
 }
 
@@ -1626,6 +1628,11 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	defer turnCancel()
 	ts.setTurnCancel(turnCancel)
+
+	// Apply per-request iteration cap (e.g. heartbeat uses fewer iterations).
+	if ts.opts.MaxIterationsOverride > 0 && ts.opts.MaxIterationsOverride < ts.agent.MaxIterations {
+		ts.agent.MaxIterations = ts.opts.MaxIterationsOverride
+	}
 
 	// Inject turnState and AgentLoop into context so tools (e.g. spawn) can retrieve them.
 	turnCtx = withTurnState(turnCtx, ts)
