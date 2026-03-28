@@ -357,7 +357,34 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	// The Gemini provider reads [image:/path] tags and sends them as InlineData.
 	if sniffN > 0 {
 		mime := http.DetectContentType(sniff[:sniffN])
-		if strings.HasPrefix(mime, "image/") {
+
+		// Supplement MIME detection with extension for formats that
+		// http.DetectContentType misses (video, audio).
+		ext := strings.ToLower(filepath.Ext(path))
+		if mime == "application/octet-stream" {
+			switch ext {
+			case ".mp4", ".m4v":
+				mime = "video/mp4"
+			case ".webm":
+				mime = "video/webm"
+			case ".mov":
+				mime = "video/quicktime"
+			case ".avi":
+				mime = "video/x-msvideo"
+			case ".mkv":
+				mime = "video/x-matroska"
+			case ".mp3":
+				mime = "audio/mpeg"
+			case ".wav":
+				mime = "audio/wav"
+			case ".ogg":
+				mime = "audio/ogg"
+			case ".flac":
+				mime = "audio/flac"
+			}
+		}
+
+		if strings.HasPrefix(mime, "image/") || strings.HasPrefix(mime, "video/") || strings.HasPrefix(mime, "audio/") {
 			size := "unknown"
 			if totalSize >= 0 {
 				size = fmt.Sprintf("%d bytes", totalSize)
@@ -366,7 +393,14 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 			if !filepath.IsAbs(path) && t.workspace != "" {
 				fullPath = filepath.Join(t.workspace, path)
 			}
-			return NewToolResult(fmt.Sprintf("[image:%s]\nImage file: %s (%s, %s)", fullPath, filepath.Base(path), mime, size))
+			mediaType := "image"
+			if strings.HasPrefix(mime, "video/") {
+				mediaType = "video"
+			} else if strings.HasPrefix(mime, "audio/") {
+				mediaType = "audio"
+			}
+			label := strings.ToUpper(mediaType[:1]) + mediaType[1:]
+			return NewToolResult(fmt.Sprintf("[%s:%s]\n%s file: %s (%s, %s)", mediaType, fullPath, label, filepath.Base(path), mime, size))
 		}
 		if !strings.HasPrefix(mime, "text/") && mime != "application/json" && mime != "application/xml" {
 			return ErrorResult(fmt.Sprintf("binary file (%s, %d bytes) — cannot display as text", mime, totalSize))

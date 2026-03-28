@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -19,7 +20,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
 
-var imageTagRe = regexp.MustCompile(`\[image:([^\]]+)\]`)
+var mediaTagRe = regexp.MustCompile(`\[(image|video|audio):([^\]]+)\]`)
 
 type (
 	ToolCall               = protocoltypes.ToolCall
@@ -143,7 +144,7 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			systemParts = append(systemParts, &genai.Part{Text: msg.Content})
 
 		case "user":
-			parts := extractImageParts(msg.Content)
+			parts := extractMediaParts(msg.Content)
 			contents = append(contents, &genai.Content{
 				Role:  "user",
 				Parts: parts,
@@ -194,28 +195,20 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			textContent := msg.Content
 			var frParts []*genai.FunctionResponsePart
 
-			// Extract image tags from tool result
-			if matches := imageTagRe.FindAllStringSubmatch(msg.Content, -1); len(matches) > 0 {
-				textContent = imageTagRe.ReplaceAllString(msg.Content, "")
+			// Extract media tags ([image:], [video:], [audio:]) from tool result
+			if matches := mediaTagRe.FindAllStringSubmatch(msg.Content, -1); len(matches) > 0 {
+				textContent = mediaTagRe.ReplaceAllString(msg.Content, "")
 				textContent = strings.TrimSpace(textContent)
 				for _, match := range matches {
-					imgData, err := os.ReadFile(match[1])
+					mediaData, err := os.ReadFile(match[2])
 					if err != nil {
 						continue
 					}
-					mime := "image/jpeg"
-					lower := strings.ToLower(match[1])
-					if strings.HasSuffix(lower, ".png") {
-						mime = "image/png"
-					} else if strings.HasSuffix(lower, ".webp") {
-						mime = "image/webp"
-					} else if strings.HasSuffix(lower, ".gif") {
-						mime = "image/gif"
-					}
+					mime := detectMIMEFromExt(match[2], match[1])
 					frParts = append(frParts, &genai.FunctionResponsePart{
 						InlineData: &genai.FunctionResponseBlob{
 							MIMEType: mime,
-							Data:     imgData,
+							Data:     mediaData,
 						},
 					})
 				}
@@ -259,11 +252,11 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 	return contents, systemInstruction
 }
 
-// extractImageParts parses [image:/path] tags from message content, reads
-// the image files, and returns genai.Parts with both the text and inline
-// image data so Gemini can natively analyze the images.
-func extractImageParts(content string) []*genai.Part {
-	matches := imageTagRe.FindAllStringSubmatchIndex(content, -1)
+// extractMediaParts parses [image:/path], [video:/path], and [audio:/path] tags
+// from content, reads the files, and returns genai.Parts with InlineData so
+// Gemini can natively analyze images, videos, and audio.
+func extractMediaParts(content string) []*genai.Part {
+	matches := mediaTagRe.FindAllStringSubmatchIndex(content, -1)
 	if len(matches) == 0 {
 		return []*genai.Part{{Text: content}}
 	}
@@ -281,21 +274,15 @@ func extractImageParts(content string) []*genai.Part {
 		}
 		lastEnd = loc[1]
 
-		imagePath := content[loc[2]:loc[3]]
-		data, err := os.ReadFile(imagePath)
+		mediaType := content[loc[2]:loc[3]] // "image", "video", or "audio"
+		mediaPath := content[loc[4]:loc[5]]
+		data, err := os.ReadFile(mediaPath)
 		if err != nil {
-			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[image unavailable: %s]", imagePath)})
+			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[%s unavailable: %s]", mediaType, mediaPath)})
 			continue
 		}
 
-		mime := "image/jpeg"
-		if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
-			mime = "image/png"
-		} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
-			mime = "image/webp"
-		} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
-			mime = "image/gif"
-		}
+		mime := detectMIMEFromExt(mediaPath, mediaType)
 
 		parts = append(parts, &genai.Part{
 			InlineData: &genai.Blob{
@@ -318,6 +305,53 @@ func extractImageParts(content string) []*genai.Part {
 	}
 
 	return parts
+}
+
+// detectMIMEFromExt returns a MIME type based on file extension and media type hint.
+func detectMIMEFromExt(path, mediaType string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	// Images
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	// Video
+	case ".mp4", ".m4v":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".avi":
+		return "video/x-msvideo"
+	case ".mkv":
+		return "video/x-matroska"
+	// Audio
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".ogg":
+		return "audio/ogg"
+	case ".flac":
+		return "audio/flac"
+	case ".m4a":
+		return "audio/mp4"
+	}
+	// Fallback based on media type hint
+	switch mediaType {
+	case "video":
+		return "video/mp4"
+	case "audio":
+		return "audio/mpeg"
+	default:
+		return "image/jpeg"
+	}
 }
 
 // buildConfig creates the GenerateContentConfig with safety settings and tools.
