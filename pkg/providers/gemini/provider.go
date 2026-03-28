@@ -79,7 +79,7 @@ func (p *Provider) Chat(
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	contents, systemInstruction := convertMessages(messages)
+	contents, systemInstruction := convertMessages(ctx, p.client, messages)
 	config := buildConfig(tools, options, systemInstruction)
 
 	resp, err := p.client.Models.GenerateContent(ctx, model, contents, config)
@@ -99,7 +99,7 @@ func (p *Provider) ChatStream(
 	options map[string]any,
 	onChunk func(accumulated string),
 ) (*LLMResponse, error) {
-	contents, systemInstruction := convertMessages(messages)
+	contents, systemInstruction := convertMessages(ctx, p.client, messages)
 	config := buildConfig(tools, options, systemInstruction)
 
 	var accumulated strings.Builder
@@ -132,9 +132,14 @@ func (p *Provider) ChatStream(
 	return result, nil
 }
 
+// inlineDataLimit is the max file size for inline media. Files larger
+// than this are uploaded via the Gemini File API instead.
+const inlineDataLimit = 10 * 1024 * 1024 // 10MB
+
 // convertMessages converts spawnbot Messages to Gemini Content format.
 // System messages are extracted as a separate system instruction.
-func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
+// Large media files are uploaded via the File API; small ones go inline.
+func convertMessages(ctx context.Context, client *genai.Client, messages []Message) ([]*genai.Content, *genai.Content) {
 	var contents []*genai.Content
 	var systemParts []*genai.Part
 
@@ -144,7 +149,7 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			systemParts = append(systemParts, &genai.Part{Text: msg.Content})
 
 		case "user":
-			parts := extractMediaParts(msg.Content)
+			parts := extractMediaParts(ctx, client, msg.Content)
 			contents = append(contents, &genai.Content{
 				Role:  "user",
 				Parts: parts,
@@ -253,9 +258,9 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 }
 
 // extractMediaParts parses [image:/path], [video:/path], and [audio:/path] tags
-// from content, reads the files, and returns genai.Parts with InlineData so
-// Gemini can natively analyze images, videos, and audio.
-func extractMediaParts(content string) []*genai.Part {
+// from content, reads the files, and returns genai.Parts. Small files go inline;
+// large files (>10MB) are uploaded via the Gemini File API.
+func extractMediaParts(ctx context.Context, client *genai.Client, content string) []*genai.Part {
 	matches := mediaTagRe.FindAllStringSubmatchIndex(content, -1)
 	if len(matches) == 0 {
 		return []*genai.Part{{Text: content}}
@@ -276,13 +281,29 @@ func extractMediaParts(content string) []*genai.Part {
 
 		mediaType := content[loc[2]:loc[3]] // "image", "video", or "audio"
 		mediaPath := content[loc[4]:loc[5]]
-		data, err := os.ReadFile(mediaPath)
+		mime := detectMIMEFromExt(mediaPath, mediaType)
+
+		info, err := os.Stat(mediaPath)
 		if err != nil {
 			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[%s unavailable: %s]", mediaType, mediaPath)})
 			continue
 		}
 
-		mime := detectMIMEFromExt(mediaPath, mediaType)
+		if info.Size() > inlineDataLimit && client != nil {
+			// Large file — upload via File API
+			part := uploadViaFileAPI(ctx, client, mediaPath, mime)
+			if part != nil {
+				parts = append(parts, part)
+				continue
+			}
+			// Fall through to inline if upload fails
+		}
+
+		data, err := os.ReadFile(mediaPath)
+		if err != nil {
+			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[%s unavailable: %s]", mediaType, mediaPath)})
+			continue
+		}
 
 		parts = append(parts, &genai.Part{
 			InlineData: &genai.Blob{
@@ -351,6 +372,23 @@ func detectMIMEFromExt(path, mediaType string) string {
 		return "audio/mpeg"
 	default:
 		return "image/jpeg"
+	}
+}
+
+// uploadViaFileAPI uploads a file to the Gemini File API and returns a Part
+// referencing the uploaded URI. Returns nil if the upload fails.
+func uploadViaFileAPI(ctx context.Context, client *genai.Client, filePath, mime string) *genai.Part {
+	uploaded, err := client.Files.UploadFromPath(ctx, filePath, &genai.UploadFileConfig{
+		MIMEType: mime,
+	})
+	if err != nil {
+		return nil
+	}
+	return &genai.Part{
+		FileData: &genai.FileData{
+			FileURI:  uploaded.URI,
+			MIMEType: uploaded.MIMEType,
+		},
 	}
 }
 
