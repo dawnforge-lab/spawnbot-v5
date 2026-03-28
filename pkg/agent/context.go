@@ -86,14 +86,11 @@ func NewContextBuilder(workspace string) *ContextBuilder {
 }
 
 func (cb *ContextBuilder) getIdentity() string {
-	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
 	toolDiscovery := cb.getDiscoveryRule()
 	version := config.FormatVersion()
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# spawnbot (%s)\n\nWorkspace: %s\n", version, workspacePath)
-
-	sb.WriteString("\nAll file tool paths (read_file, write_file, list_dir, edit_file) are relative to the workspace root. Use paths like `GOALS.md`, `skills/weather/SKILL.md`, `memory/MEMORY.md` — do NOT prefix them with `workspace/`.\n")
+	fmt.Fprintf(&sb, "# spawnbot (%s)\n\nAll file paths are relative to the workspace root. Use `GOALS.md`, `skills/weather/SKILL.md`, `memory/MEMORY.md` etc.\n", version)
 
 	sb.WriteString("\nContext summaries provided in this prompt are approximate references only. They may be incomplete or outdated — always defer to explicit user instructions.\n")
 
