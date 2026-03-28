@@ -289,14 +289,19 @@ func extractMediaParts(ctx context.Context, client *genai.Client, content string
 			continue
 		}
 
-		if info.Size() > inlineDataLimit && client != nil {
-			// Large file — upload via File API
-			part := uploadViaFileAPI(ctx, client, mediaPath, mime)
-			if part != nil {
-				parts = append(parts, part)
-				continue
+		if info.Size() > inlineDataLimit {
+			if client != nil {
+				// Large file — upload via File API
+				part := uploadViaFileAPI(ctx, client, mediaPath, mime)
+				if part != nil {
+					parts = append(parts, part)
+					continue
+				}
 			}
-			// Fall through to inline if upload fails
+			// File too large for inline and upload failed
+			sizeMB := info.Size() / (1024 * 1024)
+			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[%s: %s (%dMB) — file too large, upload failed]", mediaType, filepath.Base(mediaPath), sizeMB)})
+			continue
 		}
 
 		data, err := os.ReadFile(mediaPath)
@@ -382,8 +387,10 @@ func uploadViaFileAPI(ctx context.Context, client *genai.Client, filePath, mime 
 		MIMEType: mime,
 	})
 	if err != nil {
+		fmt.Printf("[gemini] File API upload failed for %s: %v\n", filepath.Base(filePath), err)
 		return nil
 	}
+	fmt.Printf("[gemini] File API upload OK: %s → %s\n", filepath.Base(filePath), uploaded.URI)
 	return &genai.Part{
 		FileData: &genai.FileData{
 			FileURI:  uploaded.URI,
