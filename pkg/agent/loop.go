@@ -1725,6 +1725,8 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 	activeCandidates, activeModel := al.selectCandidates(ts.agent, ts.userMessage, messages)
 	pendingMessages := append([]providers.Message(nil), ts.opts.InitialSteeringMessages...)
 	var finalContent string
+	consecutiveToolErrors := 0
+	const maxConsecutiveToolErrors = 3
 
 turnLoop:
 	for ts.currentIteration() < ts.agent.MaxIterations || len(pendingMessages) > 0 || func() bool {
@@ -2552,6 +2554,30 @@ turnLoop:
 			if !ts.opts.NoHistory {
 				ts.agent.Sessions.AddFullMessage(ts.sessionKey, toolResultMsg)
 				ts.recordPersistedMessage(toolResultMsg)
+			}
+
+			// Track consecutive tool errors to bail out early when
+			// the agent is stuck in a failure loop (e.g. heartbeat
+			// burning all iterations on repeated schema mismatches).
+			if toolResult.IsError {
+				consecutiveToolErrors++
+			} else {
+				consecutiveToolErrors = 0
+			}
+			if consecutiveToolErrors >= maxConsecutiveToolErrors {
+				logger.WarnCF("agent", "Bailing out after consecutive tool errors",
+					map[string]any{
+						"agent_id":           ts.agent.ID,
+						"consecutive_errors": consecutiveToolErrors,
+						"last_tool":          toolName,
+					})
+				windDown := providers.Message{
+					Role:    "user",
+					Content: toolWindDownWarning,
+				}
+				ts.agent.Sessions.AddFullMessage(ts.sessionKey, windDown)
+				messages = append(messages, windDown)
+				consecutiveToolErrors = 0
 			}
 
 			if steerMsgs := al.dequeueSteeringMessagesForScope(ts.sessionKey); len(steerMsgs) > 0 {

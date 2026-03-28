@@ -202,7 +202,16 @@ func (sl *SkillsLoader) BuildSkillsSummary() string {
 	for _, s := range allSkills {
 		escapedName := escapeXML(s.Name)
 		escapedDesc := escapeXML(s.Description)
-		escapedPath := escapeXML(s.Path)
+
+		// Use workspace-relative paths so the LLM passes them
+		// directly to read_file (which resolves relative to workspace).
+		displayPath := s.Path
+		if sl.workspace != "" {
+			if rel, err := filepath.Rel(sl.workspace, s.Path); err == nil {
+				displayPath = rel
+			}
+		}
+		escapedPath := escapeXML(displayPath)
 
 		lines = append(lines, fmt.Sprintf("  <skill>"))
 		lines = append(lines, fmt.Sprintf("    <name>%s</name>", escapedName))

@@ -175,8 +175,10 @@ type antigravityPart struct {
 }
 
 type antigravityFunctionCall struct {
-	Name string         `json:"name"`
-	Args map[string]any `json:"args"`
+	Name                  string         `json:"name"`
+	Args                  map[string]any `json:"args"`
+	ThoughtSignature      string         `json:"thoughtSignature,omitempty"`
+	ThoughtSignatureSnake string         `json:"thought_signature,omitempty"`
 }
 
 type antigravityFunctionResponse struct {
@@ -266,8 +268,10 @@ func (p *AntigravityProvider) buildRequest(
 					ThoughtSignature:      thoughtSignature,
 					ThoughtSignatureSnake: thoughtSignature,
 					FunctionCall: &antigravityFunctionCall{
-						Name: toolName,
-						Args: toolArgs,
+						Name:                  toolName,
+						Args:                  toolArgs,
+						ThoughtSignature:      thoughtSignature,
+						ThoughtSignatureSnake: thoughtSignature,
 					},
 				})
 			}
@@ -447,6 +451,8 @@ func (p *AntigravityProvider) parseSSEResponse(body string) (*LLMResponse, error
 							ThoughtSignature: extractPartThoughtSignature(
 								part.ThoughtSignature,
 								part.ThoughtSignatureSnake,
+								part.FunctionCall.ThoughtSignature,
+								part.FunctionCall.ThoughtSignatureSnake,
 							),
 						},
 					})
@@ -482,12 +488,11 @@ func (p *AntigravityProvider) parseSSEResponse(body string) (*LLMResponse, error
 	}, nil
 }
 
-func extractPartThoughtSignature(thoughtSignature string, thoughtSignatureSnake string) string {
-	if thoughtSignature != "" {
-		return thoughtSignature
-	}
-	if thoughtSignatureSnake != "" {
-		return thoughtSignatureSnake
+func extractPartThoughtSignature(candidates ...string) string {
+	for _, c := range candidates {
+		if c != "" {
+			return c
+		}
 	}
 	return ""
 }

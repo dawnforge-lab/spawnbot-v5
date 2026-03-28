@@ -230,14 +230,19 @@ func (t *ExecTool) Parameters() map[string]any {
 				"description": "Timeout in seconds (0 = no timeout)",
 			},
 		},
-		"required": []string{"action"},
+		"required": []string{},
 	}
 }
 
 func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	action, _ := args["action"].(string)
 	if action == "" {
-		return ErrorResult("action is required")
+		// Default to "run" when a command is provided without an explicit action.
+		if _, hasCmd := args["command"]; hasCmd {
+			action = "run"
+		} else {
+			return ErrorResult("action is required")
+		}
 	}
 
 	switch action {
