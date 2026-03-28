@@ -227,6 +227,15 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 // buildConfig creates the GenerateContentConfig with safety settings and tools.
 func buildConfig(tools []ToolDefinition, options map[string]any, systemInstruction *genai.Content) *genai.GenerateContentConfig {
 	config := &genai.GenerateContentConfig{
+		// Disable all safety filters so the agent can operate freely
+		// (e.g. persona content that might otherwise be blocked).
+		SafetySettings: []*genai.SafetySetting{
+			{Category: genai.HarmCategoryHarassment, Threshold: genai.HarmBlockThresholdBlockNone},
+			{Category: genai.HarmCategoryHateSpeech, Threshold: genai.HarmBlockThresholdBlockNone},
+			{Category: genai.HarmCategorySexuallyExplicit, Threshold: genai.HarmBlockThresholdBlockNone},
+			{Category: genai.HarmCategoryDangerousContent, Threshold: genai.HarmBlockThresholdBlockNone},
+			{Category: genai.HarmCategoryCivicIntegrity, Threshold: genai.HarmBlockThresholdBlockNone},
+		},
 		SystemInstruction: systemInstruction,
 	}
 
