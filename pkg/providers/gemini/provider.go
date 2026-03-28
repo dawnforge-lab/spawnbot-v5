@@ -187,19 +187,49 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			}
 
 		case "tool":
-			// Tool results go back as function responses
+			// Tool results go back as function responses.
+			// If the result contains [image:/path] tags, read the image
+			// and include it as FunctionResponsePart so Gemini can see it.
 			var result map[string]any
-			if err := json.Unmarshal([]byte(msg.Content), &result); err != nil {
-				// If not valid JSON, wrap it
-				result = map[string]any{"result": msg.Content}
+			textContent := msg.Content
+			var frParts []*genai.FunctionResponsePart
+
+			// Extract image tags from tool result
+			if matches := imageTagRe.FindAllStringSubmatch(msg.Content, -1); len(matches) > 0 {
+				textContent = imageTagRe.ReplaceAllString(msg.Content, "")
+				textContent = strings.TrimSpace(textContent)
+				for _, match := range matches {
+					imgData, err := os.ReadFile(match[1])
+					if err != nil {
+						continue
+					}
+					mime := "image/jpeg"
+					lower := strings.ToLower(match[1])
+					if strings.HasSuffix(lower, ".png") {
+						mime = "image/png"
+					} else if strings.HasSuffix(lower, ".webp") {
+						mime = "image/webp"
+					} else if strings.HasSuffix(lower, ".gif") {
+						mime = "image/gif"
+					}
+					frParts = append(frParts, &genai.FunctionResponsePart{
+						InlineData: &genai.FunctionResponseBlob{
+							MIMEType: mime,
+							Data:     imgData,
+						},
+					})
+				}
 			}
-			// Find the function name from the tool_call_id by looking at
-			// previous assistant messages. As a fallback, use the ID itself.
+
+			if err := json.Unmarshal([]byte(textContent), &result); err != nil {
+				result = map[string]any{"result": textContent}
+			}
+
+			// Find the function name from the tool_call_id
 			fnName := msg.ToolCallID
 			for i := len(contents) - 1; i >= 0; i-- {
 				for _, part := range contents[i].Parts {
 					if part.FunctionCall != nil {
-						// Match by convention: tool_call_id often contains the function name
 						fnName = part.FunctionCall.Name
 						break
 					}
@@ -214,6 +244,7 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 					FunctionResponse: &genai.FunctionResponse{
 						Name:     fnName,
 						Response: result,
+						Parts:    frParts,
 					},
 				}},
 			})

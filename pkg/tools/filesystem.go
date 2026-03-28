@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -249,8 +250,9 @@ func isWithinWorkspace(candidate, workspace string) bool {
 }
 
 type ReadFileTool struct {
-	fs      fileSystem
-	maxSize int64
+	fs        fileSystem
+	maxSize   int64
+	workspace string
 }
 
 func NewReadFileTool(
@@ -270,8 +272,9 @@ func NewReadFileTool(
 	}
 
 	return &ReadFileTool{
-		fs:      buildFs(workspace, restrict, patterns),
-		maxSize: maxSize,
+		fs:        buildFs(workspace, restrict, patterns),
+		maxSize:   maxSize,
+		workspace: workspace,
 	}
 }
 
@@ -349,6 +352,26 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	// it into the LLM context. Seeking back to 0 afterwards restores state.
 	sniff := make([]byte, 512)
 	sniffN, _ := file.Read(sniff)
+
+	// Detect binary/image files and return a structured tag instead of raw bytes.
+	// The Gemini provider reads [image:/path] tags and sends them as InlineData.
+	if sniffN > 0 {
+		mime := http.DetectContentType(sniff[:sniffN])
+		if strings.HasPrefix(mime, "image/") {
+			size := "unknown"
+			if totalSize >= 0 {
+				size = fmt.Sprintf("%d bytes", totalSize)
+			}
+			fullPath := path
+			if !filepath.IsAbs(path) && t.workspace != "" {
+				fullPath = filepath.Join(t.workspace, path)
+			}
+			return NewToolResult(fmt.Sprintf("[image:%s]\nImage file: %s (%s, %s)", fullPath, filepath.Base(path), mime, size))
+		}
+		if !strings.HasPrefix(mime, "text/") && mime != "application/json" && mime != "application/xml" {
+			return ErrorResult(fmt.Sprintf("binary file (%s, %d bytes) — cannot display as text", mime, totalSize))
+		}
+	}
 
 	// Reset read position to beginning before applying the caller's offset.
 	if seeker, ok := file.(io.Seeker); ok {
