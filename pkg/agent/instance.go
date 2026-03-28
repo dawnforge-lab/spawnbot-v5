@@ -245,7 +245,9 @@ func (ai *AgentInstance) CloneForHeartbeat() *AgentInstance {
 		Provider:                  ai.Provider,
 		Sessions:                  initSessionStore(sessionsDir),
 		ContextBuilder:            NewContextBuilder(ai.Workspace),
-		Tools:                     ai.Tools.Clone(),
+		Tools: ai.Tools.CloneOnly(
+			"read_file", "list_dir", "message",
+		),
 		Candidates:                ai.Candidates,
 		Router:                    ai.Router,
 		LightCandidates:           ai.LightCandidates,

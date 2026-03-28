@@ -396,6 +396,30 @@ func (r *ToolRegistry) Clone() *ToolRegistry {
 	return clone
 }
 
+// CloneOnly returns a clone containing only the named tools.
+func (r *ToolRegistry) CloneOnly(names ...string) *ToolRegistry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	allowed := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		allowed[n] = struct{}{}
+	}
+	clone := &ToolRegistry{
+		tools:      make(map[string]*ToolEntry, len(names)),
+		mediaStore: r.mediaStore,
+	}
+	for name, entry := range r.tools {
+		if _, ok := allowed[name]; ok {
+			clone.tools[name] = &ToolEntry{
+				Tool:   entry.Tool,
+				IsCore: entry.IsCore,
+				TTL:    entry.TTL,
+			}
+		}
+	}
+	return clone
+}
+
 // Unregister removes a tool by name. Returns true if the tool was found and removed.
 func (r *ToolRegistry) Unregister(name string) bool {
 	r.mu.Lock()
