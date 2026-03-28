@@ -205,11 +205,38 @@ func convertMessages(ctx context.Context, client *genai.Client, messages []Messa
 				textContent = mediaTagRe.ReplaceAllString(msg.Content, "")
 				textContent = strings.TrimSpace(textContent)
 				for _, match := range matches {
-					mediaData, err := os.ReadFile(match[2])
-					if err != nil {
+					mediaPath := match[2]
+					mediaType := match[1]
+					mime := detectMIMEFromExt(mediaPath, mediaType)
+
+					info, statErr := os.Stat(mediaPath)
+					if statErr != nil {
 						continue
 					}
-					mime := detectMIMEFromExt(match[2], match[1])
+
+					// Large files: upload via File API
+					if info.Size() > inlineDataLimit && client != nil {
+						uploaded, uploadErr := client.Files.UploadFromPath(ctx, mediaPath, &genai.UploadFileConfig{
+							MIMEType: mime,
+						})
+						if uploadErr == nil {
+							frParts = append(frParts, &genai.FunctionResponsePart{
+								FileData: &genai.FunctionResponseFileData{
+									FileURI:  uploaded.URI,
+									MIMEType: uploaded.MIMEType,
+								},
+							})
+							continue
+						}
+						fmt.Printf("[gemini] File API upload failed for tool result %s: %v\n", filepath.Base(mediaPath), uploadErr)
+						continue
+					}
+
+					// Small files: inline
+					mediaData, readErr := os.ReadFile(mediaPath)
+					if readErr != nil {
+						continue
+					}
 					frParts = append(frParts, &genai.FunctionResponsePart{
 						InlineData: &genai.FunctionResponseBlob{
 							MIMEType: mime,
