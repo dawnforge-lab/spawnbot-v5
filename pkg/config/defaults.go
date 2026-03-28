@@ -276,20 +276,11 @@ func DefaultConfig() *Config {
 				APIBase:   "https://api.shengsuanyun.com/v1",
 			},
 
-			// Antigravity (Google Cloud Code Assist) - OAuth only
-			{
-				ModelName:  "gemini-flash",
-				Model:      "antigravity/gemini-3-flash",
-				AuthMethod: "oauth",
-			},
-
-			// GitHub Copilot - https://github.com/settings/tokens
-			{
-				ModelName:  "copilot-gpt-5.4",
-				Model:      "github-copilot/gpt-5.4",
-				APIBase:    "http://localhost:4321",
-				AuthMethod: "oauth",
-			},
+			// Antigravity (Google Cloud Code Assist) and GitHub Copilot are omitted
+			// from defaults — they require OAuth login first:
+			//   spawnbot auth login --provider google-antigravity
+			//   spawnbot auth login --provider github-copilot
+			// After login, add them to model_list in config.json.
 
 			// Ollama (local) - https://ollama.com
 			{
