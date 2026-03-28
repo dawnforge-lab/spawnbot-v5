@@ -27,7 +27,12 @@ type embeddingInfo struct {
 var embeddingDefaults = map[string]embeddingInfo{
 	"gemini": {
 		provider: "gemini",
-		model:    "text-embedding-004",
+		model:    "gemini-embedding-001",
+		baseURL:  "https://generativelanguage.googleapis.com/v1beta",
+	},
+	"gemini-multimodal": {
+		provider: "gemini",
+		model:    "gemini-embedding-2-preview",
 		baseURL:  "https://generativelanguage.googleapis.com/v1beta",
 	},
 	"openai": {
@@ -300,7 +305,8 @@ func onboard(encrypt bool) {
 				Title("Embedding provider for memory").
 				Options(
 					huh.NewOption("Same as chat provider", "same"),
-					huh.NewOption("Gemini (free tier)", "gemini"),
+					huh.NewOption("Gemini Embedding 2 — multimodal (text, image, video, audio)", "gemini-multimodal"),
+					huh.NewOption("Gemini Embedding — text only", "gemini"),
 					huh.NewOption("OpenAI", "openai"),
 				).
 				Value(&embChoice),
@@ -468,7 +474,7 @@ func configureEmbeddings(cfg *config.Config, embChoice, embAPIKey, chatAPIKey, c
 			cfg.Embeddings.APIKey = chatAPIKey
 		case "anthropic", "openrouter":
 			cfg.Embeddings.Provider = "gemini"
-			cfg.Embeddings.Model = "text-embedding-004"
+			cfg.Embeddings.Model = "gemini-embedding-001"
 			cfg.Embeddings.BaseURL = "https://generativelanguage.googleapis.com/v1beta"
 			if embAPIKey != "" {
 				cfg.Embeddings.APIKey = embAPIKey
