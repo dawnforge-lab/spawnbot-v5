@@ -105,6 +105,10 @@ func Run(debug bool, homePath, configPath string, allowEmptyStartup bool) error 
 		return fmt.Errorf("error loading config: %w", err)
 	}
 
+	// Set workspace for media storage so downloaded files land inside
+	// the workspace where the agent's file tools can access them.
+	media.SetWorkspace(cfg.WorkspacePath())
+
 	logger.SetLevelFromString(cfg.Gateway.LogLevel)
 
 	if debug {
