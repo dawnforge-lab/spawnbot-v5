@@ -9,6 +9,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +18,8 @@ import (
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
+
+var imageTagRe = regexp.MustCompile(`\[image:([^\]]+)\]`)
 
 type (
 	ToolCall               = protocoltypes.ToolCall
@@ -139,7 +143,7 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 			systemParts = append(systemParts, &genai.Part{Text: msg.Content})
 
 		case "user":
-			parts := []*genai.Part{{Text: msg.Content}}
+			parts := extractImageParts(msg.Content)
 			contents = append(contents, &genai.Content{
 				Role:  "user",
 				Parts: parts,
@@ -222,6 +226,67 @@ func convertMessages(messages []Message) ([]*genai.Content, *genai.Content) {
 	}
 
 	return contents, systemInstruction
+}
+
+// extractImageParts parses [image:/path] tags from message content, reads
+// the image files, and returns genai.Parts with both the text and inline
+// image data so Gemini can natively analyze the images.
+func extractImageParts(content string) []*genai.Part {
+	matches := imageTagRe.FindAllStringSubmatchIndex(content, -1)
+	if len(matches) == 0 {
+		return []*genai.Part{{Text: content}}
+	}
+
+	var parts []*genai.Part
+	lastEnd := 0
+
+	for _, loc := range matches {
+		// Text before this tag
+		if loc[0] > lastEnd {
+			text := strings.TrimSpace(content[lastEnd:loc[0]])
+			if text != "" {
+				parts = append(parts, &genai.Part{Text: text})
+			}
+		}
+		lastEnd = loc[1]
+
+		imagePath := content[loc[2]:loc[3]]
+		data, err := os.ReadFile(imagePath)
+		if err != nil {
+			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[image unavailable: %s]", imagePath)})
+			continue
+		}
+
+		mime := "image/jpeg"
+		if strings.HasSuffix(strings.ToLower(imagePath), ".png") {
+			mime = "image/png"
+		} else if strings.HasSuffix(strings.ToLower(imagePath), ".webp") {
+			mime = "image/webp"
+		} else if strings.HasSuffix(strings.ToLower(imagePath), ".gif") {
+			mime = "image/gif"
+		}
+
+		parts = append(parts, &genai.Part{
+			InlineData: &genai.Blob{
+				MIMEType: mime,
+				Data:     data,
+			},
+		})
+	}
+
+	// Remaining text after last tag
+	if lastEnd < len(content) {
+		text := strings.TrimSpace(content[lastEnd:])
+		if text != "" {
+			parts = append(parts, &genai.Part{Text: text})
+		}
+	}
+
+	if len(parts) == 0 {
+		parts = append(parts, &genai.Part{Text: content})
+	}
+
+	return parts
 }
 
 // buildConfig creates the GenerateContentConfig with safety settings and tools.
