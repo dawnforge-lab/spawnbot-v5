@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/genai"
@@ -21,6 +22,39 @@ import (
 )
 
 var mediaTagRe = regexp.MustCompile(`\[(image|video|audio):([^\]]+)\]`)
+
+// fileUploadCache caches Gemini File API upload results so the same file
+// isn't re-uploaded on every tool call. Keyed by "path:mtime".
+type fileUploadCache struct {
+	mu    sync.RWMutex
+	items map[string]cachedUpload
+}
+
+type cachedUpload struct {
+	uri      string
+	mimeType string
+}
+
+func newFileUploadCache() *fileUploadCache {
+	return &fileUploadCache{items: make(map[string]cachedUpload)}
+}
+
+func (c *fileUploadCache) key(path string, modTime time.Time) string {
+	return path + ":" + modTime.Format(time.RFC3339Nano)
+}
+
+func (c *fileUploadCache) get(path string, modTime time.Time) (cachedUpload, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.items[c.key(path, modTime)]
+	return v, ok
+}
+
+func (c *fileUploadCache) set(path string, modTime time.Time, uri, mimeType string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items[c.key(path, modTime)] = cachedUpload{uri: uri, mimeType: mimeType}
+}
 
 type (
 	ToolCall               = protocoltypes.ToolCall
@@ -35,8 +69,9 @@ type (
 // Provider implements LLMProvider and StreamingProvider using the native
 // Google GenAI SDK. Safety settings are set to BLOCK_NONE by default.
 type Provider struct {
-	client  *genai.Client
-	timeout time.Duration
+	client      *genai.Client
+	timeout     time.Duration
+	uploadCache *fileUploadCache
 }
 
 // Gemini thinking models (3.x) need more time than standard models.
@@ -51,7 +86,7 @@ func NewProvider(ctx context.Context, apiKey string) (*Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating gemini client: %w", err)
 	}
-	return &Provider{client: client, timeout: defaultTimeout}, nil
+	return &Provider{client: client, timeout: defaultTimeout, uploadCache: newFileUploadCache()}, nil
 }
 
 // NewProviderWithTimeout creates a Gemini provider with custom timeout.
@@ -79,7 +114,7 @@ func (p *Provider) Chat(
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	contents, systemInstruction := convertMessages(ctx, p.client, messages)
+	contents, systemInstruction := convertMessages(ctx, p.client, p.uploadCache, messages)
 	config := buildConfig(tools, options, systemInstruction)
 
 	resp, err := p.client.Models.GenerateContent(ctx, model, contents, config)
@@ -99,7 +134,7 @@ func (p *Provider) ChatStream(
 	options map[string]any,
 	onChunk func(accumulated string),
 ) (*LLMResponse, error) {
-	contents, systemInstruction := convertMessages(ctx, p.client, messages)
+	contents, systemInstruction := convertMessages(ctx, p.client, p.uploadCache, messages)
 	config := buildConfig(tools, options, systemInstruction)
 
 	var accumulated strings.Builder
@@ -139,7 +174,7 @@ const inlineDataLimit = 10 * 1024 * 1024 // 10MB
 // convertMessages converts spawnbot Messages to Gemini Content format.
 // System messages are extracted as a separate system instruction.
 // Large media files are uploaded via the File API; small ones go inline.
-func convertMessages(ctx context.Context, client *genai.Client, messages []Message) ([]*genai.Content, *genai.Content) {
+func convertMessages(ctx context.Context, client *genai.Client, cache *fileUploadCache, messages []Message) ([]*genai.Content, *genai.Content) {
 	var contents []*genai.Content
 	var systemParts []*genai.Part
 
@@ -149,7 +184,7 @@ func convertMessages(ctx context.Context, client *genai.Client, messages []Messa
 			systemParts = append(systemParts, &genai.Part{Text: msg.Content})
 
 		case "user":
-			parts := extractMediaParts(ctx, client, msg.Content)
+			parts := extractMediaParts(ctx, client, cache, msg.Content)
 			contents = append(contents, &genai.Content{
 				Role:  "user",
 				Parts: parts,
@@ -216,19 +251,16 @@ func convertMessages(ctx context.Context, client *genai.Client, messages []Messa
 
 					// Large files: upload via File API
 					if info.Size() > inlineDataLimit && client != nil {
-						uploaded, uploadErr := client.Files.UploadFromPath(ctx, mediaPath, &genai.UploadFileConfig{
-							MIMEType: mime,
-						})
-						if uploadErr == nil {
+						uri, uploadMime := uploadWithCache(ctx, client, cache, mediaPath, mime, info.ModTime())
+						if uri != "" {
 							frParts = append(frParts, &genai.FunctionResponsePart{
 								FileData: &genai.FunctionResponseFileData{
-									FileURI:  uploaded.URI,
-									MIMEType: uploaded.MIMEType,
+									FileURI:  uri,
+									MIMEType: uploadMime,
 								},
 							})
 							continue
 						}
-						fmt.Printf("[gemini] File API upload failed for tool result %s: %v\n", filepath.Base(mediaPath), uploadErr)
 						continue
 					}
 
@@ -287,7 +319,7 @@ func convertMessages(ctx context.Context, client *genai.Client, messages []Messa
 // extractMediaParts parses [image:/path], [video:/path], and [audio:/path] tags
 // from content, reads the files, and returns genai.Parts. Small files go inline;
 // large files (>10MB) are uploaded via the Gemini File API.
-func extractMediaParts(ctx context.Context, client *genai.Client, content string) []*genai.Part {
+func extractMediaParts(ctx context.Context, client *genai.Client, cache *fileUploadCache, content string) []*genai.Part {
 	matches := mediaTagRe.FindAllStringSubmatchIndex(content, -1)
 	if len(matches) == 0 {
 		return []*genai.Part{{Text: content}}
@@ -318,14 +350,17 @@ func extractMediaParts(ctx context.Context, client *genai.Client, content string
 
 		if info.Size() > inlineDataLimit {
 			if client != nil {
-				// Large file — upload via File API
-				part := uploadViaFileAPI(ctx, client, mediaPath, mime)
-				if part != nil {
-					parts = append(parts, part)
+				uri, uploadMime := uploadWithCache(ctx, client, cache, mediaPath, mime, info.ModTime())
+				if uri != "" {
+					parts = append(parts, &genai.Part{
+						FileData: &genai.FileData{
+							FileURI:  uri,
+							MIMEType: uploadMime,
+						},
+					})
 					continue
 				}
 			}
-			// File too large for inline and upload failed
 			sizeMB := info.Size() / (1024 * 1024)
 			parts = append(parts, &genai.Part{Text: fmt.Sprintf("[%s: %s (%dMB) — file too large, upload failed]", mediaType, filepath.Base(mediaPath), sizeMB)})
 			continue
@@ -407,23 +442,26 @@ func detectMIMEFromExt(path, mediaType string) string {
 	}
 }
 
-// uploadViaFileAPI uploads a file to the Gemini File API and returns a Part
-// referencing the uploaded URI. Returns nil if the upload fails.
-func uploadViaFileAPI(ctx context.Context, client *genai.Client, filePath, mime string) *genai.Part {
+// uploadWithCache uploads a file via the Gemini File API, caching the result
+// so repeated read_file calls on the same file don't re-upload.
+func uploadWithCache(ctx context.Context, client *genai.Client, cache *fileUploadCache, filePath, mime string, modTime time.Time) (uri, mimeType string) {
+	if cache != nil {
+		if cached, ok := cache.get(filePath, modTime); ok {
+			return cached.uri, cached.mimeType
+		}
+	}
+
 	uploaded, err := client.Files.UploadFromPath(ctx, filePath, &genai.UploadFileConfig{
 		MIMEType: mime,
 	})
 	if err != nil {
-		fmt.Printf("[gemini] File API upload failed for %s: %v\n", filepath.Base(filePath), err)
-		return nil
+		return "", ""
 	}
-	fmt.Printf("[gemini] File API upload OK: %s → %s\n", filepath.Base(filePath), uploaded.URI)
-	return &genai.Part{
-		FileData: &genai.FileData{
-			FileURI:  uploaded.URI,
-			MIMEType: uploaded.MIMEType,
-		},
+
+	if cache != nil {
+		cache.set(filePath, modTime, uploaded.URI, uploaded.MIMEType)
 	}
+	return uploaded.URI, uploaded.MIMEType
 }
 
 // buildConfig creates the GenerateContentConfig with safety settings and tools.
