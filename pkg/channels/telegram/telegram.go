@@ -630,34 +630,40 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 
 	if message.Video != nil {
 		videoPath := c.downloadFile(ctx, message.Video.FileID, ".mp4")
+		if content != "" {
+			content += "\n"
+		}
 		if videoPath != "" {
 			mediaPaths = append(mediaPaths, storeMedia(videoPath, "video.mp4"))
-			if content != "" {
-				content += "\n"
-			}
 			content += "[video]"
+		} else {
+			content += "[video: failed to download — file may exceed Telegram's 20MB bot limit]"
 		}
 	}
 
 	if message.VideoNote != nil {
 		vnPath := c.downloadFile(ctx, message.VideoNote.FileID, ".mp4")
+		if content != "" {
+			content += "\n"
+		}
 		if vnPath != "" {
 			mediaPaths = append(mediaPaths, storeMedia(vnPath, "videonote.mp4"))
-			if content != "" {
-				content += "\n"
-			}
 			content += "[video]"
+		} else {
+			content += "[video note: failed to download]"
 		}
 	}
 
 	if message.Animation != nil {
 		animPath := c.downloadFile(ctx, message.Animation.FileID, ".mp4")
+		if content != "" {
+			content += "\n"
+		}
 		if animPath != "" {
 			mediaPaths = append(mediaPaths, storeMedia(animPath, "animation.mp4"))
-			if content != "" {
-				content += "\n"
-			}
 			content += "[video]"
+		} else {
+			content += "[animation: failed to download]"
 		}
 	}
 
@@ -667,12 +673,14 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 			ext = ".webm"
 		}
 		stickerPath := c.downloadFile(ctx, message.Sticker.FileID, ext)
+		if content != "" {
+			content += "\n"
+		}
 		if stickerPath != "" {
 			mediaPaths = append(mediaPaths, storeMedia(stickerPath, "sticker"+ext))
-			if content != "" {
-				content += "\n"
-			}
 			content += "[image: sticker]"
+		} else {
+			content += "[sticker: failed to download]"
 		}
 	}
 
