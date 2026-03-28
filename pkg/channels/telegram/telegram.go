@@ -628,6 +628,54 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 		}
 	}
 
+	if message.Video != nil {
+		videoPath := c.downloadFile(ctx, message.Video.FileID, ".mp4")
+		if videoPath != "" {
+			mediaPaths = append(mediaPaths, storeMedia(videoPath, "video.mp4"))
+			if content != "" {
+				content += "\n"
+			}
+			content += "[video]"
+		}
+	}
+
+	if message.VideoNote != nil {
+		vnPath := c.downloadFile(ctx, message.VideoNote.FileID, ".mp4")
+		if vnPath != "" {
+			mediaPaths = append(mediaPaths, storeMedia(vnPath, "videonote.mp4"))
+			if content != "" {
+				content += "\n"
+			}
+			content += "[video]"
+		}
+	}
+
+	if message.Animation != nil {
+		animPath := c.downloadFile(ctx, message.Animation.FileID, ".mp4")
+		if animPath != "" {
+			mediaPaths = append(mediaPaths, storeMedia(animPath, "animation.mp4"))
+			if content != "" {
+				content += "\n"
+			}
+			content += "[video]"
+		}
+	}
+
+	if message.Sticker != nil {
+		ext := ".webp"
+		if message.Sticker.IsVideo {
+			ext = ".webm"
+		}
+		stickerPath := c.downloadFile(ctx, message.Sticker.FileID, ext)
+		if stickerPath != "" {
+			mediaPaths = append(mediaPaths, storeMedia(stickerPath, "sticker"+ext))
+			if content != "" {
+				content += "\n"
+			}
+			content += "[image: sticker]"
+		}
+	}
+
 	if message.Document != nil {
 		docPath := c.downloadFile(ctx, message.Document.FileID, "")
 		if docPath != "" {
