@@ -283,7 +283,7 @@ func (t *ReadFileTool) Name() string {
 }
 
 func (t *ReadFileTool) Description() string {
-	return "Read the contents of a file. Supports pagination via `offset` and `length`."
+	return "Read the contents of a file. Supports pagination via `offset` and `length`. For image files (jpg, png, webp, gif), the image is analyzed natively — just read_file the image path directly, no external scripts needed."
 }
 
 func (t *ReadFileTool) Parameters() map[string]any {
