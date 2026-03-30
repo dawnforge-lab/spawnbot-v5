@@ -17,6 +17,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/auth"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/cron"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/gateway"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/heartbeat"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/migrate"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/model"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/onboard"
@@ -42,6 +43,7 @@ func NewSpawnbotCommand() *cobra.Command {
 		gateway.NewGatewayCommand(),
 		status.NewStatusCommand(),
 		cron.NewCronCommand(),
+		heartbeat.NewHeartbeatCommand(),
 		migrate.NewMigrateCommand(),
 		skills.NewSkillsCommand(),
 		model.NewModelCommand(),
