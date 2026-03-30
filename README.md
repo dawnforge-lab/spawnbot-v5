@@ -124,7 +124,12 @@ Connect any MCP server at runtime -- no restart required:
 
 The agent can operate without user interaction:
 
-- **Heartbeat**: Periodic prompt execution (configurable interval), with main session context injection for situational awareness
+- **Heartbeat**: Periodic prompt execution (configurable interval, minimum 5 minutes, default 30 minutes), with main session context injection for situational awareness
+  - **HEARTBEAT_OK suppression**: When the agent has nothing to report, it replies `HEARTBEAT_OK` which is silently suppressed instead of sent to the user
+  - **Deduplication**: Identical alert messages are suppressed within a 24-hour window to prevent spam
+  - **Structured events**: Every heartbeat run emits a structured event (`sent`, `ok`, `skipped`, `failed`) with duration, preview, skip reason, and channel -- enabling monitoring and UI integration
+  - **Retry**: A retry channel allows re-triggering heartbeats when the main agent queue clears
+  - **Runtime interval changes**: The heartbeat interval can be changed at runtime via `SetInterval()` or the CLI
 - **Self-improvement loop**: Heartbeat reviews recent conversations for repeated patterns, missing tools, and struggles -- creates skills or MCP servers to address them
 - **Idle triggers**: Fire after channel inactivity threshold
 - **RSS polling**: Monitor feeds, summarize new items
@@ -174,7 +179,7 @@ pkg/
   routing/    Model routing (light/heavy) + agent binding
   mcp/        MCP server lifecycle management
   autonomy/   Idle monitor, RSS poller
-  heartbeat/  Periodic autonomous tasks
+  heartbeat/  Periodic autonomous tasks (dedup, events, HEARTBEAT_OK suppression)
   voice/      Audio transcription
   identity/   SOUL.md loading
   credential/ SSH-key encryption
@@ -220,14 +225,38 @@ Channel.Send()
     USER.md              User profile
     GOALS.md             Objectives
     PLAYBOOK.md          Operating procedures
-    HEARTBEAT.md         Periodic tasks
+    HEARTBEAT.md         Periodic tasks (user-editable checklist)
+    heartbeat.log        Heartbeat execution log
     memory/              Daily notes + long-term memory
       MEMORY.md
       YYYYMM/YYYYMMDD.md
     sessions/            Conversation history (JSONL)
+      heartbeat/         Isolated heartbeat session store
     skills/              Installed skills
     state/               Persistent state
 ```
+
+### Heartbeat Configuration
+
+In `config.json`:
+
+```json
+{
+  "heartbeat": {
+    "enabled": true,
+    "interval": 30
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the heartbeat service |
+| `interval` | int | `30` | Interval in minutes between heartbeat runs (minimum 5) |
+
+Environment variables: `SPAWNBOT_HEARTBEAT_ENABLED`, `SPAWNBOT_HEARTBEAT_INTERVAL`
+
+The heartbeat reads tasks from `HEARTBEAT.md` in the workspace. If the file is missing, a default template is created. If the file has no user tasks (nothing below the marker line), the heartbeat is silently skipped. The agent runs with a lightweight clone (5 iterations max, read-only tools: `read_file`, `list_dir`, `message`) to keep executions fast and safe.
 
 ## Building from Source
 
@@ -258,16 +287,52 @@ make docker-build-full  # With Node.js for MCP servers
 
 ## CLI Commands
 
-```bash
-spawnbot onboard              # Interactive setup wizard
-spawnbot agent                # CLI chat mode
-spawnbot agent -m "message"   # Single message mode
-spawnbot gateway              # Start all channels
-spawnbot cron list            # List scheduled tasks
-spawnbot skills install NAME  # Install skill from registry
-spawnbot migrate              # Migrate config from older versions
-spawnbot version              # Show version info
-```
+### Core
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot onboard` | Interactive first-run setup wizard |
+| `spawnbot agent` | CLI chat mode (interactive) |
+| `spawnbot agent -m "message"` | Single message mode (non-interactive) |
+| `spawnbot gateway` | Start all channels and background services |
+| `spawnbot status` | Show agent status |
+| `spawnbot version` | Show version and build info |
+| `spawnbot migrate` | Migrate config from older versions |
+
+### Heartbeat
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot heartbeat status` | Show current heartbeat configuration (enabled, interval) |
+| `spawnbot heartbeat set-interval -m <minutes>` | Set heartbeat interval in minutes (minimum 5). Requires gateway restart. |
+
+### Scheduled Tasks (Cron)
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot cron list` | List all scheduled tasks |
+| `spawnbot cron add` | Add a new scheduled task |
+| `spawnbot cron remove <id>` | Remove a scheduled task |
+| `spawnbot cron enable <id>` | Enable a scheduled task |
+| `spawnbot cron disable <id>` | Disable a scheduled task |
+
+### Skills
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot skills install <name>` | Install a skill from the registry |
+
+### Model Configuration
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot model` | Manage model configuration |
+
+### Authentication
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot auth` | Manage authentication and credentials |
 
 ## License
 
