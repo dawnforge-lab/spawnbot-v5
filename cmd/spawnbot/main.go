@@ -21,6 +21,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/migrate"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/model"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/onboard"
+	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/reset"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/skills"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/status"
 	"github.com/dawnforge-lab/spawnbot-v5/cmd/spawnbot/internal/version"
@@ -47,6 +48,8 @@ func NewSpawnbotCommand() *cobra.Command {
 		migrate.NewMigrateCommand(),
 		skills.NewSkillsCommand(),
 		model.NewModelCommand(),
+		reset.NewResetCommand(),
+		reset.NewNukeCommand(),
 		version.NewVersionCommand(),
 	)
 

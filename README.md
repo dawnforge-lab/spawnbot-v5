@@ -334,6 +334,15 @@ make docker-build-full  # With Node.js for MCP servers
 |---------|-------------|
 | `spawnbot auth` | Manage authentication and credentials |
 
+### Reset & Uninstall
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot reset` | Delete all configs, memories, sessions, skills, and cron jobs. Keeps the binary and Go runtime so you can re-run `spawnbot onboard`. Stops and removes systemd services. |
+| `spawnbot reset -y` | Same as above, skip confirmation prompt |
+| `spawnbot nuke` | Completely remove spawnbot from the system: deletes `~/.spawnbot/` entirely, removes systemd services, SSH encryption key, and PATH entry from shell rc files. |
+| `spawnbot nuke -y` | Same as above, skip confirmation prompt |
+
 ## License
 
 MIT (based on [PicoClaw](https://github.com/sipeed/picoclaw) by Sipeed)
