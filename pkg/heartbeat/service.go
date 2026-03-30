@@ -44,6 +44,9 @@ type HeartbeatService struct {
 	enabled   bool
 	mu        sync.RWMutex
 	stopChan  chan struct{}
+	dedup     *Dedup
+	events    *EventEmitter
+	retryCh   chan struct{} // signals a retry after main-busy skip
 }
 
 // NewHeartbeatService creates a new heartbeat service
@@ -62,6 +65,32 @@ func NewHeartbeatService(workspace string, intervalMinutes int, enabled bool) *H
 		interval:  time.Duration(intervalMinutes) * time.Minute,
 		enabled:   enabled,
 		state:     state.NewManager(workspace),
+		dedup:     NewDedup(24 * time.Hour),
+		events:    NewEventEmitter(),
+		retryCh:   make(chan struct{}, 1),
+	}
+}
+
+// Events returns the event emitter for subscribing to heartbeat events.
+func (hs *HeartbeatService) Events() *EventEmitter {
+	return hs.events
+}
+
+// SetInterval updates the heartbeat interval in minutes. Restarts the ticker
+// if the service is running. Enforces the minimum interval.
+func (hs *HeartbeatService) SetInterval(minutes int) {
+	if minutes < minIntervalMinutes {
+		minutes = minIntervalMinutes
+	}
+
+	hs.mu.Lock()
+	hs.interval = time.Duration(minutes) * time.Minute
+	wasRunning := hs.stopChan != nil
+	hs.mu.Unlock()
+
+	if wasRunning {
+		hs.Stop()
+		hs.Start()
 	}
 }
 
@@ -141,14 +170,16 @@ func (hs *HeartbeatService) runLoop(stopChan chan struct{}) {
 			return
 		case <-ticker.C:
 			hs.executeHeartbeat()
+		case <-hs.retryCh:
+			hs.executeHeartbeat()
 		}
 	}
 }
 
-// executeHeartbeat performs a single heartbeat check
 func (hs *HeartbeatService) executeHeartbeat() {
+	start := time.Now()
+
 	hs.mu.RLock()
-	enabled := hs.enabled
 	handler := hs.handler
 	if !hs.enabled || hs.stopChan == nil {
 		hs.mu.RUnlock()
@@ -156,66 +187,110 @@ func (hs *HeartbeatService) executeHeartbeat() {
 	}
 	hs.mu.RUnlock()
 
-	if !enabled {
-		return
-	}
-
 	logger.DebugC("heartbeat", "Executing heartbeat")
 
 	prompt := hs.buildPrompt()
 	if prompt == "" {
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusSkipped,
+			SkipReason: "empty-heartbeat-file",
+		})
 		logger.InfoC("heartbeat", "No heartbeat prompt (HEARTBEAT.md empty or missing)")
 		return
 	}
 
 	if handler == nil {
 		hs.logErrorf("Heartbeat handler not configured")
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusFailed,
+			SkipReason: "no-handler",
+		})
 		return
 	}
 
-	// Get last channel info for context
 	lastChannel := hs.state.GetLastChannel()
 	channel, chatID := hs.parseLastChannel(lastChannel)
-
-	// Debug log for channel resolution
 	hs.logInfof("Resolved channel: %s, chatID: %s (from lastChannel: %s)", channel, chatID, lastChannel)
 
 	result := handler(prompt, channel, chatID)
+	durationMs := time.Since(start).Milliseconds()
 
 	if result == nil {
 		hs.logInfof("Heartbeat handler returned nil result")
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusFailed,
+			DurationMs: durationMs,
+			SkipReason: "nil-result",
+		})
 		return
 	}
 
-	// Handle different result types
 	if result.IsError {
 		hs.logErrorf("Heartbeat error: %s", result.ForLLM)
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusFailed,
+			DurationMs: durationMs,
+			SkipReason: result.ForLLM,
+		})
 		return
 	}
 
 	if result.Async {
 		hs.logInfof("Async task started: %s", result.ForLLM)
-		logger.InfoCF("heartbeat", "Async heartbeat task started",
-			map[string]any{
-				"message": result.ForLLM,
-			})
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusSent,
+			DurationMs: durationMs,
+			Preview:    truncatePreview(result.ForLLM, 200),
+			Channel:    channel,
+		})
 		return
 	}
 
-	// Check if silent
-	if result.Silent {
+	// HEARTBEAT_OK suppression: if the response is just HEARTBEAT_OK, suppress delivery
+	responseText := result.ForUser
+	if responseText == "" {
+		responseText = result.ForLLM
+	}
+
+	if isHeartbeatOK(responseText) || result.Silent {
 		hs.logInfof("Heartbeat OK - silent")
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusOK,
+			DurationMs: durationMs,
+			Channel:    channel,
+		})
 		return
 	}
 
-	// Send result to user
-	if result.ForUser != "" {
-		hs.sendResponse(result.ForUser)
-	} else if result.ForLLM != "" {
-		hs.sendResponse(result.ForLLM)
+	// Deduplication: skip if identical message sent within TTL
+	if hs.dedup.IsDuplicate(responseText) {
+		hs.logInfof("Heartbeat skipped - duplicate alert within 24h")
+		hs.events.Emit(HeartbeatEvent{
+			Timestamp:  start,
+			Status:     EventStatusSkipped,
+			DurationMs: durationMs,
+			SkipReason: "duplicate",
+			Preview:    truncatePreview(responseText, 200),
+			Channel:    channel,
+		})
+		return
 	}
 
-	hs.logInfof("Heartbeat completed: %s", result.ForLLM)
+	hs.sendResponse(responseText)
+	hs.logInfof("Heartbeat completed: %s", responseText)
+	hs.events.Emit(HeartbeatEvent{
+		Timestamp:  start,
+		Status:     EventStatusSent,
+		DurationMs: durationMs,
+		Preview:    truncatePreview(responseText, 200),
+		Channel:    channel,
+	})
 }
 
 // buildPrompt builds the heartbeat prompt from HEARTBEAT.md
@@ -393,4 +468,19 @@ func (hs *HeartbeatService) logf(level, format string, args ...any) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	fmt.Fprintf(f, "[%s] [%s] %s\n", timestamp, level, fmt.Sprintf(format, args...))
+}
+
+// isHeartbeatOK returns true if the response is effectively just HEARTBEAT_OK.
+func isHeartbeatOK(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return strings.EqualFold(trimmed, "HEARTBEAT_OK") ||
+		strings.EqualFold(trimmed, "Heartbeat OK")
+}
+
+// truncatePreview truncates a string to maxLen, appending "..." if truncated.
+func truncatePreview(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

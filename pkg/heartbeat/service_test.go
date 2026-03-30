@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteHeartbeat_Async(t *testing.T) {
@@ -247,4 +249,83 @@ func TestBuildPrompt_UserTasksAfterMarkerProducePrompt(t *testing.T) {
 	if !strings.Contains(prompt, "Check unread Feishu messages") {
 		t.Fatalf("prompt = %q, want user task content", prompt)
 	}
+}
+
+func TestExecuteHeartbeat_DeduplicatesIdenticalAlerts(t *testing.T) {
+	tmpDir := t.TempDir()
+	hs := NewHeartbeatService(tmpDir, 30, true)
+	hs.stopChan = make(chan struct{})
+
+	hs.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
+		return &tools.ToolResult{ForUser: "alert: disk full", ForLLM: "alert: disk full"}
+	})
+
+	var sentCount int
+	hs.Events().OnEvent(func(ev HeartbeatEvent) {
+		if ev.Status == EventStatusSent {
+			sentCount++
+		}
+	})
+
+	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check disk"), 0o644)
+
+	hs.executeHeartbeat()
+	hs.executeHeartbeat() // second call should be deduped
+
+	assert.Equal(t, 1, sentCount, "duplicate alert should be suppressed")
+}
+
+func TestExecuteHeartbeat_SuppressesHeartbeatOKResponse(t *testing.T) {
+	tmpDir := t.TempDir()
+	hs := NewHeartbeatService(tmpDir, 30, true)
+	hs.stopChan = make(chan struct{})
+
+	hs.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
+		return &tools.ToolResult{ForLLM: "HEARTBEAT_OK", ForUser: "HEARTBEAT_OK"}
+	})
+
+	var lastEvent *HeartbeatEvent
+	hs.Events().OnEvent(func(ev HeartbeatEvent) {
+		lastEvent = &ev
+	})
+
+	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check status"), 0o644)
+	hs.executeHeartbeat()
+
+	require.NotNil(t, lastEvent)
+	assert.Equal(t, EventStatusOK, lastEvent.Status)
+}
+
+func TestExecuteHeartbeat_EmitsEventOnSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	hs := NewHeartbeatService(tmpDir, 30, true)
+	hs.stopChan = make(chan struct{})
+
+	hs.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
+		return &tools.ToolResult{ForUser: "alert: something happened", ForLLM: "alert"}
+	})
+
+	var lastEvent *HeartbeatEvent
+	hs.Events().OnEvent(func(ev HeartbeatEvent) {
+		lastEvent = &ev
+	})
+
+	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check things"), 0o644)
+	hs.executeHeartbeat()
+
+	require.NotNil(t, lastEvent)
+	assert.Equal(t, EventStatusSent, lastEvent.Status)
+	assert.Greater(t, lastEvent.DurationMs, int64(-1))
+}
+
+func TestSetInterval_UpdatesTicker(t *testing.T) {
+	tmpDir := t.TempDir()
+	hs := NewHeartbeatService(tmpDir, 30, true)
+
+	hs.SetInterval(10)
+	assert.Equal(t, 10*time.Minute, hs.interval)
+
+	// Minimum enforcement
+	hs.SetInterval(2)
+	assert.Equal(t, 5*time.Minute, hs.interval)
 }
