@@ -1413,15 +1413,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 
 	// Log struggle signal for user corrections
 	if agent.StruggleCollector != nil && msg.Content != "" {
-		prevAssistant := ""
-		history := agent.Sessions.GetHistory(scopeKey)
-		for i := len(history) - 1; i >= 0; i-- {
-			if history[i].Role == "assistant" && history[i].Content != "" {
-				prevAssistant = history[i].Content
-				break
-			}
-		}
-		agent.StruggleCollector.OnUserMessage(msg.Content, prevAssistant, scopeKey)
+		agent.StruggleCollector.HandleTurnStart(msg.Content, scopeKey)
 	}
 
 	opts := processOptions{
@@ -2638,9 +2630,8 @@ turnLoop:
 
 			// Log struggle signal for self-improvement loop
 			if ts.agent.StruggleCollector != nil && toolResult.IsError {
-				ts.agent.StruggleCollector.OnToolResult(
+				ts.agent.StruggleCollector.HandleToolEnd(
 					toolName,
-					toolArgs,
 					true,
 					toolResult.ContentForLLM(),
 					ts.sessionKey,
@@ -2828,7 +2819,7 @@ turnLoop:
 
 	// Log repeated tool signals for self-improvement loop
 	if ts.agent.StruggleCollector != nil {
-		ts.agent.StruggleCollector.OnTurnEnd(toolCallCounts, ts.sessionKey)
+		ts.agent.StruggleCollector.HandleTurnEnd(ts.sessionKey)
 	}
 
 	ts.setPhase(TurnPhaseFinalizing)
