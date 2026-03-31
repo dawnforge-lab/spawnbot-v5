@@ -9,6 +9,12 @@ import re
 SKILL_TEMPLATE = """---
 name: {name}
 description: "TODO: Describe what this skill does and when to use it. Be specific about triggers."
+# arguments: []
+# argument-hint: ""
+# context: inline
+# agent_type: ""
+# allowed_tools: []
+# user-invocable: true
 ---
 
 # {title}
@@ -23,6 +29,12 @@ TODO: Describe the skill's purpose and core workflow.
 SKILL_TEMPLATE_WITH_SCRIPTS = """---
 name: {name}
 description: "TODO: Describe what this skill does and when to use it. Be specific about triggers."
+# arguments: []
+# argument-hint: ""
+# context: inline
+# agent_type: ""
+# allowed_tools: []
+# user-invocable: true
 ---
 
 # {title}
@@ -43,6 +55,12 @@ The following scripts are available in the `scripts/` directory:
 SKILL_TEMPLATE_WITH_REFERENCES = """---
 name: {name}
 description: "TODO: Describe what this skill does and when to use it. Be specific about triggers."
+# arguments: []
+# argument-hint: ""
+# context: inline
+# agent_type: ""
+# allowed_tools: []
+# user-invocable: true
 ---
 
 # {title}
@@ -63,6 +81,12 @@ For detailed information, see:
 SKILL_TEMPLATE_FULL = """---
 name: {name}
 description: "TODO: Describe what this skill does and when to use it. Be specific about triggers."
+# arguments: []
+# argument-hint: ""
+# context: inline
+# agent_type: ""
+# allowed_tools: []
+# user-invocable: true
 ---
 
 # {title}
@@ -151,6 +175,18 @@ def main():
         "--examples", action="store_true",
         help="Add example placeholder files in resource directories"
     )
+    parser.add_argument(
+        "--context", choices=["inline", "fork", "spawn"], default="inline",
+        help="Execution context for the skill (default: inline)"
+    )
+    parser.add_argument(
+        "--agent-type", default="",
+        help="Agent type to use when context is fork or spawn"
+    )
+    parser.add_argument(
+        "--arguments", default="",
+        help="Comma-separated argument names for the skill"
+    )
 
     args = parser.parse_args()
 
@@ -198,6 +234,30 @@ def main():
 
     # Write SKILL.md
     skill_md = template.format(name=args.name, title=title)
+
+    # Uncomment and populate context if non-default value provided
+    if args.context and args.context != "inline":
+        skill_md = skill_md.replace(
+            "# context: inline",
+            f"context: {args.context}"
+        )
+
+    # Uncomment and populate agent_type if provided
+    if args.agent_type:
+        skill_md = skill_md.replace(
+            '# agent_type: ""',
+            f'agent_type: "{args.agent_type}"'
+        )
+
+    # Uncomment and populate arguments if provided
+    if args.arguments:
+        arg_list = [a.strip() for a in args.arguments.split(",") if a.strip()]
+        args_yaml = "[" + ", ".join(arg_list) + "]"
+        skill_md = skill_md.replace(
+            "# arguments: []",
+            f"arguments: {args_yaml}"
+        )
+
     skill_md_path = os.path.join(skill_dir, "SKILL.md")
     with open(skill_md_path, "w") as f:
         f.write(skill_md)
