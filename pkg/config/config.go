@@ -94,8 +94,9 @@ type Config struct {
 	Gateway   GatewayConfig   `json:"gateway"`
 	Hooks     HooksConfig     `json:"hooks,omitempty"`
 	Tools     ToolsConfig     `json:"tools"`
-	Heartbeat HeartbeatConfig `json:"heartbeat"`
-	Devices   DevicesConfig   `json:"devices"`
+	Heartbeat   HeartbeatConfig   `json:"heartbeat"`
+	SelfImprove SelfImproveConfig `json:"self_improve"`
+	Devices     DevicesConfig     `json:"devices"`
 	Voice      VoiceConfig              `json:"voice"`
 	Embeddings EmbeddingsConfig         `json:"embeddings"`
 	Autonomy   autonomy.AutonomyConfig  `json:"autonomy"`
@@ -830,6 +831,13 @@ func (c *IRCConfig) SetSASLPassword(password string) {
 type HeartbeatConfig struct {
 	Enabled  bool `json:"enabled"  env:"SPAWNBOT_HEARTBEAT_ENABLED"`
 	Interval int  `json:"interval" env:"SPAWNBOT_HEARTBEAT_INTERVAL"` // minutes, min 5
+}
+
+type SelfImproveConfig struct {
+	Enabled      bool `json:"enabled"       env:"SPAWNBOT_SELF_IMPROVE_ENABLED"`
+	Hour         int  `json:"hour"          env:"SPAWNBOT_SELF_IMPROVE_HOUR"`         // 0-23, default 3
+	MaxCreations int  `json:"max_creations" env:"SPAWNBOT_SELF_IMPROVE_MAX_CREATIONS"` // default 3
+	MaxRetries   int  `json:"max_retries"   env:"SPAWNBOT_SELF_IMPROVE_MAX_RETRIES"`   // default 2
 }
 
 type DevicesConfig struct {
