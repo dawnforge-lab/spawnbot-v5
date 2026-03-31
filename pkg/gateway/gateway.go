@@ -38,6 +38,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/heartbeat"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
@@ -285,6 +286,9 @@ func setupAndStartServices(
 	)
 	runningServices.HeartbeatService.SetBus(msgBus)
 	runningServices.HeartbeatService.SetHandler(createHeartbeatHandler(agentLoop))
+	runningServices.HeartbeatService.SetTaskStore(
+		tasks.NewTaskStore(filepath.Join(cfg.WorkspacePath(), "tasks.json")),
+	)
 	if err = runningServices.HeartbeatService.Start(); err != nil {
 		return nil, fmt.Errorf("error starting heartbeat service: %w", err)
 	}
@@ -498,6 +502,9 @@ func restartServices(
 	)
 	runningServices.HeartbeatService.SetBus(msgBus)
 	runningServices.HeartbeatService.SetHandler(createHeartbeatHandler(al))
+	runningServices.HeartbeatService.SetTaskStore(
+		tasks.NewTaskStore(filepath.Join(cfg.WorkspacePath(), "tasks.json")),
+	)
 	if err = runningServices.HeartbeatService.Start(); err != nil {
 		return fmt.Errorf("error restarting heartbeat service: %w", err)
 	}

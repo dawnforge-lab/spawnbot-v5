@@ -20,6 +20,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
 
@@ -47,6 +48,7 @@ type HeartbeatService struct {
 	dedup     *Dedup
 	events    *EventEmitter
 	retryCh   chan struct{} // signals a retry after main-busy skip
+	taskStore *tasks.TaskStore
 }
 
 // NewHeartbeatService creates a new heartbeat service
@@ -106,6 +108,13 @@ func (hs *HeartbeatService) SetHandler(handler HeartbeatHandler) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 	hs.handler = handler
+}
+
+// SetTaskStore sets the task store for injecting pending tasks into the heartbeat prompt.
+func (hs *HeartbeatService) SetTaskStore(s *tasks.TaskStore) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	hs.taskStore = s
 }
 
 // Start begins the heartbeat service
@@ -312,6 +321,17 @@ func (hs *HeartbeatService) buildPrompt() string {
 		return ""
 	}
 
+	taskContext := ""
+	if hs.taskStore != nil {
+		pending := hs.taskStore.PendingSummary()
+		if pending != "" {
+			taskContext = "\n\n# Pending Tasks\n\n" + pending +
+				"\n\nReview these tasks. Follow up on any that need action — " +
+				"start working on pending tasks, check on in_progress tasks, " +
+				"or mark tasks as completed/failed."
+		}
+	}
+
 	now := time.Now().Format("2006-01-02 15:04:05")
 	return fmt.Sprintf(`# Heartbeat Check
 
@@ -321,8 +341,8 @@ You are a proactive AI assistant. This is a scheduled heartbeat check.
 Review the following tasks and execute any necessary actions using available skills.
 If there is nothing that requires attention, respond ONLY with: HEARTBEAT_OK
 
-%s
-`, now, content)
+%s%s
+`, now, content, taskContext)
 }
 
 // createDefaultHeartbeatTemplate creates the default HEARTBEAT.md file
