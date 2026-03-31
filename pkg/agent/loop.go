@@ -394,6 +394,7 @@ func registerSharedTools(
 		agentDefs.Reload(workspaceAgentsDir)
 		agent.AgentRegistry = agentDefs
 		agent.ContextBuilder.SetAgentRegistry(agentDefs)
+		agent.Tools.Register(tools.NewCreateAgentTool(workspaceAgentsDir, agentDefs))
 	}
 }
 
