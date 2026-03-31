@@ -402,6 +402,11 @@ func spawnSubTurn(
 		}
 	}
 
+	// Re-apply timeout after agent resolution may have changed cfg.Timeout
+	if cfg.Timeout > 0 {
+		timeout = cfg.Timeout
+	}
+
 	// Create processOptions for the child turn
 	opts := processOptions{
 		SessionKey:              childID,
