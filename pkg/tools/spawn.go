@@ -57,6 +57,10 @@ func (t *SpawnTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Optional target agent ID to delegate the task to",
 			},
+			"agent_type": map[string]any{
+				"type":        "string",
+				"description": "The type of agent to use (e.g. researcher, coder, reviewer, planner). Omit for a general-purpose subagent.",
+			},
 		},
 		"required": []string{"task"},
 	}
@@ -92,6 +96,7 @@ func (t *SpawnTool) execute(
 
 	label, _ := args["label"].(string)
 	agentID, _ := args["agent_id"].(string)
+	agentType, _ := args["agent_type"].(string)
 
 	// Check allowlist if targeting a specific agent
 	if agentID != "" && t.allowlistCheck != nil {
@@ -119,6 +124,7 @@ func (t *SpawnTool) execute(
 				MaxTokens:          t.maxTokens,
 				Temperature:        t.temperature,
 				Async:              true, // Async execution
+				AgentType:          agentType,
 			})
 			if err != nil {
 				result = ErrorResult(fmt.Sprintf("Spawn failed: %v", err)).WithError(err)

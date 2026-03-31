@@ -172,6 +172,11 @@ type SubTurnConfig struct {
 	// Used by team tool to enforce token limits across all team members.
 	InitialTokenBudget *atomic.Int64
 
+	// AgentType is the name of an agent definition from the registry.
+	// When set, the agent definition's system prompt, model, and tool filtering are applied.
+	// When empty, the default hardcoded subagent behavior is used.
+	AgentType string
+
 	// Can be extended with temperature, topP, etc.
 }
 
@@ -230,6 +235,7 @@ func (s *AgentLoopSpawner) SpawnSubTurn(
 		Critical:           cfg.Critical,
 		Timeout:            cfg.Timeout,
 		MaxContextRunes:    cfg.MaxContextRunes,
+		AgentType:          cfg.AgentType,
 	}
 
 	return spawnSubTurn(ctx, s.al, parentTS, agentCfg)
@@ -348,6 +354,52 @@ func spawnSubTurn(
 	// don't pollute the parent's registry.
 	if baseAgent.Tools != nil {
 		agent.Tools = baseAgent.Tools.Clone()
+	}
+
+	// Resolve agent_type from the agent definition registry.
+	// When set, the agent definition's system prompt, model, and tool filtering override defaults.
+	if cfg.AgentType != "" {
+		if agent.AgentRegistry == nil {
+			return tools.ErrorResult("agent registry not initialized"), nil
+		}
+		agentDef := agent.AgentRegistry.Get(cfg.AgentType)
+		if agentDef == nil {
+			available := agent.AgentRegistry.Summary()
+			return tools.ErrorResult(fmt.Sprintf("agent type %q not found. %s", cfg.AgentType, available)), nil
+		}
+
+		// Use agent definition's system prompt instead of the default hardcoded one
+		cfg.ActualSystemPrompt = agentDef.SystemPrompt + "\n\nTask: " + cfg.SystemPrompt
+		cfg.SystemPrompt = cfg.SystemPrompt // keep task as user message (unchanged)
+
+		// Apply model override from agent definition
+		if agentDef.Model != "" {
+			cfg.Model = agentDef.Model
+		}
+
+		// Apply timeout override from agent definition
+		if agentDef.Timeout > 0 && cfg.Timeout <= 0 {
+			cfg.Timeout = agentDef.Timeout
+		}
+
+		// Filter tools based on agent definition's allow/deny lists
+		if agent.Tools != nil {
+			allToolNames := agent.Tools.List()
+			allowedNames := agentDef.FilterTools(allToolNames)
+			allowedSet := make(map[string]bool, len(allowedNames))
+			for _, n := range allowedNames {
+				allowedSet[n] = true
+			}
+			// Remove tools not in the allowed set
+			for _, name := range allToolNames {
+				if !allowedSet[name] {
+					agent.Tools.Unregister(name)
+				}
+			}
+			if len(allowedNames) == 0 {
+				return tools.ErrorResult(fmt.Sprintf("agent %q has no tools available after filtering — check tools_allow/tools_deny", cfg.AgentType)), nil
+			}
+		}
 	}
 
 	// Create processOptions for the child turn

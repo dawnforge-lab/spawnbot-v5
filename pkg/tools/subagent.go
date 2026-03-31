@@ -35,6 +35,7 @@ type SubTurnConfig struct {
 	ActualSystemPrompt string
 	InitialMessages    []providers.Message
 	InitialTokenBudget *atomic.Int64 // Shared token budget for team members; nil if no budget
+	AgentType          string        // agent definition name from registry (e.g. "researcher", "coder")
 }
 
 type SubagentTask struct {
@@ -368,6 +369,10 @@ func (t *SubagentTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Optional short label for the task (for display)",
 			},
+			"agent_type": map[string]any{
+				"type":        "string",
+				"description": "The type of agent to use (e.g. researcher, coder, reviewer, planner). Omit for a general-purpose subagent.",
+			},
 		},
 		"required": []string{"task"},
 	}
@@ -380,6 +385,7 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 	}
 
 	label, _ := args["label"].(string)
+	agentType, _ := args["agent_type"].(string)
 
 	// Task description becomes the first user message.
 	taskMessage := task
@@ -397,6 +403,7 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]any) *ToolRe
 			MaxTokens:          t.maxTokens,
 			Temperature:        t.temperature,
 			Async:              false, // Synchronous execution
+			AgentType:          agentType,
 		})
 		if err != nil {
 			return ErrorResult(fmt.Sprintf("Subagent execution failed: %v", err)).WithError(err)
