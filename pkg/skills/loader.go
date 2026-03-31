@@ -26,8 +26,14 @@ const (
 )
 
 type SkillMetadata struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name          string   `json:"name" yaml:"name"`
+	Description   string   `json:"description" yaml:"description"`
+	Arguments     []string `json:"arguments,omitempty" yaml:"arguments"`
+	ArgumentHint  string   `json:"argument-hint,omitempty" yaml:"argument-hint"`
+	Context       string   `json:"context,omitempty" yaml:"context"`
+	AgentType     string   `json:"agent_type,omitempty" yaml:"agent_type"`
+	AllowedTools  []string `json:"allowed_tools,omitempty" yaml:"allowed_tools"`
+	UserInvocable bool     `json:"user-invocable" yaml:"user-invocable"`
 }
 
 type SkillInfo struct {
@@ -225,6 +231,49 @@ func (sl *SkillsLoader) BuildSkillsSummary() string {
 	return strings.Join(lines, "\n")
 }
 
+// rawSkillMeta is an intermediate struct used during parsing.
+// UserInvocable is a pointer so we can detect when the field is absent (nil means not set).
+type rawSkillMeta struct {
+	Name          string   `json:"name" yaml:"name"`
+	Description   string   `json:"description" yaml:"description"`
+	Arguments     []string `json:"arguments,omitempty" yaml:"arguments"`
+	ArgumentHint  string   `json:"argument-hint,omitempty" yaml:"argument-hint"`
+	Context       string   `json:"context,omitempty" yaml:"context"`
+	AgentType     string   `json:"agent_type,omitempty" yaml:"agent_type"`
+	AllowedTools  []string `json:"allowed_tools,omitempty" yaml:"allowed_tools"`
+	UserInvocable *bool    `json:"user-invocable,omitempty" yaml:"user-invocable"`
+}
+
+func applyDefaults(meta *SkillMetadata, raw *rawSkillMeta) {
+	if raw.Name != "" {
+		meta.Name = raw.Name
+	}
+	if raw.Description != "" {
+		meta.Description = raw.Description
+	}
+	meta.Arguments = raw.Arguments
+	meta.ArgumentHint = raw.ArgumentHint
+	meta.AgentType = raw.AgentType
+	meta.AllowedTools = raw.AllowedTools
+
+	// Context: default to "inline", validate against allowed values.
+	switch raw.Context {
+	case "inline", "fork", "spawn":
+		meta.Context = raw.Context
+	case "":
+		meta.Context = "inline"
+	default:
+		meta.Context = "inline"
+	}
+
+	// UserInvocable: default to true when the field is absent from the source.
+	if raw.UserInvocable == nil {
+		meta.UserInvocable = true
+	} else {
+		meta.UserInvocable = *raw.UserInvocable
+	}
+}
+
 func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 	content, err := os.ReadFile(skillPath)
 	if err != nil {
@@ -249,31 +298,22 @@ func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 	}
 
 	if frontmatter == "" {
+		// Apply defaults even when there is no frontmatter.
+		applyDefaults(metadata, &rawSkillMeta{})
 		return metadata
 	}
 
-	// Try JSON first (for backward compatibility)
-	var jsonMeta struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
-	if err := json.Unmarshal([]byte(frontmatter), &jsonMeta); err == nil {
-		if jsonMeta.Name != "" {
-			metadata.Name = jsonMeta.Name
-		}
-		if jsonMeta.Description != "" {
-			metadata.Description = jsonMeta.Description
-		}
+	// Try JSON first (for backward compatibility).
+	var jsonRaw rawSkillMeta
+	if err := json.Unmarshal([]byte(frontmatter), &jsonRaw); err == nil {
+		applyDefaults(metadata, &jsonRaw)
 		return metadata
 	}
 
-	// Fall back to simple YAML parsing
-	yamlMeta := sl.parseSimpleYAML(frontmatter)
-	if name := yamlMeta["name"]; name != "" {
-		metadata.Name = name
-	}
-	if description := yamlMeta["description"]; description != "" {
-		metadata.Description = description
+	// Fall back to YAML parsing.
+	var yamlRaw rawSkillMeta
+	if err := yaml.Unmarshal([]byte(frontmatter), &yamlRaw); err == nil {
+		applyDefaults(metadata, &yamlRaw)
 	}
 	return metadata
 }
