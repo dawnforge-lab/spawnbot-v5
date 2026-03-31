@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
@@ -20,50 +21,70 @@ var correctionPatterns = regexp.MustCompile(
 )
 
 // Collector detects struggle signals during conversations and appends them to a JSONL log.
+// It implements agent.EventObserver — mount it on the HookManager to receive events.
 type Collector struct {
 	logPath string
+
+	mu             sync.Mutex
+	turnToolCounts map[string]int
+	turnSession    string
 }
 
 // NewCollector creates a new struggle signal collector.
 func NewCollector(logPath string) *Collector {
-	return &Collector{logPath: logPath}
-}
-
-// OnToolResult logs a signal when a tool call returns an error.
-func (c *Collector) OnToolResult(toolName string, args map[string]any, isError bool, errorMsg, session string) {
-	if !isError {
-		return
+	return &Collector{
+		logPath:        logPath,
+		turnToolCounts: make(map[string]int),
 	}
-
-	context := truncate(formatArgs(args), maxContextLen)
-	c.append(Signal{
-		Timestamp: time.Now(),
-		Type:      TypeToolError,
-		Tool:      toolName,
-		Error:     truncate(errorMsg, maxContextLen),
-		Session:   session,
-		Context:   context,
-	})
 }
 
-// OnUserMessage logs a signal when the user's message matches correction patterns.
-func (c *Collector) OnUserMessage(userMsg, prevAssistant, session string) {
-	if !correctionPatterns.MatchString(strings.TrimSpace(userMsg)) {
-		return
+// HandleTurnStart processes a turn start event.
+// Resets per-turn tool counters and checks for user correction patterns.
+func (c *Collector) HandleTurnStart(userMessage, session string) {
+	c.mu.Lock()
+	c.turnToolCounts = make(map[string]int)
+	c.turnSession = session
+	c.mu.Unlock()
+
+	if userMessage != "" && correctionPatterns.MatchString(strings.TrimSpace(userMessage)) {
+		c.append(Signal{
+			Timestamp: time.Now(),
+			Type:      TypeUserCorrection,
+			Error:     truncate(userMessage, maxContextLen),
+			Session:   session,
+		})
 	}
-
-	c.append(Signal{
-		Timestamp: time.Now(),
-		Type:      TypeUserCorrection,
-		Error:     truncate(userMsg, maxContextLen),
-		Context:   truncate(prevAssistant, maxContextLen),
-		Session:   session,
-	})
 }
 
-// OnTurnEnd logs signals for tools called 3+ times in a single turn.
-func (c *Collector) OnTurnEnd(toolCallCounts map[string]int, session string) {
-	for tool, count := range toolCallCounts {
+// HandleToolEnd processes a tool execution end event.
+// Logs error signals and increments per-turn tool counters.
+func (c *Collector) HandleToolEnd(toolName string, isError bool, errorMsg, session string) {
+	c.mu.Lock()
+	c.turnToolCounts[toolName]++
+	c.mu.Unlock()
+
+	if isError {
+		c.append(Signal{
+			Timestamp: time.Now(),
+			Type:      TypeToolError,
+			Tool:      toolName,
+			Error:     truncate(errorMsg, maxContextLen),
+			Session:   session,
+		})
+	}
+}
+
+// HandleTurnEnd processes a turn end event.
+// Emits repeated-tool signals for any tool called 3+ times this turn.
+func (c *Collector) HandleTurnEnd(session string) {
+	c.mu.Lock()
+	counts := make(map[string]int, len(c.turnToolCounts))
+	for k, v := range c.turnToolCounts {
+		counts[k] = v
+	}
+	c.mu.Unlock()
+
+	for tool, count := range counts {
 		if count >= repeatedToolThreshold {
 			c.append(Signal{
 				Timestamp: time.Now(),
@@ -93,17 +114,6 @@ func (c *Collector) append(sig Signal) {
 	if _, err := f.Write(data); err != nil {
 		logger.ErrorCF("struggles", "Failed to write signal", map[string]any{"error": err.Error()})
 	}
-}
-
-func formatArgs(args map[string]any) string {
-	if len(args) == 0 {
-		return ""
-	}
-	data, err := json.Marshal(args)
-	if err != nil {
-		return ""
-	}
-	return string(data)
 }
 
 func truncate(s string, maxLen int) string {

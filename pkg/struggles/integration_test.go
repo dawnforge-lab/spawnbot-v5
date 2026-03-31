@@ -11,13 +11,17 @@ func TestCollector_MultipleSignals_Integration(t *testing.T) {
 	c := NewCollector(logPath)
 
 	// Tool error
-	c.OnToolResult("exec", map[string]any{"command": "jq"}, true, "not found", "s1")
+	c.HandleToolEnd("exec", true, "not found", "s1")
 
 	// User correction
-	c.OnUserMessage("no that's wrong", "I did YAML", "s1")
+	c.HandleTurnStart("no that's wrong", "s1")
 
-	// Repeated tool
-	c.OnTurnEnd(map[string]int{"exec": 4}, "s1")
+	// Repeated tool — simulate 4 calls then end turn
+	c.HandleTurnStart("do it", "s1")
+	for i := 0; i < 4; i++ {
+		c.HandleToolEnd("exec", false, "", "s1")
+	}
+	c.HandleTurnEnd("s1")
 
 	signals, err := ReadLog(logPath)
 	if err != nil {
