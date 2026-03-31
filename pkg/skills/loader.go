@@ -37,10 +37,13 @@ type SkillMetadata struct {
 }
 
 type SkillInfo struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Source      string `json:"source"`
-	Description string `json:"description"`
+	Name          string `json:"name"`
+	Path          string `json:"path"`
+	Source        string `json:"source"`
+	Description   string `json:"description"`
+	ArgumentHint  string `json:"argument-hint,omitempty"`
+	Context       string `json:"context,omitempty"`
+	UserInvocable bool   `json:"user-invocable"`
 }
 
 func (info SkillInfo) validate() error {
@@ -132,6 +135,9 @@ func (sl *SkillsLoader) ListSkills() []SkillInfo {
 			if metadata != nil {
 				info.Description = metadata.Description
 				info.Name = metadata.Name
+				info.ArgumentHint = metadata.ArgumentHint
+				info.Context = metadata.Context
+				info.UserInvocable = metadata.UserInvocable
 			}
 			if err := info.validate(); err != nil {
 				slog.Warn("invalid skill from "+source, "name", info.Name, "error", err)
@@ -219,9 +225,12 @@ func (sl *SkillsLoader) BuildSkillsSummary() string {
 		}
 		escapedPath := escapeXML(displayPath)
 
-		lines = append(lines, fmt.Sprintf("  <skill>"))
+		lines = append(lines, "  <skill>")
 		lines = append(lines, fmt.Sprintf("    <name>%s</name>", escapedName))
 		lines = append(lines, fmt.Sprintf("    <description>%s</description>", escapedDesc))
+		if s.ArgumentHint != "" {
+			lines = append(lines, fmt.Sprintf("    <usage>/%s %s</usage>", escapeXML(s.Name), escapeXML(s.ArgumentHint)))
+		}
 		lines = append(lines, fmt.Sprintf("    <location>%s</location>", escapedPath))
 		lines = append(lines, fmt.Sprintf("    <source>%s</source>", s.Source))
 		lines = append(lines, "  </skill>")
@@ -316,6 +325,31 @@ func (sl *SkillsLoader) getSkillMetadata(skillPath string) *SkillMetadata {
 		applyDefaults(metadata, &yamlRaw)
 	}
 	return metadata
+}
+
+// GetSkillMetadata returns the full metadata for a skill by name.
+func (sl *SkillsLoader) GetSkillMetadata(name string) SkillMetadata {
+	for _, root := range sl.SkillRoots() {
+		skillDir := filepath.Join(root, name)
+		if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md")); err == nil {
+			m := sl.getSkillMetadata(filepath.Join(skillDir, "SKILL.md"))
+			if m != nil {
+				return *m
+			}
+		}
+	}
+	return SkillMetadata{Context: "inline", UserInvocable: true}
+}
+
+// GetSkillDir returns the absolute path to a skill's directory.
+func (sl *SkillsLoader) GetSkillDir(name string) string {
+	for _, root := range sl.SkillRoots() {
+		skillDir := filepath.Join(root, name)
+		if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md")); err == nil {
+			return skillDir
+		}
+	}
+	return ""
 }
 
 func extractMarkdownMetadata(content string) (title, description string) {
