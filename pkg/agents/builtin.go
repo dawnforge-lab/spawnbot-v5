@@ -17,12 +17,16 @@ var reviewerAgentMD string
 //go:embed builtin/planner/AGENT.md
 var plannerAgentMD string
 
+//go:embed builtin/self-improver/AGENT.md
+var selfImproverAgentMD string
+
 func (r *Registry) LoadBuiltins() error {
 	builtins := map[string]string{
-		"researcher": researcherAgentMD,
-		"coder":      coderAgentMD,
-		"reviewer":   reviewerAgentMD,
-		"planner":    plannerAgentMD,
+		"researcher":    researcherAgentMD,
+		"coder":         coderAgentMD,
+		"reviewer":      reviewerAgentMD,
+		"planner":       plannerAgentMD,
+		"self-improver": selfImproverAgentMD,
 	}
 
 	for name, content := range builtins {

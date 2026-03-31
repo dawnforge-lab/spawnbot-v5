@@ -14,15 +14,15 @@ func TestEndToEnd_BuiltinsLoadAndSummarize(t *testing.T) {
 	}
 
 	list := r.List()
-	if len(list) != 4 {
-		t.Fatalf("expected 4 builtin agents, got %d", len(list))
+	if len(list) != 5 {
+		t.Fatalf("expected 5 builtin agents, got %d", len(list))
 	}
 
 	names := map[string]bool{}
 	for _, a := range list {
 		names[a.Name] = true
 	}
-	for _, expected := range []string{"researcher", "coder", "reviewer", "planner"} {
+	for _, expected := range []string{"researcher", "coder", "reviewer", "planner", "self-improver"} {
 		if !names[expected] {
 			t.Fatalf("missing builtin agent: %s", expected)
 		}
