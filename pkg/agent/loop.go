@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/commands"
@@ -395,6 +396,13 @@ func registerSharedTools(
 		agent.AgentRegistry = agentDefs
 		agent.ContextBuilder.SetAgentRegistry(agentDefs)
 		agent.Tools.Register(tools.NewCreateAgentTool(workspaceAgentsDir, agentDefs))
+
+		// Initialize task store
+		taskStorePath := filepath.Join(agent.Workspace, "tasks.json")
+		taskStore := tasks.NewTaskStore(taskStorePath)
+		agent.TaskStore = taskStore
+		agent.ContextBuilder.SetTaskStore(taskStore)
+		agent.Tools.Register(tools.NewTasksTool(taskStore))
 	}
 }
 

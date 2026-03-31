@@ -14,6 +14,7 @@ import (
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
@@ -28,6 +29,7 @@ type ContextBuilder struct {
 	toolDiscoveryRegex bool
 	splitOnMarker      bool
 	agentRegistry      *agents.Registry
+	taskStore          *tasks.TaskStore
 
 	// Cache for system prompt to avoid rebuilding on every call.
 	// This fixes issue #607: repeated reprocessing of the entire context.
@@ -61,6 +63,10 @@ func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
 
 func (cb *ContextBuilder) SetAgentRegistry(r *agents.Registry) {
 	cb.agentRegistry = r
+}
+
+func (cb *ContextBuilder) SetTaskStore(s *tasks.TaskStore) {
+	cb.taskStore = s
 }
 
 
@@ -158,6 +164,14 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 		agentSummary := cb.agentRegistry.Summary()
 		if agentSummary != "" {
 			parts = append(parts, fmt.Sprintf("# Agents\n\nYou can spawn specialized agents using the spawn or subagent tools with the agent_type parameter.\n\n%s", agentSummary))
+		}
+	}
+
+	// Tasks - show summary of active tasks
+	if cb.taskStore != nil {
+		taskSummary := cb.taskStore.Summary(10)
+		if taskSummary != "" {
+			parts = append(parts, "# Tasks\n\n"+taskSummary)
 		}
 	}
 

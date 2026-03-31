@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
@@ -52,6 +53,9 @@ type AgentInstance struct {
 
 	// AgentRegistry holds loaded agent definitions for spawning specialized agents.
 	AgentRegistry *agents.Registry
+
+	// TaskStore provides persistent task tracking for the agent.
+	TaskStore *tasks.TaskStore
 
 	// MemoryStore provides persistent daily-notes and long-term memory.
 	// Used by the memory flush system to preserve key facts before compaction.
