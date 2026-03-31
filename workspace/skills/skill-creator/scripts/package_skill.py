@@ -112,8 +112,28 @@ def validate_skill(skill_dir: str) -> list[ValidationError]:
     elif len(description) < 20:
         errors.append(ValidationError("warning", "Description is very short — include trigger context for better discoverability"))
 
+    # Validate new fields
+    context = frontmatter.get('context', 'inline')
+    if context not in ('inline', 'fork', 'spawn'):
+        errors.append(ValidationError(
+            'error', f'Invalid context value: {context}. Must be inline, fork, or spawn.'))
+
+    agent_type = frontmatter.get('agent_type', '')
+    if agent_type and not re.match(NAME_PATTERN, agent_type):
+        errors.append(ValidationError(
+            'error', f'Invalid agent_type: {agent_type}. Must match {NAME_PATTERN}.'))
+
+    arguments = frontmatter.get('arguments', [])
+    if arguments and not isinstance(arguments, list):
+        errors.append(ValidationError(
+            'error', 'arguments must be a list of strings.'))
+
+    if context in ('fork', 'spawn') and not agent_type:
+        errors.append(ValidationError(
+            'warning', f'context is {context} but no agent_type specified. Will use default agent.'))
+
     # Check for extra frontmatter fields
-    known_fields = {"name", "description", "metadata"}
+    known_fields = {"name", "description", "metadata", "arguments", "argument-hint", "context", "agent_type", "allowed_tools", "user-invocable"}
     extra_fields = set(frontmatter.keys()) - known_fields
     if extra_fields:
         errors.append(ValidationError("warning", f"Unknown frontmatter fields: {', '.join(sorted(extra_fields))}"))
