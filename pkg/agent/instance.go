@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/media"
@@ -48,6 +49,9 @@ type AgentInstance struct {
 	// LightCandidates holds the resolved provider candidates for the light model.
 	// Pre-computed at agent creation to avoid repeated model_list lookups at runtime.
 	LightCandidates []providers.FallbackCandidate
+
+	// AgentRegistry holds loaded agent definitions for spawning specialized agents.
+	AgentRegistry *agents.Registry
 
 	// MemoryStore provides persistent daily-notes and long-term memory.
 	// Used by the memory flush system to preserve key facts before compaction.

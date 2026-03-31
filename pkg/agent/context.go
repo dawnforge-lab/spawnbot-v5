@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
@@ -26,6 +27,7 @@ type ContextBuilder struct {
 	toolDiscoveryBM25  bool
 	toolDiscoveryRegex bool
 	splitOnMarker      bool
+	agentRegistry      *agents.Registry
 
 	// Cache for system prompt to avoid rebuilding on every call.
 	// This fixes issue #607: repeated reprocessing of the entire context.
@@ -55,6 +57,10 @@ func (cb *ContextBuilder) WithToolDiscovery(useBM25, useRegex bool) *ContextBuil
 func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
 	cb.splitOnMarker = enabled
 	return cb
+}
+
+func (cb *ContextBuilder) SetAgentRegistry(r *agents.Registry) {
+	cb.agentRegistry = r
 }
 
 
@@ -145,6 +151,14 @@ func (cb *ContextBuilder) BuildSystemPrompt() string {
 The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
 
 %s`, skillsSummary))
+	}
+
+	// Agents - show summary of available agent types for spawning
+	if cb.agentRegistry != nil {
+		agentSummary := cb.agentRegistry.Summary()
+		if agentSummary != "" {
+			parts = append(parts, fmt.Sprintf("# Agents\n\nYou can spawn specialized agents using the spawn or subagent tools with the agent_type parameter.\n\n%s", agentSummary))
+		}
 	}
 
 	// Memory is NOT injected into the system prompt. The agent reads memory

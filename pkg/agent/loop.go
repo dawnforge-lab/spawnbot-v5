@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/commands"
@@ -383,6 +384,16 @@ func registerSharedTools(
 		} else if (spawnEnabled || spawnStatusEnabled) && !cfg.Tools.IsToolEnabled("subagent") {
 			logger.WarnCF("agent", "spawn/spawn_status tools require subagent to be enabled", nil)
 		}
+
+		// Agent registry: load builtin + workspace agent definitions
+		agentDefs := agents.NewRegistry()
+		if err := agentDefs.LoadBuiltins(); err != nil {
+			logger.WarnCF("agent", "Failed to load builtin agents", map[string]any{"error": err.Error()})
+		}
+		workspaceAgentsDir := filepath.Join(agent.Workspace, "agents")
+		agentDefs.Reload(workspaceAgentsDir)
+		agent.AgentRegistry = agentDefs
+		agent.ContextBuilder.SetAgentRegistry(agentDefs)
 	}
 }
 
