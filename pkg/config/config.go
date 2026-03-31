@@ -140,10 +140,11 @@ func (c *Config) FilterSensitiveData(content string) string {
 }
 
 type HooksConfig struct {
-	Enabled   bool                         `json:"enabled"`
-	Defaults  HookDefaultsConfig           `json:"defaults,omitempty"`
-	Builtins  map[string]BuiltinHookConfig `json:"builtins,omitempty"`
-	Processes map[string]ProcessHookConfig `json:"processes,omitempty"`
+	Enabled   bool                            `json:"enabled"`
+	Defaults  HookDefaultsConfig              `json:"defaults,omitempty"`
+	Builtins  map[string]BuiltinHookConfig    `json:"builtins,omitempty"`
+	Processes map[string]ProcessHookConfig    `json:"processes,omitempty"`
+	Commands  map[string]CommandHookConfig    `json:"commands,omitempty"`
 }
 
 type HookDefaultsConfig struct {
@@ -167,6 +168,17 @@ type ProcessHookConfig struct {
 	Env       map[string]string `json:"env,omitempty"`
 	Observe   []string          `json:"observe,omitempty"`
 	Intercept []string          `json:"intercept,omitempty"`
+}
+
+type CommandHookConfig struct {
+	Enabled   bool     `json:"enabled"`
+	Script    string   `json:"script"`
+	Mode      string   `json:"mode"`
+	Events    []string `json:"events,omitempty"`
+	Tools     []string `json:"tools,omitempty"`
+	TimeoutMS int      `json:"timeout_ms,omitempty"`
+	Priority  int      `json:"priority,omitempty"`
+	Shell     string   `json:"shell,omitempty"`
 }
 
 // BuildInfo contains build-time version information
