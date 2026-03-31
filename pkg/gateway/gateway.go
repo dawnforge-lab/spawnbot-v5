@@ -284,7 +284,9 @@ func setupAndStartServices(
 	struggleCollector := struggles.NewCollector(
 		filepath.Join(cfg.WorkspacePath(), "struggles.jsonl"),
 	)
-	agentLoop.SetStruggleCollector(struggleCollector)
+	if err := agentLoop.MountHook(agent.NamedHook("struggles", agent.NewStrugglesObserver(struggleCollector))); err != nil {
+		return nil, fmt.Errorf("mount struggles hook: %w", err)
+	}
 
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -197,6 +198,24 @@ func (al *AgentLoop) loadConfiguredHooks(ctx context.Context) (err error) {
 		mounted = append(mounted, name)
 	}
 
+	commandNames := enabledCommandHookNames(al.cfg.Hooks.Commands)
+	for _, name := range commandNames {
+		spec := al.cfg.Hooks.Commands[name]
+		cmdHook, buildErr := commandHookFromConfig(name, spec, al.cfg.WorkspacePath())
+		if buildErr != nil {
+			return fmt.Errorf("configure command hook %q: %w", name, buildErr)
+		}
+		if err := al.MountHook(HookRegistration{
+			Name:     name,
+			Priority: spec.Priority,
+			Source:   HookSourceInProcess,
+			Hook:     cmdHook,
+		}); err != nil {
+			return fmt.Errorf("mount command hook %q: %w", name, err)
+		}
+		mounted = append(mounted, name)
+	}
+
 	return nil
 }
 
@@ -326,4 +345,61 @@ func validHookEventKinds() map[string]struct{} {
 		kinds[kind.String()] = struct{}{}
 	}
 	return kinds
+}
+
+func enabledCommandHookNames(specs map[string]config.CommandHookConfig) []string {
+	if len(specs) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(specs))
+	for name, spec := range specs {
+		if spec.Enabled {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func commandHookFromConfig(name string, spec config.CommandHookConfig, workspace string) (*CommandHook, error) {
+	if spec.Script == "" {
+		return nil, fmt.Errorf("script path is required")
+	}
+	if spec.Mode != "observe" && spec.Mode != "intercept" {
+		return nil, fmt.Errorf("mode must be 'observe' or 'intercept', got %q", spec.Mode)
+	}
+
+	scriptPath := spec.Script
+	if !filepath.IsAbs(scriptPath) {
+		scriptPath = filepath.Join(workspace, scriptPath)
+	}
+
+	events := make(map[string]struct{}, len(spec.Events))
+	if len(spec.Events) > 0 {
+		validKinds := validHookEventKinds()
+		for _, e := range spec.Events {
+			if _, ok := validKinds[e]; !ok {
+				return nil, fmt.Errorf("unsupported event kind %q", e)
+			}
+			events[e] = struct{}{}
+		}
+	}
+
+	tools := make(map[string]struct{}, len(spec.Tools))
+	for _, t := range spec.Tools {
+		tools[t] = struct{}{}
+	}
+
+	timeout := time.Duration(spec.TimeoutMS) * time.Millisecond
+	shell := spec.Shell
+
+	return NewCommandHook(CommandHookOptions{
+		Name:       name,
+		ScriptPath: scriptPath,
+		Mode:       spec.Mode,
+		Events:     events,
+		Tools:      tools,
+		Timeout:    timeout,
+		Shell:      shell,
+	}), nil
 }

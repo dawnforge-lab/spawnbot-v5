@@ -25,8 +25,8 @@ func TestReadLog_WithSignals(t *testing.T) {
 	logPath := filepath.Join(dir, "struggles.jsonl")
 	c := NewCollector(logPath)
 
-	c.OnToolResult("exec", map[string]any{"command": "jq"}, true, "not found", "s1")
-	c.OnToolResult("exec", map[string]any{"command": "jq"}, true, "not found", "s2")
+	c.HandleToolEnd("exec", true, "not found", "s1")
+	c.HandleToolEnd("exec", true, "not found", "s2")
 
 	signals, err := ReadLog(logPath)
 	if err != nil {
@@ -64,7 +64,7 @@ func TestTruncateLog(t *testing.T) {
 	logPath := filepath.Join(dir, "struggles.jsonl")
 	c := NewCollector(logPath)
 
-	c.OnToolResult("exec", map[string]any{}, true, "fail", "s1")
+	c.HandleToolEnd("exec", true, "fail", "s1")
 
 	signals, _ := ReadLog(logPath)
 	if len(signals) != 1 {
@@ -87,7 +87,7 @@ func TestReadLogContent(t *testing.T) {
 	logPath := filepath.Join(dir, "struggles.jsonl")
 	c := NewCollector(logPath)
 
-	c.OnToolResult("exec", map[string]any{}, true, "not found", "s1")
+	c.HandleToolEnd("exec", true, "not found", "s1")
 
 	content, err := ReadLogContent(logPath, 100*1024)
 	if err != nil {
