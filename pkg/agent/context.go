@@ -862,6 +862,11 @@ The following skills are active for this request. Follow them when relevant.
 %s`, content)
 }
 
+// SkillsLoader returns the underlying skills loader.
+func (cb *ContextBuilder) SkillsLoader() *skills.SkillsLoader {
+	return cb.skillsLoader
+}
+
 func (cb *ContextBuilder) ListSkillNames() []string {
 	if cb.skillsLoader == nil {
 		return nil

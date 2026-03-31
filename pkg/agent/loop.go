@@ -298,6 +298,16 @@ func registerSharedTools(
 			}
 		}
 
+		// Register use_skill tool for skill activation with arguments
+		if agent.ContextBuilder != nil {
+			agent.Tools.Register(tools.NewUseSkillTool(
+				agent.ContextBuilder.SkillsLoader(),
+				NewSubTurnSpawner(al),
+				agent.Workspace,
+				filepath.Join(agent.Workspace, "agents"),
+			))
+		}
+
 		// Spawn and spawn_status tools share a SubagentManager.
 		// Construct it when either tool is enabled (both require subagent).
 		spawnEnabled := cfg.Tools.IsToolEnabled("spawn")
