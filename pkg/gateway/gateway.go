@@ -41,6 +41,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/struggles"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/voice"
 )
@@ -279,6 +280,12 @@ func setupAndStartServices(
 	}
 	fmt.Println("✓ Cron service started")
 
+	// Create struggle collector for self-improvement loop
+	struggleCollector := struggles.NewCollector(
+		filepath.Join(cfg.WorkspacePath(), "struggles.jsonl"),
+	)
+	agentLoop.SetStruggleCollector(struggleCollector)
+
 	runningServices.HeartbeatService = heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),
 		cfg.Heartbeat.Interval,
@@ -289,6 +296,7 @@ func setupAndStartServices(
 	runningServices.HeartbeatService.SetTaskStore(
 		tasks.NewTaskStore(filepath.Join(cfg.WorkspacePath(), "tasks.json")),
 	)
+	runningServices.HeartbeatService.SetSelfImproveConfig(cfg.SelfImprove)
 	if err = runningServices.HeartbeatService.Start(); err != nil {
 		return nil, fmt.Errorf("error starting heartbeat service: %w", err)
 	}
@@ -505,6 +513,7 @@ func restartServices(
 	runningServices.HeartbeatService.SetTaskStore(
 		tasks.NewTaskStore(filepath.Join(cfg.WorkspacePath(), "tasks.json")),
 	)
+	runningServices.HeartbeatService.SetSelfImproveConfig(cfg.SelfImprove)
 	if err = runningServices.HeartbeatService.Start(); err != nil {
 		return fmt.Errorf("error restarting heartbeat service: %w", err)
 	}
