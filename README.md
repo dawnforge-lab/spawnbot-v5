@@ -69,6 +69,18 @@ The agent's personality and rules live in markdown files in the workspace:
 
 3. **Semantic memory** (SQLite + vector embeddings, requires CGO) -- FTS5 full-text search plus vector similarity with temporal decay scoring. Configurable embedding provider (Gemini, OpenAI).
 
+### Task Tracking
+
+Persistent task system for tracking work across sessions and heartbeats:
+
+- **JSON-backed store** (`~/.spawnbot/workspace/tasks.json`) with atomic writes
+- **Single `tasks` tool** with actions: `create`, `list`, `get`, `update`, `complete`, `fail`
+- **System prompt integration**: active tasks shown in agent context (full list under 10, count + top 5 above)
+- **Heartbeat integration**: pending tasks injected into heartbeat prompt for autonomous follow-up
+- **7-day TTL**: completed/failed tasks auto-cleaned on startup
+- **Agent tracking**: records which agent type worked on each task
+- **Corruption recovery**: if `tasks.json` is corrupted, warning shown in system prompt so the agent can fix it
+
 ### Skills
 
 Extensible capability system with 3-tier priority (workspace > global > builtin):
@@ -126,6 +138,7 @@ Built-in tools with configurable approval modes (YOLO / approval / review):
 | `memory_store`, `memory_search` | Semantic memory operations |
 | `search_tools` | Skill/tool discovery |
 | `skills_install`, `skills_search` | Skill management |
+| `tasks` | Persistent task tracking (create, list, update, complete, fail) |
 | `cron` | Scheduled task management |
 | `i2c`, `spi` | Hardware I/O (Linux embedded) |
 
@@ -206,6 +219,7 @@ pkg/
   providers/  25+ LLM provider implementations + fallback chains
   tools/      Tool registry + built-in tools + MCP wrappers
   agents/     Agent definitions, registry, AGENT.md loader, builtins
+  tasks/      Persistent task store, summary generation, TTL cleanup
   skills/     Skill loading, discovery, registry
   memory/     JSONL session store + SQLite semantic memory
   session/    Session management (JSONL backend)
