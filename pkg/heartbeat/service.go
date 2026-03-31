@@ -317,9 +317,7 @@ func (hs *HeartbeatService) buildPrompt() string {
 	}
 
 	content := string(data)
-	if !heartbeatHasUserTasks(content) {
-		return ""
-	}
+	hasUserTasks := heartbeatHasUserTasks(content)
 
 	taskContext := ""
 	if hs.taskStore != nil {
@@ -330,6 +328,11 @@ func (hs *HeartbeatService) buildPrompt() string {
 				"start working on pending tasks, check on in_progress tasks, " +
 				"or mark tasks as completed/failed."
 		}
+	}
+
+	// Skip heartbeat only if there are no user tasks AND no pending tasks
+	if !hasUserTasks && taskContext == "" {
+		return ""
 	}
 
 	now := time.Now().Format("2006-01-02 15:04:05")
