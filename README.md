@@ -87,7 +87,11 @@ Extensible capability system with 3-tier priority (workspace > global > builtin)
 
 - **SKILL.md** with YAML frontmatter defines each skill's metadata, triggers, and instructions
 - **Progressive disclosure**: metadata loaded at startup, body loaded on activation, resources loaded on demand
-- **Skill creator**: Built-in skill with scaffolding scripts (`init_skill.py`, `package_skill.py`) and reference docs for creating new skills
+- **Argument substitution**: Skills accept parameters via `${ARGUMENTS}`, `${ARG1}`..`${ARGN}`, `${SKILL_DIR}`, `${WORKSPACE}`
+- **Execution contexts**: Skills run inline (default), as sync subagent (`fork`), or async subagent (`spawn`)
+- **Slash commands**: Users invoke skills via `/skill name args`; agent invokes via `use_skill` tool
+- **Tool permissions**: Skills can declare `allowed_tools` for subagent execution
+- **Skill creator**: Built-in skill with scaffolding scripts (`init_skill.py`, `package_skill.py`) and reference docs
 - **ClawHub registry**: Remote skill search and installation
 
 ### Agent Definitions
@@ -138,6 +142,7 @@ Built-in tools with configurable approval modes (YOLO / approval / review):
 | `connect_mcp`, `disconnect_mcp`, `list_mcp` | Runtime MCP server management |
 | `memory_store`, `memory_search` | Semantic memory operations |
 | `search_tools` | Skill/tool discovery |
+| `use_skill` | Activate skills with arguments (inline/fork/spawn) |
 | `skills_install`, `skills_search` | Skill management |
 | `tasks` | Persistent task tracking (create, list, update, complete, fail) |
 | `cron` | Scheduled task management |
