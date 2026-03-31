@@ -305,6 +305,9 @@ func registerSharedTools(
 				NewSubTurnSpawner(al),
 				agent.Workspace,
 				filepath.Join(agent.Workspace, "agents"),
+				agent.Model,
+				agent.MaxTokens,
+				agent.Temperature,
 			))
 		}
 

@@ -6,14 +6,14 @@ import (
 )
 
 func TestUseSkillTool_Name(t *testing.T) {
-	tool := NewUseSkillTool(nil, nil, "", "")
+	tool := NewUseSkillTool(nil, nil, "", "", "", 0, 0)
 	if tool.Name() != "use_skill" {
 		t.Errorf("expected name %q, got %q", "use_skill", tool.Name())
 	}
 }
 
 func TestUseSkillTool_Parameters(t *testing.T) {
-	tool := NewUseSkillTool(nil, nil, "", "")
+	tool := NewUseSkillTool(nil, nil, "", "", "", 0, 0)
 	params := tool.Parameters()
 	props, ok := params["properties"].(map[string]any)
 	if !ok {
@@ -28,7 +28,7 @@ func TestUseSkillTool_Parameters(t *testing.T) {
 }
 
 func TestUseSkillTool_SkillNotFound(t *testing.T) {
-	tool := NewUseSkillTool(nil, nil, "", "")
+	tool := NewUseSkillTool(nil, nil, "", "", "", 0, 0)
 	result := tool.Execute(context.Background(), map[string]any{
 		"skill": "nonexistent",
 	})
@@ -38,7 +38,7 @@ func TestUseSkillTool_SkillNotFound(t *testing.T) {
 }
 
 func TestUseSkillTool_MissingSkillName(t *testing.T) {
-	tool := NewUseSkillTool(nil, nil, "", "")
+	tool := NewUseSkillTool(nil, nil, "", "", "", 0, 0)
 	result := tool.Execute(context.Background(), map[string]any{})
 	if !result.IsError {
 		t.Error("expected error for missing skill name")

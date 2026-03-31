@@ -10,19 +10,25 @@ import (
 
 // UseSkillTool activates a skill with arguments, handling inline/fork/spawn execution.
 type UseSkillTool struct {
-	loader    *skills.SkillsLoader
-	spawner   SubTurnSpawner
-	workspace string
-	agentsDir string
+	loader      *skills.SkillsLoader
+	spawner     SubTurnSpawner
+	workspace   string
+	agentsDir   string
+	model       string
+	maxTokens   int
+	temperature float64
 }
 
 // NewUseSkillTool creates a new use_skill tool.
-func NewUseSkillTool(loader *skills.SkillsLoader, spawner SubTurnSpawner, workspace, agentsDir string) *UseSkillTool {
+func NewUseSkillTool(loader *skills.SkillsLoader, spawner SubTurnSpawner, workspace, agentsDir, model string, maxTokens int, temperature float64) *UseSkillTool {
 	return &UseSkillTool{
-		loader:    loader,
-		spawner:   spawner,
-		workspace: workspace,
-		agentsDir: agentsDir,
+		loader:      loader,
+		spawner:     spawner,
+		workspace:   workspace,
+		agentsDir:   agentsDir,
+		model:       model,
+		maxTokens:   maxTokens,
+		temperature: temperature,
 	}
 }
 
@@ -100,6 +106,9 @@ func (t *UseSkillTool) executeFork(ctx context.Context, content string, meta ski
 	}
 
 	cfg := SubTurnConfig{
+		Model:        t.model,
+		MaxTokens:    t.maxTokens,
+		Temperature:  t.temperature,
 		SystemPrompt: content,
 		Async:        false,
 	}
@@ -120,6 +129,9 @@ func (t *UseSkillTool) executeSpawn(ctx context.Context, content string, meta sk
 	}
 
 	cfg := SubTurnConfig{
+		Model:        t.model,
+		MaxTokens:    t.maxTokens,
+		Temperature:  t.temperature,
 		SystemPrompt: content,
 		Async:        true,
 	}
