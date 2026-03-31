@@ -279,6 +279,39 @@ func (ch *CommandHook) matchesTool(toolName string) bool {
 	return ok
 }
 
+// MountCommandHook creates and mounts a command hook on the AgentLoop's HookManager.
+func (al *AgentLoop) MountCommandHook(name, scriptPath, mode string, events, toolNames []string, timeoutMS int) error {
+	if al == nil {
+		return fmt.Errorf("agent loop is nil")
+	}
+
+	eventMap := make(map[string]struct{}, len(events))
+	for _, e := range events {
+		eventMap[e] = struct{}{}
+	}
+	toolMap := make(map[string]struct{}, len(toolNames))
+	for _, t := range toolNames {
+		toolMap[t] = struct{}{}
+	}
+
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+
+	hook := NewCommandHook(CommandHookOptions{
+		Name:       name,
+		ScriptPath: scriptPath,
+		Mode:       mode,
+		Events:     eventMap,
+		Tools:      toolMap,
+		Timeout:    timeout,
+	})
+
+	return al.MountHook(HookRegistration{
+		Name:   name,
+		Source: HookSourceInProcess,
+		Hook:   hook,
+	})
+}
+
 // extractToolInfo extracts tool name and arguments from event payloads.
 func extractToolInfo(evt Event) (string, map[string]any) {
 	switch p := evt.Payload.(type) {

@@ -304,6 +304,13 @@ func registerSharedTools(
 			))
 		}
 
+		// Register create_hook tool for runtime hook creation
+		agent.Tools.Register(tools.NewCreateHookTool(
+			agent.Workspace,
+			al,
+			nil, // config updater wired separately if needed
+		))
+
 		// Spawn and spawn_status tools share a SubagentManager.
 		// Construct it when either tool is enabled (both require subagent).
 		spawnEnabled := cfg.Tools.IsToolEnabled("spawn")
