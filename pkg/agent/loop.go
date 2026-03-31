@@ -852,6 +852,13 @@ func (al *AgentLoop) hookAbortError(ts *turnState, stage string, decision HookDe
 	return err
 }
 
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen]
+}
+
 func hookDeniedToolContent(prefix, reason string) string {
 	if reason == "" {
 		return prefix
@@ -2597,16 +2604,21 @@ turnLoop:
 				Content:    contentForLLM,
 				ToolCallID: toolCallID,
 			}
+			errorMsg := ""
+			if toolResult.IsError {
+				errorMsg = truncateString(contentForLLM, 200)
+			}
 			al.emitEvent(
 				EventKindToolExecEnd,
 				ts.eventMeta("runTurn", "turn.tool.end"),
 				ToolExecEndPayload{
-					Tool:       toolName,
-					Duration:   toolDuration,
-					ForLLMLen:  len(contentForLLM),
-					ForUserLen: len(toolResult.ForUser),
-					IsError:    toolResult.IsError,
-					Async:      toolResult.Async,
+					Tool:         toolName,
+					Duration:     toolDuration,
+					ForLLMLen:    len(contentForLLM),
+					ForUserLen:   len(toolResult.ForUser),
+					IsError:      toolResult.IsError,
+					Async:        toolResult.Async,
+					ErrorMessage: errorMsg,
 				},
 			)
 			messages = append(messages, toolResultMsg)
