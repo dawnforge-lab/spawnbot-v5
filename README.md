@@ -102,6 +102,7 @@ Specialized subagents defined as markdown files with YAML frontmatter. Each agen
 | `coder` | Write code, scripts, config files | Full file + exec access, no messaging |
 | `reviewer` | Review work for bugs and security issues | Read-only |
 | `planner` | Break down tasks into structured plans | Read + write (for plan files), no exec |
+| `self-improver` | Analyze struggles and create skills/agents | read + write + create_agent + subagent, no exec/messaging |
 
 **Custom agents:** Create new agent types in `~/.spawnbot/workspace/agents/<name>/AGENT.md` or let the agent create them autonomously via the `create_agent` tool.
 
@@ -176,7 +177,7 @@ The agent can operate without user interaction:
   - **Structured events**: Every heartbeat run emits a structured event (`sent`, `ok`, `skipped`, `failed`) with duration, preview, skip reason, and channel -- enabling monitoring and UI integration
   - **Retry**: A retry channel allows re-triggering heartbeats when the main agent queue clears
   - **Runtime interval changes**: The heartbeat interval can be changed at runtime via `SetInterval()` or the CLI
-- **Self-improvement loop**: Heartbeat reviews recent conversations for repeated patterns, missing tools, and struggles -- creates skills or MCP servers to address them
+- **Self-improvement loop**: Daily automated review of agent struggles. A `StruggleCollector` logs tool failures, user corrections, and repeated tool patterns during conversations. At a configurable hour (default 3 AM), a dedicated `self-improver` agent analyzes the log, creates skills or agent definitions to address recurring patterns, validates each creation with a test subagent, and reports results to the user. Failed creations are retried up to `max_retries` times before being reported as unresolved.
 - **Idle triggers**: Fire after channel inactivity threshold
 - **RSS polling**: Monitor feeds, summarize new items
 - **Cron scheduling**: Standard cron expressions for recurring tasks
@@ -227,7 +228,8 @@ pkg/
   routing/    Model routing (light/heavy) + agent binding
   mcp/        MCP server lifecycle management
   autonomy/   Idle monitor, RSS poller
-  heartbeat/  Periodic autonomous tasks (dedup, events, HEARTBEAT_OK suppression)
+  heartbeat/  Periodic autonomous tasks + self-improvement loop trigger
+  struggles/  Struggle signal collection and log management
   voice/      Audio transcription
   identity/   SOUL.md loading
   credential/ SSH-key encryption
@@ -275,6 +277,7 @@ Channel.Send()
     PLAYBOOK.md          Operating procedures
     HEARTBEAT.md         Periodic tasks (user-editable checklist)
     heartbeat.log        Heartbeat execution log
+    struggles.jsonl      Struggle signal log (tool errors, corrections, repeated patterns)
     memory/              Daily notes + long-term memory
       MEMORY.md
       YYYYMM/YYYYMMDD.md
@@ -306,6 +309,32 @@ In `config.json`:
 Environment variables: `SPAWNBOT_HEARTBEAT_ENABLED`, `SPAWNBOT_HEARTBEAT_INTERVAL`
 
 The heartbeat reads tasks from `HEARTBEAT.md` in the workspace. If the file is missing, a default template is created. If the file has no user tasks (nothing below the marker line), the heartbeat is silently skipped. The agent runs with a lightweight clone (5 iterations max, read-only tools: `read_file`, `list_dir`, `message`) to keep executions fast and safe.
+
+### Self-Improvement Configuration
+
+In `config.json`:
+
+```json
+{
+  "self_improve": {
+    "enabled": true,
+    "hour": 3,
+    "max_creations": 3,
+    "max_retries": 2
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable the self-improvement loop |
+| `hour` | int | `3` | Hour (0-23) to run the daily review |
+| `max_creations` | int | `3` | Max skills/agents created per daily run |
+| `max_retries` | int | `2` | Max retry attempts per creation after test failure |
+
+Environment variables: `SPAWNBOT_SELF_IMPROVE_ENABLED`, `SPAWNBOT_SELF_IMPROVE_HOUR`
+
+The self-improvement loop writes struggle signals to `struggles.jsonl` during normal conversations (always on, negligible cost). The daily review only runs when `enabled: true`. Signals carry over if the review fails.
 
 ## Building from Source
 
