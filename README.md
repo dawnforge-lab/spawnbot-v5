@@ -78,6 +78,38 @@ Extensible capability system with 3-tier priority (workspace > global > builtin)
 - **Skill creator**: Built-in skill with scaffolding scripts (`init_skill.py`, `package_skill.py`) and reference docs for creating new skills
 - **ClawHub registry**: Remote skill search and installation
 
+### Agent Definitions
+
+Specialized subagents defined as markdown files with YAML frontmatter. Each agent type has its own system prompt, tool restrictions, model override, and execution limits.
+
+**4 builtin agents:**
+
+| Agent | Purpose | Tool Access |
+|-------|---------|-------------|
+| `researcher` | Gather information without side effects | Read-only (no writes, no exec, no messaging) |
+| `coder` | Write code, scripts, config files | Full file + exec access, no messaging |
+| `reviewer` | Review work for bugs and security issues | Read-only |
+| `planner` | Break down tasks into structured plans | Read + write (for plan files), no exec |
+
+**Custom agents:** Create new agent types in `~/.spawnbot/workspace/agents/<name>/AGENT.md` or let the agent create them autonomously via the `create_agent` tool.
+
+**AGENT.md format:**
+```yaml
+---
+name: sql-expert
+description: Specializes in database queries and schema design
+tools_deny:
+  - message
+  - send_file
+max_iterations: 20
+timeout: 5m
+---
+
+You are a SQL expert agent. Focus on database queries and schema design...
+```
+
+Spawn agents via tools: `spawn` (async) or `subagent` (sync) with `agent_type` parameter. Workspace agents override builtins with the same name.
+
 ### Tools
 
 Built-in tools with configurable approval modes (YOLO / approval / review):
@@ -88,7 +120,8 @@ Built-in tools with configurable approval modes (YOLO / approval / review):
 | `list_dir` | Directory listing |
 | `exec`, `shell` | Shell command execution |
 | `send_file`, `message` | Channel communication |
-| `spawn` | Sub-agent parallel execution |
+| `spawn`, `subagent` | Sub-agent execution (async/sync) with agent type selection |
+| `create_agent` | Create new agent type definitions at runtime |
 | `connect_mcp`, `disconnect_mcp`, `list_mcp` | Runtime MCP server management |
 | `memory_store`, `memory_search` | Semantic memory operations |
 | `search_tools` | Skill/tool discovery |
@@ -172,6 +205,7 @@ pkg/
   channels/   16 communication adapters
   providers/  25+ LLM provider implementations + fallback chains
   tools/      Tool registry + built-in tools + MCP wrappers
+  agents/     Agent definitions, registry, AGENT.md loader, builtins
   skills/     Skill loading, discovery, registry
   memory/     JSONL session store + SQLite semantic memory
   session/    Session management (JSONL backend)
@@ -233,6 +267,7 @@ Channel.Send()
     sessions/            Conversation history (JSONL)
       heartbeat/         Isolated heartbeat session store
     skills/              Installed skills
+    agents/              Custom agent definitions (AGENT.md)
     state/               Persistent state
 ```
 
