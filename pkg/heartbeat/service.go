@@ -16,10 +16,12 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/constants"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/fileutil"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/struggles"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
@@ -48,7 +50,8 @@ type HeartbeatService struct {
 	dedup     *Dedup
 	events    *EventEmitter
 	retryCh   chan struct{} // signals a retry after main-busy skip
-	taskStore *tasks.TaskStore
+	taskStore         *tasks.TaskStore
+	selfImproveConfig config.SelfImproveConfig
 }
 
 // NewHeartbeatService creates a new heartbeat service
@@ -198,6 +201,9 @@ func (hs *HeartbeatService) executeHeartbeat() {
 
 	logger.DebugC("heartbeat", "Executing heartbeat")
 
+	// Self-improvement review runs independently of the regular heartbeat outcome.
+	defer hs.maybeSelfImprove()
+
 	prompt := hs.buildPrompt()
 	if prompt == "" {
 		hs.events.Emit(HeartbeatEvent{
@@ -300,6 +306,7 @@ func (hs *HeartbeatService) executeHeartbeat() {
 		Preview:    truncatePreview(responseText, 200),
 		Channel:    channel,
 	})
+
 }
 
 // buildPrompt builds the heartbeat prompt from HEARTBEAT.md
@@ -506,4 +513,149 @@ func truncatePreview(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// SetSelfImproveConfig sets the self-improvement configuration.
+func (hs *HeartbeatService) SetSelfImproveConfig(cfg config.SelfImproveConfig) {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	if cfg.Hour < 0 || cfg.Hour > 23 {
+		cfg.Hour = 3
+	}
+	if cfg.MaxCreations <= 0 {
+		cfg.MaxCreations = 3
+	}
+	if cfg.MaxRetries < 0 {
+		cfg.MaxRetries = 2
+	}
+	hs.selfImproveConfig = cfg
+}
+
+// shouldSelfImprove checks whether the self-improvement review should run.
+func (hs *HeartbeatService) shouldSelfImprove(currentHour int) bool {
+	if !hs.selfImproveConfig.Enabled {
+		return false
+	}
+	if currentHour != hs.selfImproveConfig.Hour {
+		return false
+	}
+	// Check if already ran today
+	stateFile := filepath.Join(hs.workspace, "state", "last_self_improve.txt")
+	data, err := os.ReadFile(stateFile)
+	if err == nil {
+		today := time.Now().Format("2006-01-02")
+		if strings.TrimSpace(string(data)) == today {
+			return false
+		}
+	}
+	// Check if struggle log has entries
+	logPath := filepath.Join(hs.workspace, "struggles.jsonl")
+	info, err := os.Stat(logPath)
+	if err != nil || info.Size() == 0 {
+		return false
+	}
+	return true
+}
+
+// markSelfImproveRan records that the self-improvement review ran today.
+func (hs *HeartbeatService) markSelfImproveRan() {
+	stateDir := filepath.Join(hs.workspace, "state")
+	os.MkdirAll(stateDir, 0o755)
+	stateFile := filepath.Join(stateDir, "last_self_improve.txt")
+	today := time.Now().Format("2006-01-02")
+	os.WriteFile(stateFile, []byte(today), 0o644)
+}
+
+// maybeSelfImprove checks conditions and runs the self-improvement review if appropriate.
+func (hs *HeartbeatService) maybeSelfImprove() {
+	currentHour := time.Now().Hour()
+	if !hs.shouldSelfImprove(currentHour) {
+		return
+	}
+
+	logPath := filepath.Join(hs.workspace, "struggles.jsonl")
+	content, err := struggles.ReadLogContent(logPath, struggles.MaxLogBytes)
+	if err != nil {
+		hs.logErrorf("Failed to read struggle log: %v", err)
+		return
+	}
+	if content == "" {
+		return
+	}
+
+	hs.mu.RLock()
+	handler := hs.handler
+	hs.mu.RUnlock()
+
+	if handler == nil {
+		hs.logErrorf("Self-improve: no handler configured")
+		return
+	}
+
+	prompt := hs.buildSelfImprovePrompt(content)
+	lastChannel := hs.state.GetLastChannel()
+	channel, chatID := hs.parseLastChannel(lastChannel)
+
+	hs.logInfof("Starting self-improvement review")
+	hs.events.Emit(HeartbeatEvent{
+		Timestamp: time.Now(),
+		Status:    EventStatusSent,
+		Preview:   "Self-improvement review started",
+		Channel:   channel,
+	})
+
+	result := handler(prompt, channel, chatID)
+
+	if result != nil && !result.IsError {
+		if err := struggles.TruncateLog(logPath); err != nil {
+			hs.logErrorf("Failed to truncate struggle log: %v", err)
+		}
+		hs.markSelfImproveRan()
+		hs.logInfof("Self-improvement review completed")
+
+		responseText := result.ForUser
+		if responseText == "" {
+			responseText = result.ForLLM
+		}
+		if responseText != "" && !isHeartbeatOK(responseText) && !result.Silent {
+			hs.sendResponse(responseText)
+		}
+	} else {
+		errMsg := "unknown error"
+		if result != nil {
+			errMsg = result.ForLLM
+		}
+		hs.logErrorf("Self-improvement review failed: %s", errMsg)
+		hs.sendResponse(fmt.Sprintf("Self-improvement review failed: %s. Signals carried over to next run.", errMsg))
+	}
+}
+
+// buildSelfImprovePrompt constructs the prompt for the self-improvement agent.
+func (hs *HeartbeatService) buildSelfImprovePrompt(struggleLog string) string {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	maxCreations := hs.selfImproveConfig.MaxCreations
+	if maxCreations <= 0 {
+		maxCreations = 3
+	}
+	maxRetries := hs.selfImproveConfig.MaxRetries
+	if maxRetries < 0 {
+		maxRetries = 2
+	}
+
+	return fmt.Sprintf(`# Self-Improvement Review
+
+Current time: %s
+
+You are a self-improvement agent. Analyze the struggle log below and create skills or agents to address recurring patterns.
+
+## Configuration
+- Maximum creations this run: %d
+- Maximum retries per creation: %d
+
+## Struggle Log
+
+%s
+
+Follow your system prompt instructions to analyze, create, test, and report.
+`, now, maxCreations, maxRetries, struggleLog)
 }
