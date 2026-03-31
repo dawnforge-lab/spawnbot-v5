@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
@@ -585,13 +586,38 @@ func deliverSubTurnResult(al *AgentLoop, parentTS *turnState, childID string, re
 	resultChan := parentTS.pendingResults
 	parentTS.mu.Unlock()
 
-	// If parent turn has already finished, treat this as an orphan result
+	// If parent turn has already finished, re-inject the result through the
+	// inbound message bus so it triggers a new agent turn. Without this the
+	// result would be silently lost (orphaned).
 	if isFinished || resultChan == nil {
 		if result != nil && al != nil {
 			al.emitEvent(EventKindSubTurnOrphan,
 				parentTS.eventMeta("deliverSubTurnResult", "subturn.orphan"),
 				SubTurnOrphanPayload{ParentTurnID: parentTS.turnID, ChildTurnID: childID, Reason: "parent_finished"},
 			)
+			// Deliver result to user immediately if available
+			if !result.Silent && result.ForUser != "" {
+				outCtx, outCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer outCancel()
+				_ = al.bus.PublishOutbound(outCtx, bus.OutboundMessage{
+					Channel: parentTS.channel,
+					ChatID:  parentTS.chatID,
+					Content: result.ForUser,
+				})
+			}
+			// Re-inject into inbound bus to trigger a new agent turn
+			content := result.ContentForLLM()
+			if content != "" {
+				content = al.cfg.FilterSensitiveData(content)
+				pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer pubCancel()
+				_ = al.bus.PublishInbound(pubCtx, bus.InboundMessage{
+					Channel:  "system",
+					SenderID: fmt.Sprintf("async:spawn:%s", childID),
+					ChatID:   fmt.Sprintf("%s:%s", parentTS.channel, parentTS.chatID),
+					Content:  content,
+				})
+			}
 		}
 		return
 	}
@@ -611,8 +637,8 @@ func deliverSubTurnResult(al *AgentLoop, parentTS *turnState, childID string, re
 		}
 	case <-parentTS.Finished():
 		// Parent finished while we were waiting to deliver.
-		// The result cannot be delivered to the LLM, so it becomes an orphan.
-		logger.WarnCF("subturn", "parent finished before result could be delivered", map[string]any{
+		// Re-inject through message bus to trigger a new agent turn.
+		logger.WarnCF("subturn", "parent finished before result could be delivered, re-injecting via bus", map[string]any{
 			"parent_id": parentTS.turnID,
 			"child_id":  childID,
 		})
@@ -626,6 +652,29 @@ func deliverSubTurnResult(al *AgentLoop, parentTS *turnState, childID string, re
 					Reason:       "parent_finished_waiting",
 				},
 			)
+			// Deliver result to user immediately if available
+			if !result.Silent && result.ForUser != "" {
+				outCtx, outCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer outCancel()
+				_ = al.bus.PublishOutbound(outCtx, bus.OutboundMessage{
+					Channel: parentTS.channel,
+					ChatID:  parentTS.chatID,
+					Content: result.ForUser,
+				})
+			}
+			// Re-inject into inbound bus to trigger a new agent turn
+			content := result.ContentForLLM()
+			if content != "" {
+				content = al.cfg.FilterSensitiveData(content)
+				pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer pubCancel()
+				_ = al.bus.PublishInbound(pubCtx, bus.InboundMessage{
+					Channel:  "system",
+					SenderID: fmt.Sprintf("async:spawn:%s", childID),
+					ChatID:   fmt.Sprintf("%s:%s", parentTS.channel, parentTS.chatID),
+					Content:  content,
+				})
+			}
 		}
 	}
 }
