@@ -16,6 +16,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/struggles"
 )
 
 func agentCmd(message, sessionKey, model string, debug bool) error {
@@ -53,6 +54,11 @@ func agentCmd(message, sessionKey, model string, debug bool) error {
 	defer msgBus.Close()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
 	defer agentLoop.Close()
+
+	// Wire struggle collector for self-improvement loop
+	agentLoop.SetStruggleCollector(struggles.NewCollector(
+		filepath.Join(cfg.WorkspacePath(), "struggles.jsonl"),
+	))
 
 	// Print agent startup info (only for interactive mode)
 	startupInfo := agentLoop.GetStartupInfo()
