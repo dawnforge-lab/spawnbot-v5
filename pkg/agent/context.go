@@ -167,13 +167,8 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 		}
 	}
 
-	// Tasks - show summary of active tasks
-	if cb.taskStore != nil {
-		taskSummary := cb.taskStore.Summary(10)
-		if taskSummary != "" {
-			parts = append(parts, "# Tasks\n\n"+taskSummary)
-		}
-	}
+	// Tasks are injected in buildDynamicContext() because they change between turns.
+	// The static system prompt is cached and would show stale task state.
 
 	// Memory is NOT injected into the system prompt. The agent reads memory
 	// on demand via memory_search/read_file tools, guided by instructions in SOUL.md.
@@ -503,6 +498,13 @@ func (cb *ContextBuilder) buildDynamicContext(channel, chatID, senderID, senderD
 	}
 	if senderLine := formatCurrentSenderLine(senderID, senderDisplayName); senderLine != "" {
 		fmt.Fprintf(&sb, "\n\n## Current Sender\n%s", senderLine)
+	}
+
+	if cb.taskStore != nil {
+		taskSummary := cb.taskStore.Summary(10)
+		if taskSummary != "" {
+			fmt.Fprintf(&sb, "\n\n## Tasks\n%s", taskSummary)
+		}
 	}
 
 	return sb.String()
