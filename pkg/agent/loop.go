@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
-	"github.com/dawnforge-lab/spawnbot-v5/pkg/struggles"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
@@ -72,7 +71,6 @@ type AgentLoop struct {
 
 	reloadFunc   func() error
 	inboundHook  func(msg bus.InboundMessage) // optional hook called on every inbound message
-	struggles    *struggles.Collector
 }
 
 // processOptions configures how a message is processed
@@ -94,11 +92,6 @@ type processOptions struct {
 	NoHistory               bool                // If true, don't load session history (for heartbeat)
 	MaxIterationsOverride   int                 // If > 0, cap tool iterations for this request
 	SkipInitialSteeringPoll bool                // If true, skip the steering poll at loop start (used by Continue)
-}
-
-// SetStruggleCollector sets the collector for the self-improvement loop.
-func (al *AgentLoop) SetStruggleCollector(c *struggles.Collector) {
-	al.struggles = c
 }
 
 type continuationTarget struct {
@@ -1386,10 +1379,6 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		return "", routeErr
 	}
 
-	if al.struggles != nil && agent.StruggleCollector == nil {
-		agent.StruggleCollector = al.struggles
-	}
-
 	// Reset message-tool state for this round so we don't skip publishing due to a previous round.
 	if tool, ok := agent.Tools.Get("message"); ok {
 		if resetter, ok := tool.(interface{ ResetSentInRound() }); ok {
@@ -1410,11 +1399,6 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 			"route_agent":   route.AgentID,
 			"route_channel": route.Channel,
 		})
-
-	// Log struggle signal for user corrections
-	if agent.StruggleCollector != nil && msg.Content != "" {
-		agent.StruggleCollector.HandleTurnStart(msg.Content, scopeKey)
-	}
 
 	opts := processOptions{
 		SessionKey:        sessionKey,
@@ -1783,7 +1767,6 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 	var finalContent string
 	consecutiveToolErrors := 0
 	const maxConsecutiveToolErrors = 3
-	toolCallCounts := map[string]int{}
 
 turnLoop:
 	for ts.currentIteration() < ts.agent.MaxIterations || len(pendingMessages) > 0 || func() bool {
@@ -2476,7 +2459,6 @@ turnLoop:
 				})
 			}
 
-			toolCallCounts[toolName]++
 			toolStart := time.Now()
 			toolResult := ts.agent.Tools.ExecuteWithContext(
 				turnCtx,
@@ -2626,16 +2608,6 @@ turnLoop:
 				consecutiveToolErrors++
 			} else {
 				consecutiveToolErrors = 0
-			}
-
-			// Log struggle signal for self-improvement loop
-			if ts.agent.StruggleCollector != nil && toolResult.IsError {
-				ts.agent.StruggleCollector.HandleToolEnd(
-					toolName,
-					true,
-					toolResult.ContentForLLM(),
-					ts.sessionKey,
-				)
 			}
 
 			if consecutiveToolErrors >= maxConsecutiveToolErrors {
@@ -2815,11 +2787,6 @@ turnLoop:
 		} else {
 			finalContent = ts.opts.DefaultResponse
 		}
-	}
-
-	// Log repeated tool signals for self-improvement loop
-	if ts.agent.StruggleCollector != nil {
-		ts.agent.StruggleCollector.HandleTurnEnd(ts.sessionKey)
 	}
 
 	ts.setPhase(TurnPhaseFinalizing)

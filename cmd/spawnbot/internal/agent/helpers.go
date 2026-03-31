@@ -56,9 +56,12 @@ func agentCmd(message, sessionKey, model string, debug bool) error {
 	defer agentLoop.Close()
 
 	// Wire struggle collector for self-improvement loop
-	agentLoop.SetStruggleCollector(struggles.NewCollector(
+	struggleCollector := struggles.NewCollector(
 		filepath.Join(cfg.WorkspacePath(), "struggles.jsonl"),
-	))
+	)
+	if err := agentLoop.MountHook(agent.NamedHook("struggles", agent.NewStrugglesObserver(struggleCollector))); err != nil {
+		logger.ErrorCF("agent", "Failed to mount struggles hook", map[string]any{"error": err.Error()})
+	}
 
 	// Print agent startup info (only for interactive mode)
 	startupInfo := agentLoop.GetStartupInfo()
