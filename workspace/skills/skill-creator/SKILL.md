@@ -51,21 +51,86 @@ Every skill consists of a required SKILL.md file and optional bundled resources:
 skill-name/
 ├── SKILL.md (required)
 │   ├── YAML frontmatter metadata (required)
-│   │   ├── name: (required)
-│   │   └── description: (required)
 │   └── Markdown instructions (required)
 └── Bundled Resources (optional)
     ├── scripts/          - Executable code (Python/Bash/etc.)
-    ├── references/       - Documentation intended to be loaded into context as needed
+    ├── references/       - Documentation loaded into context as needed
     └── assets/           - Files used in output (templates, icons, fonts, etc.)
 ```
 
-#### SKILL.md (required)
+#### SKILL.md Frontmatter
 
-Every SKILL.md consists of:
+All fields except `name` and `description` are optional.
 
-- **Frontmatter** (YAML): Contains `name` and `description` fields. These are the only fields that the agent reads to determine when the skill gets used, thus it is very important to be clear and comprehensive in describing what the skill is, and when it should be used.
-- **Body** (Markdown): Instructions and guidance for using the skill. Only loaded AFTER the skill triggers (if at all).
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string | — | Alphanumeric + hyphens, ≤64 chars. Must match the skill folder name. |
+| `description` | string | — | What the skill does and when to use it. Primary triggering signal. |
+| `arguments` | list | — | Positional argument names, e.g. `[file, target]` |
+| `argument-hint` | string | — | Usage hint shown in `/skill` command, e.g. `<file> [target]` |
+| `context` | string | `inline` | Execution context: `inline`, `fork`, or `spawn` |
+| `agent_type` | string | — | Agent definition for fork/spawn subagents |
+| `allowed_tools` | list | — | Additional tools granted to the subagent |
+| `user-invocable` | bool | `true` | Whether the skill appears as a `/skill-name` slash command |
+
+Example with all fields:
+
+```yaml
+---
+name: code-review
+description: Review code for bugs, style, and correctness. Use when asked to review a file or diff.
+arguments: [file, target]
+argument-hint: <file> [target]
+context: fork
+agent_type: coder
+allowed_tools: [read_file, bash]
+user-invocable: true
+---
+```
+
+Minimal example (most skills only need these two fields):
+
+```yaml
+---
+name: weather
+description: Get current weather and forecasts. Use when asked about weather for a location.
+---
+```
+
+**Writing the `description`:** Include both what the skill does and when to trigger it. This is the primary triggering mechanism—the agent reads only the description to decide whether to invoke the skill.
+
+#### Execution Contexts
+
+Choose the context based on task complexity and isolation needs:
+
+- **`inline`** (default): The skill body is injected into the current conversation as instructions. Use for lightweight guidance, quick lookups, and simple instructions that don't require isolation.
+
+- **`fork`**: Runs the skill in a focused subagent and returns the result synchronously. Use for tasks that need isolation from the current context—code generation, analysis, document processing. The caller waits for the result.
+
+- **`spawn`**: Runs the skill in a background subagent and returns immediately. Use for long-running tasks—web scraping, report generation, batch processing. The caller gets a task ID to check status later.
+
+When using `fork` or `spawn`, set `agent_type` to select the appropriate agent definition, and `allowed_tools` to grant additional tools beyond the subagent's defaults.
+
+#### Argument Substitution
+
+When a skill declares `arguments`, the agent substitutes variables in the SKILL.md body before injecting it:
+
+| Variable | Value |
+|---|---|
+| `${ARGUMENTS}` | All args joined as a single string |
+| `${ARG1}`, `${ARG2}`, ... | Individual positional args |
+| `${SKILL_DIR}` | Absolute path to the skill's directory |
+| `${WORKSPACE}` | Workspace root path |
+
+Undefined positional args (e.g. `${ARG2}` when only one arg is provided) are left as-is.
+
+Example skill body using substitution:
+
+```markdown
+Review the file at ${ARG1} and check for issues related to ${ARG2}.
+
+Script location: ${SKILL_DIR}/scripts/check.py
+```
 
 #### Bundled Resources (optional)
 
@@ -75,7 +140,7 @@ Executable code (Python/Bash/etc.) for tasks that require deterministic reliabil
 
 - **When to include**: When the same code is being rewritten repeatedly or deterministic reliability is needed
 - **Example**: `scripts/rotate_pdf.py` for PDF rotation tasks
-- **Benefits**: Token efficient, deterministic, may be executed without loading into context
+- **Benefits**: Token efficient, deterministic, may be executed without loading into context window
 - **Note**: Scripts may still need to be read by the agent for patching or environment-specific adjustments
 
 ##### References (`references/`)
@@ -87,7 +152,7 @@ Documentation and reference material intended to be loaded as needed into contex
 - **Use cases**: Database schemas, API documentation, domain knowledge, company policies, detailed workflow guides
 - **Benefits**: Keeps SKILL.md lean, loaded only when the agent determines it's needed
 - **Best practice**: If files are large (>10k words), include grep search patterns in SKILL.md
-- **Avoid duplication**: Information should live in either SKILL.md or references files, not both. Prefer references files for detailed information unless it's truly core to the skill—this keeps SKILL.md lean while making information discoverable without hogging the context window. Keep only essential procedural instructions and workflow guidance in SKILL.md; move detailed reference material, schemas, and examples to references files.
+- **Avoid duplication**: Information should live in either SKILL.md or references files, not both. Keep only essential procedural instructions and workflow guidance in SKILL.md; move detailed reference material, schemas, and examples to references files.
 
 ##### Assets (`assets/`)
 
@@ -108,7 +173,7 @@ A skill should only contain essential files that directly support its functional
 - CHANGELOG.md
 - etc.
 
-The skill should only contain the information needed for an AI agent to do the job at hand. It should not contain auxiliary context about the process that went into creating it, setup and testing procedures, user-facing documentation, etc. Creating additional documentation files just adds clutter and confusion.
+The skill should only contain the information needed for an AI agent to do the job at hand. Creating additional documentation files just adds clutter and confusion.
 
 ### Progressive Disclosure Design Principle
 
@@ -116,13 +181,11 @@ Skills use a three-level loading system to manage context efficiently:
 
 1. **Metadata (name + description)** - Always in context (~100 words)
 2. **SKILL.md body** - When skill triggers (<5k words)
-3. **Bundled resources** - As needed by the agent (Unlimited because scripts can be executed without reading into context window)
+3. **Bundled resources** - As needed by the agent (unlimited because scripts can be executed without reading into context window)
 
-#### Progressive Disclosure Patterns
+Keep SKILL.md body to the essentials and under 500 lines to minimize context bloat. Split content into separate files when approaching this limit. When splitting out content into other files, reference them from SKILL.md and describe clearly when to read them.
 
-Keep SKILL.md body to the essentials and under 500 lines to minimize context bloat. Split content into separate files when approaching this limit. When splitting out content into other files, it is very important to reference them from SKILL.md and describe clearly when to read them, to ensure the reader of the skill knows they exist and when to use them.
-
-**Key principle:** When a skill supports multiple variations, frameworks, or options, keep only the core workflow and selection guidance in SKILL.md. Move variant-specific details (patterns, examples, configuration) into separate reference files.
+**Key principle:** When a skill supports multiple variations, frameworks, or options, keep only the core workflow and selection guidance in SKILL.md. Move variant-specific details into separate reference files.
 
 **Pattern 1: High-level guide with references**
 
@@ -138,10 +201,9 @@ Extract text with pdfplumber:
 
 - **Form filling**: See [FORMS.md](FORMS.md) for complete guide
 - **API reference**: See [REFERENCE.md](REFERENCE.md) for all methods
-- **Examples**: See [EXAMPLES.md](EXAMPLES.md) for common patterns
 ```
 
-the agent loads FORMS.md, REFERENCE.md, or EXAMPLES.md only when needed.
+the agent loads FORMS.md or REFERENCE.md only when needed.
 
 **Pattern 2: Domain-specific organization**
 
@@ -159,30 +221,11 @@ bigquery-skill/
 
 When a user asks about sales metrics, the agent only reads sales.md.
 
-Similarly, for skills supporting multiple frameworks or variants, organize by variant:
-
-```
-cloud-deploy/
-├── SKILL.md (workflow + provider selection)
-└── references/
-    ├── aws.md (AWS deployment patterns)
-    ├── gcp.md (GCP deployment patterns)
-    └── azure.md (Azure deployment patterns)
-```
-
-When the user chooses AWS, the agent only reads aws.md.
-
 **Pattern 3: Conditional details**
 
 Show basic content, link to advanced content:
 
 ```markdown
-# DOCX Processing
-
-## Creating documents
-
-Use docx-js for new documents. See [DOCX-JS.md](DOCX-JS.md).
-
 ## Editing documents
 
 For simple edits, modify the XML directly.
@@ -190,8 +233,6 @@ For simple edits, modify the XML directly.
 **For tracked changes**: See [REDLINING.md](REDLINING.md)
 **For OOXML details**: See [OOXML.md](OOXML.md)
 ```
-
-the agent reads REDLINING.md or OOXML.md only when the user needs those features.
 
 **Important guidelines:**
 
@@ -242,21 +283,17 @@ To turn concrete examples into an effective skill, analyze each example by:
 
 1. Considering how to execute on the example from scratch
 2. Identifying what scripts, references, and assets would be helpful when executing these workflows repeatedly
+3. Deciding the appropriate execution context (inline, fork, spawn)
 
 Example: When building a `pdf-editor` skill to handle queries like "Help me rotate this PDF," the analysis shows:
 
 1. Rotating a PDF requires re-writing the same code each time
 2. A `scripts/rotate_pdf.py` script would be helpful to store in the skill
 
-Example: When designing a `frontend-webapp-builder` skill for queries like "Build me a todo app" or "Build me a dashboard to track my steps," the analysis shows:
+Example: When building a `code-review` skill to review files in isolation:
 
-1. Writing a frontend webapp requires the same boilerplate HTML/React each time
-2. An `assets/hello-world/` template containing the boilerplate HTML/React project files would be helpful to store in the skill
-
-Example: When building a `big-query` skill to handle queries like "How many users have logged in today?" the analysis shows:
-
-1. Querying BigQuery requires re-discovering the table schemas and relationships each time
-2. A `references/schema.md` file documenting the table schemas would be helpful to store in the skill
+1. Code review benefits from a focused agent that only reads the target file
+2. `context: fork` with `agent_type: coder` gives a clean subagent with appropriate tools
 
 To establish the skill's contents, analyze each concrete example to create a list of the reusable resources to include: scripts, references, and assets.
 
@@ -271,7 +308,7 @@ When creating a new skill from scratch, always run the `init_skill.py` script. T
 Usage:
 
 ```bash
-scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples]
+scripts/init_skill.py <skill-name> --path <output-directory> [--resources scripts,references,assets] [--examples] [--context inline|fork|spawn] [--agent-type <type>] [--arguments <name> ...]
 ```
 
 Examples:
@@ -280,6 +317,7 @@ Examples:
 scripts/init_skill.py my-skill --path skills/public
 scripts/init_skill.py my-skill --path skills/public --resources scripts,references
 scripts/init_skill.py my-skill --path skills/public --resources scripts --examples
+scripts/init_skill.py code-review --path skills/public --context fork --agent-type coder --arguments file target
 ```
 
 The script:
@@ -288,12 +326,13 @@ The script:
 - Generates a SKILL.md template with proper frontmatter and TODO placeholders
 - Optionally creates resource directories based on `--resources`
 - Optionally adds example files when `--examples` is set
+- Sets `context`, `agent_type`, and `arguments` in frontmatter when provided
 
 After initialization, customize the SKILL.md and add resources as needed. If you used `--examples`, replace or delete placeholder files.
 
 ### Step 4: Edit the Skill
 
-When editing the (newly-generated or existing) skill, remember that the skill is being created for another instance of the agent to use. Include information that would be beneficial and non-obvious to the agent. Consider what procedural knowledge, domain-specific details, or reusable assets would help another the agent instance execute these tasks more effectively.
+When editing the (newly-generated or existing) skill, remember that the skill is being created for another instance of the agent to use. Include information that would be beneficial and non-obvious to the agent. Consider what procedural knowledge, domain-specific details, or reusable assets would help another agent instance execute these tasks more effectively.
 
 #### Learn Proven Design Patterns
 
@@ -318,19 +357,18 @@ If you used `--examples`, delete any placeholder files that are not needed for t
 
 ##### Frontmatter
 
-Write the YAML frontmatter with `name` and `description`:
+Write the YAML frontmatter. Required: `name` and `description`. Add optional fields only when they change behavior:
 
-- `name`: The skill name
-- `description`: This is the primary triggering mechanism for your skill, and helps the agent understand when to use the skill.
-  - Include both what the Skill does and specific triggers/contexts for when to use it.
-  - Include all "when to use" information here - Not in the body. The body is only loaded after triggering, so "When to Use This Skill" sections in the body are not helpful to the agent.
-  - Example description for a `docx` skill: "Comprehensive document creation, editing, and analysis with support for tracked changes, comments, formatting preservation, and text extraction. Use when the agent needs to work with professional documents (.docx files) for: (1) Creating new documents, (2) Modifying or editing content, (3) Working with tracked changes, (4) Adding comments, or any other document tasks"
-
-Do not include any other fields in YAML frontmatter.
+- `name`: Alphanumeric + hyphens, ≤64 chars.
+- `description`: Primary triggering mechanism. Include both what the skill does and specific triggers/contexts for when to use it. Include all "when to use" information here—not in the body. The body is only loaded after triggering.
+- `arguments` + `argument-hint`: Add when the skill takes positional inputs from the user.
+- `context`: Add when the skill needs isolation (`fork`) or async execution (`spawn`). Leave out for `inline` (the default).
+- `agent_type` + `allowed_tools`: Add when using `fork` or `spawn` to configure the subagent.
+- `user-invocable`: Set to `false` only when the skill is internal and should not appear as a slash command.
 
 ##### Body
 
-Write instructions for using the skill and its bundled resources.
+Write instructions for using the skill and its bundled resources. Use argument substitution variables (`${ARG1}`, `${ARGUMENTS}`, etc.) in the body when the skill accepts positional arguments.
 
 ### Step 5: Packaging a Skill
 
