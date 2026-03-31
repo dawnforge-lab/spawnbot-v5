@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/struggles"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
@@ -60,6 +61,9 @@ type AgentInstance struct {
 	// MemoryStore provides persistent daily-notes and long-term memory.
 	// Used by the memory flush system to preserve key facts before compaction.
 	MemoryStore *MemoryStore
+
+	// StruggleCollector logs struggle signals for the self-improvement loop.
+	StruggleCollector *struggles.Collector
 }
 
 // NewAgentInstance creates an agent instance from config.
