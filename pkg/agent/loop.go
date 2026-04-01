@@ -168,6 +168,9 @@ func registerSharedTools(
 			continue
 		}
 
+		// search_tools is core — always visible so the agent can discover hidden tools
+		agent.Tools.Register(tools.NewSearchTools(agent.Tools))
+
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
 				BraveAPIKeys:    config.MergeAPIKeys(cfg.Tools.Web.Brave.APIKey(), cfg.Tools.Web.Brave.APIKeys()),
@@ -205,7 +208,7 @@ func registerSharedTools(
 			if err != nil {
 				logger.ErrorCF("agent", "Failed to create web search tool", map[string]any{"error": err.Error()})
 			} else if searchTool != nil {
-				agent.Tools.Register(searchTool)
+				agent.Tools.RegisterHidden(searchTool)
 			}
 		}
 		if cfg.Tools.IsToolEnabled("web_fetch") {
@@ -218,7 +221,7 @@ func registerSharedTools(
 			if err != nil {
 				logger.ErrorCF("agent", "Failed to create web fetch tool", map[string]any{"error": err.Error()})
 			} else {
-				agent.Tools.Register(fetchTool)
+				agent.Tools.RegisterHidden(fetchTool)
 			}
 		}
 
@@ -283,17 +286,17 @@ func registerSharedTools(
 					cfg.Tools.Skills.SearchCache.MaxSize,
 					time.Duration(cfg.Tools.Skills.SearchCache.TTLSeconds)*time.Second,
 				)
-				agent.Tools.Register(tools.NewFindSkillsTool(registryMgr, searchCache))
+				agent.Tools.RegisterHidden(tools.NewFindSkillsTool(registryMgr, searchCache))
 			}
 
 			if install_skills_enable {
-				agent.Tools.Register(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
+				agent.Tools.RegisterHidden(tools.NewInstallSkillTool(registryMgr, agent.Workspace))
 			}
 		}
 
 		// Register use_skill tool for skill activation with arguments
 		if agent.ContextBuilder != nil {
-			agent.Tools.Register(tools.NewUseSkillTool(
+			agent.Tools.RegisterHidden(tools.NewUseSkillTool(
 				agent.ContextBuilder.SkillsLoader(),
 				NewSubTurnSpawner(al),
 				agent.Workspace,
@@ -392,15 +395,15 @@ func registerSharedTools(
 					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
 				})
 
-				agent.Tools.Register(spawnTool)
+				agent.Tools.RegisterHidden(spawnTool)
 
 				// Also register the synchronous subagent tool
 				subagentTool := tools.NewSubagentTool(subagentManager)
 				subagentTool.SetSpawner(NewSubTurnSpawner(al))
-				agent.Tools.Register(subagentTool)
+				agent.Tools.RegisterHidden(subagentTool)
 			}
 			if spawnStatusEnabled {
-				agent.Tools.Register(tools.NewSpawnStatusTool(subagentManager))
+				agent.Tools.RegisterHidden(tools.NewSpawnStatusTool(subagentManager))
 			}
 		} else if (spawnEnabled || spawnStatusEnabled) && !cfg.Tools.IsToolEnabled("subagent") {
 			logger.WarnCF("agent", "spawn/spawn_status tools require subagent to be enabled", nil)
@@ -415,14 +418,14 @@ func registerSharedTools(
 		agentDefs.Reload(workspaceAgentsDir)
 		agent.AgentRegistry = agentDefs
 		agent.ContextBuilder.SetAgentRegistry(agentDefs)
-		agent.Tools.Register(tools.NewCreateAgentTool(workspaceAgentsDir, agentDefs))
+		agent.Tools.RegisterHidden(tools.NewCreateAgentTool(workspaceAgentsDir, agentDefs))
 
 		// Initialize task store
 		taskStorePath := filepath.Join(agent.Workspace, "tasks.json")
 		taskStore := tasks.NewTaskStore(taskStorePath)
 		agent.TaskStore = taskStore
 		agent.ContextBuilder.SetTaskStore(taskStore)
-		agent.Tools.Register(tools.NewTasksTool(taskStore))
+		agent.Tools.RegisterHidden(tools.NewTasksTool(taskStore))
 	}
 }
 
@@ -469,10 +472,9 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				}()
 				// Release inbound media files after the turn completes. This defer fires after
 				// processMessage returns, at which point all media has been fully consumed:
-				// - Images are base64-encoded into data URLs in resolveMediaRefs before the LLM call.
+				// - Media refs are resolved to path tags injected into message content by resolveMediaRefs before the LLM call.
 				// - Audio is read from disk by transcribeAudioInMessage before the turn loop.
-				// - Non-image/audio files have their path injected into message content; any tool
-				//   reads happen synchronously inside runTurn before processMessage returns.
+				// - Any tool reads happen synchronously inside runTurn before processMessage returns.
 				defer func() {
 					if al.mediaStore != nil && msg.MediaScope != "" {
 						if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
@@ -2765,10 +2767,7 @@ turnLoop:
 			}, nil
 		}
 
-		ts.agent.Tools.TickTTL()
-		logger.DebugCF("agent", "TTL tick after tool execution", map[string]any{
-			"agent_id": ts.agent.ID, "iteration": iteration,
-		})
+		// TTL ticking removed: discovered tools are now session-persistent (Task 1).
 	}
 
 	if steerMsgs := al.dequeueSteeringMessagesForScope(ts.sessionKey); len(steerMsgs) > 0 {

@@ -8,7 +8,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
@@ -102,9 +102,6 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			for serverName, conn := range servers {
 				uniqueTools += len(conn.Tools)
 
-				serverCfg := al.cfg.Tools.MCP.Servers[serverName]
-				registerAsHidden := serverIsDeferred(al.cfg.Tools.MCP.Discovery.Enabled, serverCfg)
-
 				for _, tool := range conn.Tools {
 					for _, agentID := range agentIDs {
 						agent, ok := al.registry.GetAgent(agentID)
@@ -113,11 +110,8 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 						}
 
 						mcpTool := tools.NewMCPTool(mcpManager, serverName, tool)
-						if registerAsHidden {
-							agent.Tools.RegisterHidden(mcpTool)
-						} else {
-							agent.Tools.Register(mcpTool)
-						}
+						hint := firstSentence(tool.Description, 80)
+						agent.Tools.RegisterHiddenWithHint(mcpTool, hint)
 
 						totalRegistrations++
 						logger.DebugCF("agent", "Registered MCP tool",
@@ -126,7 +120,7 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 								"server":   serverName,
 								"tool":     tool.Name,
 								"name":     mcpTool.Name(),
-								"deferred": registerAsHidden,
+								"deferred": true,
 							})
 					}
 				}
@@ -148,54 +142,9 @@ func (al *AgentLoop) ensureMCPInitialized(ctx context.Context) error {
 			if !ok {
 				continue
 			}
-			agent.Tools.Register(tools.NewConnectMCPTool(mcpManager, agent.Tools))
-			agent.Tools.Register(tools.NewDisconnectMCPTool(mcpManager, agent.Tools))
-			agent.Tools.Register(tools.NewListMCPTool(mcpManager))
-		}
-
-		// Initializes Discovery Tools only if enabled by configuration
-		if al.cfg.Tools.MCP.Discovery.Enabled {
-			useBM25 := al.cfg.Tools.MCP.Discovery.UseBM25
-			useRegex := al.cfg.Tools.MCP.Discovery.UseRegex
-
-			if !useBM25 && !useRegex {
-				al.mcp.setInitErr(fmt.Errorf(
-					"tool discovery is enabled but neither 'use_bm25' nor 'use_regex' is set to true in the configuration",
-				))
-				if closeErr := mcpManager.Close(); closeErr != nil {
-					logger.ErrorCF("agent", "Failed to close MCP manager",
-						map[string]any{"error": closeErr.Error()})
-				}
-				return
-			}
-
-			ttl := al.cfg.Tools.MCP.Discovery.TTL
-			if ttl <= 0 {
-				ttl = 5
-			}
-
-			maxSearchResults := al.cfg.Tools.MCP.Discovery.MaxSearchResults
-			if maxSearchResults <= 0 {
-				maxSearchResults = 5
-			}
-
-			logger.InfoCF("agent", "Initializing tool discovery", map[string]any{
-				"bm25": useBM25, "regex": useRegex, "ttl": ttl, "max_results": maxSearchResults,
-			})
-
-			for _, agentID := range agentIDs {
-				agent, ok := al.registry.GetAgent(agentID)
-				if !ok {
-					continue
-				}
-
-				if useRegex {
-					agent.Tools.Register(tools.NewRegexSearchTool(agent.Tools, ttl, maxSearchResults))
-				}
-				if useBM25 {
-					agent.Tools.Register(tools.NewBM25SearchTool(agent.Tools, ttl, maxSearchResults))
-				}
-			}
+			agent.Tools.RegisterHidden(tools.NewConnectMCPTool(mcpManager, agent.Tools))
+			agent.Tools.RegisterHidden(tools.NewDisconnectMCPTool(mcpManager, agent.Tools))
+			agent.Tools.RegisterHidden(tools.NewListMCPTool(mcpManager))
 		}
 
 		al.mcp.setManager(mcpManager)
@@ -217,4 +166,17 @@ func serverIsDeferred(discoveryEnabled bool, serverCfg config.MCPServerConfig) b
 		return *serverCfg.Deferred
 	}
 	return true
+}
+
+// firstSentence returns the first sentence of s (up to maxLen characters).
+// If no sentence-ending punctuation is found within maxLen, the string is
+// truncated at maxLen.
+func firstSentence(s string, maxLen int) string {
+	if i := strings.IndexAny(s, ".!?"); i >= 0 && i < maxLen {
+		return s[:i+1]
+	}
+	if len(s) > maxLen {
+		return s[:maxLen]
+	}
+	return s
 }

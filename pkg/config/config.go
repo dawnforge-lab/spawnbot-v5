@@ -954,10 +954,7 @@ type GatewayConfig struct {
 
 type ToolDiscoveryConfig struct {
 	Enabled          bool `json:"enabled"            env:"SPAWNBOT_TOOLS_DISCOVERY_ENABLED"`
-	TTL              int  `json:"ttl"                env:"SPAWNBOT_TOOLS_DISCOVERY_TTL"`
 	MaxSearchResults int  `json:"max_search_results" env:"SPAWNBOT_MAX_SEARCH_RESULTS"`
-	UseBM25          bool `json:"use_bm25"           env:"SPAWNBOT_TOOLS_DISCOVERY_USE_BM25"`
-	UseRegex         bool `json:"use_regex"          env:"SPAWNBOT_TOOLS_DISCOVERY_USE_REGEX"`
 }
 
 type ToolConfig struct {

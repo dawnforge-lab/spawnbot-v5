@@ -375,6 +375,11 @@ func (ts *turnState) interruptHintMessage() providers.Message {
 // override is set (subturns with role-specific prompts), otherwise falls through
 // to the standard BuildMessages with full identity/SOUL/skills/memory.
 func (ts *turnState) buildMessages(history []providers.Message, summary, currentMessage string, media []string) []providers.Message {
+	// Prepend deferred tools announcement to user message if deferred tools exist
+	if announcement := BuildDeferredToolsAnnouncement(ts.agent.Tools); announcement != "" {
+		currentMessage = announcement + "\n\n" + currentMessage
+	}
+
 	if ts.opts.SystemPromptOverride != "" {
 		return ts.agent.ContextBuilder.BuildMessagesWithSystemOverride(
 			ts.opts.SystemPromptOverride,

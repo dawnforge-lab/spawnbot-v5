@@ -15,13 +15,14 @@ import (
 )
 
 type ToolEntry struct {
-	Tool   Tool
-	IsCore bool
-	TTL    int
+	Tool       Tool
+	IsCore     bool
+	SearchHint string
 }
 
 type ToolRegistry struct {
 	tools      map[string]*ToolEntry
+	discovered map[string]bool
 	mu         sync.RWMutex
 	version    atomic.Uint64 // incremented on Register/RegisterHidden for cache invalidation
 	mediaStore media.MediaStore
@@ -33,7 +34,8 @@ type mediaStoreAware interface {
 
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
-		tools: make(map[string]*ToolEntry),
+		tools:      make(map[string]*ToolEntry),
+		discovered: make(map[string]bool),
 	}
 }
 
@@ -48,7 +50,6 @@ func (r *ToolRegistry) Register(tool Tool) {
 	r.tools[name] = &ToolEntry{
 		Tool:   tool,
 		IsCore: true,
-		TTL:    0, // Core tools do not use TTL
 	}
 	if aware, ok := tool.(mediaStoreAware); ok && r.mediaStore != nil {
 		aware.SetMediaStore(r.mediaStore)
@@ -57,7 +58,7 @@ func (r *ToolRegistry) Register(tool Tool) {
 	logger.DebugCF("tools", "Registered core tool", map[string]any{"name": name})
 }
 
-// RegisterHidden saves hidden tools (visible only via TTL)
+// RegisterHidden saves hidden tools (visible only after discovery via PromoteTools).
 func (r *ToolRegistry) RegisterHidden(tool Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -69,13 +70,33 @@ func (r *ToolRegistry) RegisterHidden(tool Tool) {
 	r.tools[name] = &ToolEntry{
 		Tool:   tool,
 		IsCore: false,
-		TTL:    0,
 	}
 	if aware, ok := tool.(mediaStoreAware); ok && r.mediaStore != nil {
 		aware.SetMediaStore(r.mediaStore)
 	}
 	r.version.Add(1)
 	logger.DebugCF("tools", "Registered hidden tool", map[string]any{"name": name})
+}
+
+// RegisterHiddenWithHint saves a hidden tool with a search hint for deferred discovery.
+func (r *ToolRegistry) RegisterHiddenWithHint(tool Tool, hint string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	name := tool.Name()
+	if _, exists := r.tools[name]; exists {
+		logger.WarnCF("tools", "Hidden tool registration overwrites existing tool",
+			map[string]any{"name": name})
+	}
+	r.tools[name] = &ToolEntry{
+		Tool:       tool,
+		IsCore:     false,
+		SearchHint: hint,
+	}
+	if aware, ok := tool.(mediaStoreAware); ok && r.mediaStore != nil {
+		aware.SetMediaStore(r.mediaStore)
+	}
+	r.version.Add(1)
+	logger.DebugCF("tools", "Registered hidden tool with hint", map[string]any{"name": name, "hint": hint})
 }
 
 // SetMediaStore injects a MediaStore into all registered tools that can
@@ -92,16 +113,16 @@ func (r *ToolRegistry) SetMediaStore(store media.MediaStore) {
 	}
 }
 
-// PromoteTools atomically sets the TTL for multiple non-core tools.
-// This prevents a concurrent TickTTL from decrementing between promotions.
-func (r *ToolRegistry) PromoteTools(names []string, ttl int) {
+// PromoteTools marks non-core tools as discovered for the session.
+// Once discovered, a tool stays visible for the lifetime of the session.
+func (r *ToolRegistry) PromoteTools(names []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	promoted := 0
 	for _, name := range names {
 		if entry, exists := r.tools[name]; exists {
 			if !entry.IsCore {
-				entry.TTL = ttl
+				r.discovered[name] = true
 				promoted++
 			}
 		}
@@ -109,19 +130,8 @@ func (r *ToolRegistry) PromoteTools(names []string, ttl int) {
 	logger.DebugCF(
 		"tools",
 		"PromoteTools completed",
-		map[string]any{"requested": len(names), "promoted": promoted, "ttl": ttl},
+		map[string]any{"requested": len(names), "promoted": promoted},
 	)
-}
-
-// TickTTL decreases TTL only for non-core tools
-func (r *ToolRegistry) TickTTL() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for _, entry := range r.tools {
-		if !entry.IsCore && entry.TTL > 0 {
-			entry.TTL--
-		}
-	}
 }
 
 // Version returns the current registry version (atomically).
@@ -150,7 +160,7 @@ func (r *ToolRegistry) SnapshotHiddenTools() HiddenToolSnapshot {
 	defer r.mu.RUnlock()
 	docs := make([]HiddenToolDoc, 0, len(r.tools))
 	for name, entry := range r.tools {
-		if !entry.IsCore {
+		if !entry.IsCore && !r.discovered[name] {
 			docs = append(docs, HiddenToolDoc{
 				Name:        name,
 				Description: entry.Tool.Description(),
@@ -163,6 +173,33 @@ func (r *ToolRegistry) SnapshotHiddenTools() HiddenToolSnapshot {
 	}
 }
 
+// GetDeferredNames returns sorted names of hidden, undiscovered tools.
+func (r *ToolRegistry) GetDeferredNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0)
+	for name, entry := range r.tools {
+		if !entry.IsCore && !r.discovered[name] {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// GetDeferredTools returns hidden, undiscovered tool entries.
+func (r *ToolRegistry) GetDeferredTools() []*ToolEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entries := make([]*ToolEntry, 0)
+	for name, entry := range r.tools {
+		if !entry.IsCore && !r.discovered[name] {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
+}
+
 func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -170,8 +207,8 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Hidden tools with expired TTL are not callable.
-	if !entry.IsCore && entry.TTL <= 0 {
+	// Hidden tools that haven't been discovered are not callable.
+	if !entry.IsCore && !r.discovered[name] {
 		return nil, false
 	}
 	return entry.Tool, true
@@ -317,7 +354,7 @@ func (r *ToolRegistry) GetDefinitions() []map[string]any {
 	for _, name := range sorted {
 		entry := r.tools[name]
 
-		if !entry.IsCore && entry.TTL <= 0 {
+		if !entry.IsCore && !r.discovered[name] {
 			continue
 		}
 
@@ -337,7 +374,7 @@ func (r *ToolRegistry) ToProviderDefs() []providers.ToolDefinition {
 	for _, name := range sorted {
 		entry := r.tools[name]
 
-		if !entry.IsCore && entry.TTL <= 0 {
+		if !entry.IsCore && !r.discovered[name] {
 			continue
 		}
 
@@ -384,14 +421,18 @@ func (r *ToolRegistry) Clone() *ToolRegistry {
 	defer r.mu.RUnlock()
 	clone := &ToolRegistry{
 		tools:      make(map[string]*ToolEntry, len(r.tools)),
+		discovered: make(map[string]bool, len(r.discovered)),
 		mediaStore: r.mediaStore,
 	}
 	for name, entry := range r.tools {
 		clone.tools[name] = &ToolEntry{
-			Tool:   entry.Tool,
-			IsCore: entry.IsCore,
-			TTL:    entry.TTL,
+			Tool:       entry.Tool,
+			IsCore:     entry.IsCore,
+			SearchHint: entry.SearchHint,
 		}
+	}
+	for name := range r.discovered {
+		clone.discovered[name] = true
 	}
 	return clone
 }
@@ -406,14 +447,18 @@ func (r *ToolRegistry) CloneOnly(names ...string) *ToolRegistry {
 	}
 	clone := &ToolRegistry{
 		tools:      make(map[string]*ToolEntry, len(names)),
+		discovered: make(map[string]bool),
 		mediaStore: r.mediaStore,
 	}
 	for name, entry := range r.tools {
 		if _, ok := allowed[name]; ok {
 			clone.tools[name] = &ToolEntry{
-				Tool:   entry.Tool,
-				IsCore: entry.IsCore,
-				TTL:    entry.TTL,
+				Tool:       entry.Tool,
+				IsCore:     entry.IsCore,
+				SearchHint: entry.SearchHint,
+			}
+			if r.discovered[name] {
+				clone.discovered[name] = true
 			}
 		}
 	}
@@ -471,7 +516,7 @@ func (r *ToolRegistry) GetSummaries() []string {
 	for _, name := range sorted {
 		entry := r.tools[name]
 
-		if !entry.IsCore && entry.TTL <= 0 {
+		if !entry.IsCore && !r.discovered[name] {
 			continue
 		}
 
@@ -480,7 +525,7 @@ func (r *ToolRegistry) GetSummaries() []string {
 	return summaries
 }
 
-// GetAll returns all registered tools (both core and non-core with TTL > 0).
+// GetAll returns all registered tools (both core and discovered non-core).
 // Used by SubTurn to inherit parent's tool set.
 func (r *ToolRegistry) GetAll() []Tool {
 	r.mu.RLock()
@@ -491,8 +536,8 @@ func (r *ToolRegistry) GetAll() []Tool {
 	for _, name := range sorted {
 		entry := r.tools[name]
 
-		// Include core tools and non-core tools with active TTL
-		if entry.IsCore || entry.TTL > 0 {
+		// Include core tools and discovered non-core tools
+		if entry.IsCore || r.discovered[name] {
 			tools = append(tools, entry.Tool)
 		}
 	}

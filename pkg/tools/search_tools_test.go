@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -50,105 +49,6 @@ func setupPopulatedRegistry() *ToolRegistry {
 	return reg
 }
 
-func TestRegexSearchTool_Execute(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewRegexSearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	t.Run("Empty Pattern Error", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Missing or invalid 'pattern'") {
-			t.Errorf("Expected missing pattern error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Invalid Regex Syntax", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "[unclosed"})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Invalid regex pattern syntax") {
-			t.Errorf("Expected regex syntax error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("No Match Found", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "alien"})
-		if res.IsError || !strings.Contains(res.ForLLM, "No tools found matching") {
-			t.Errorf("Expected 'no tools found' message, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Successful Match & Promotion", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "system"})
-
-		if res.IsError {
-			t.Fatalf("Unexpected error: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "SUCCESS: These tools have been temporarily UNLOCKED") {
-			t.Errorf("Expected success string, got: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "mcp_read_file") {
-			t.Errorf("Expected 'mcp_read_file' in results")
-		}
-
-		// Verify that the TTL has been updated for the tools found
-		reg.mu.RLock()
-		defer reg.mu.RUnlock()
-		if reg.tools["mcp_read_file"].TTL != 5 {
-			t.Errorf("Expected TTL of 'mcp_read_file' to be promoted to 5, got %d", reg.tools["mcp_read_file"].TTL)
-		}
-		if reg.tools["mcp_fetch_net"].TTL != 0 {
-			t.Errorf("Expected 'mcp_fetch_net' to NOT be promoted (TTL=0)")
-		}
-	})
-}
-
-func TestBM25SearchTool_Execute(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewBM25SearchTool(reg, 3, 10)
-	ctx := context.Background()
-
-	t.Run("Empty Query Error", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "   "})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Missing or invalid 'query'") {
-			t.Errorf("Expected missing query error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("No Match Found", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "aliens spaceships"})
-		if res.IsError || !strings.Contains(res.ForLLM, "No tools found matching") {
-			t.Errorf("Expected 'no tools found', got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Successful Match & Promotion", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "read files"})
-
-		if res.IsError {
-			t.Fatalf("Unexpected error: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "mcp_read_file") {
-			t.Errorf("Expected 'mcp_read_file' in BM25 results")
-		}
-
-		reg.mu.RLock()
-		defer reg.mu.RUnlock()
-		if reg.tools["mcp_read_file"].TTL != 3 {
-			t.Errorf("Expected TTL of 'mcp_read_file' to be promoted to 3")
-		}
-	})
-}
-
-func TestRegexSearchTool_PatternTooLong(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewRegexSearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	longPattern := strings.Repeat("a", MaxRegexPatternLength+1)
-	res := tool.Execute(ctx, map[string]any{"pattern": longPattern})
-	if !res.IsError || !strings.Contains(res.ForLLM, "Pattern too long") {
-		t.Errorf("Expected pattern too long error, got: %v", res.ForLLM)
-	}
-}
 
 func TestSearchRegex_ZeroMaxResults(t *testing.T) {
 	reg := setupPopulatedRegistry()
@@ -252,30 +152,27 @@ func TestToolRegistry_SearchLimitsAndCoreFiltering(t *testing.T) {
 	})
 }
 
-func TestGet_HiddenToolTTLLifecycle(t *testing.T) {
+func TestGet_HiddenToolDiscoveryLifecycle(t *testing.T) {
 	reg := NewToolRegistry()
 	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "test"})
 
-	// TTL=0 at registration → not gettable
+	// Not discovered → not gettable
 	_, ok := reg.Get("hidden_tool")
 	if ok {
-		t.Error("Expected hidden tool with TTL=0 to NOT be gettable")
+		t.Error("Expected undiscovered hidden tool to NOT be gettable")
 	}
 
-	// Promote → gettable
-	reg.PromoteTools([]string{"hidden_tool"}, 3)
+	// Promote → gettable (session-persistent)
+	reg.PromoteTools([]string{"hidden_tool"})
 	_, ok = reg.Get("hidden_tool")
 	if !ok {
 		t.Error("Expected promoted hidden tool to be gettable")
 	}
 
-	// Tick down to 0 → not gettable again
-	reg.TickTTL() // 3→2
-	reg.TickTTL() // 2→1
-	reg.TickTTL() // 1→0
+	// Stays gettable (no TTL decay)
 	_, ok = reg.Get("hidden_tool")
-	if ok {
-		t.Error("Expected hidden tool with TTL ticked to 0 to NOT be gettable")
+	if !ok {
+		t.Error("Expected discovered tool to stay gettable")
 	}
 
 	// Core tools remain always gettable
@@ -286,30 +183,8 @@ func TestGet_HiddenToolTTLLifecycle(t *testing.T) {
 	}
 }
 
-func TestBM25CacheInvalidation(t *testing.T) {
-	reg := NewToolRegistry()
-	reg.RegisterHidden(&mockSearchableTool{name: "tool_alpha", desc: "alpha functionality"})
 
-	tool := NewBM25SearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	// First search should find tool_alpha
-	res := tool.Execute(ctx, map[string]any{"query": "alpha"})
-	if !strings.Contains(res.ForLLM, "tool_alpha") {
-		t.Fatalf("Expected 'tool_alpha' in first search, got: %v", res.ForLLM)
-	}
-
-	// Register a new hidden tool
-	reg.RegisterHidden(&mockSearchableTool{name: "tool_beta", desc: "beta functionality"})
-
-	// Cache should be invalidated; new tool should be findable
-	res = tool.Execute(ctx, map[string]any{"query": "beta"})
-	if !strings.Contains(res.ForLLM, "tool_beta") {
-		t.Errorf("Expected 'tool_beta' after cache invalidation, got: %v", res.ForLLM)
-	}
-}
-
-func TestPromoteTools_ConcurrentWithTickTTL(t *testing.T) {
+func TestPromoteTools_ConcurrentAccess(t *testing.T) {
 	reg := NewToolRegistry()
 	for i := 0; i < 20; i++ {
 		reg.RegisterHidden(&mockSearchableTool{
@@ -323,17 +198,17 @@ func TestPromoteTools_ConcurrentWithTickTTL(t *testing.T) {
 		names[i] = fmt.Sprintf("concurrent_tool_%d", i)
 	}
 
-	// Hammer PromoteTools and TickTTL concurrently to detect races
+	// Hammer PromoteTools and Get concurrently to detect races
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 1000; i++ {
-			reg.PromoteTools(names, 5)
+			reg.PromoteTools(names)
 		}
 		close(done)
 	}()
 
 	for i := 0; i < 1000; i++ {
-		reg.TickTTL()
+		reg.Get(fmt.Sprintf("concurrent_tool_%d", i%20))
 	}
 	<-done
 }
