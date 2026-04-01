@@ -43,6 +43,20 @@ func NewResultStore(baseDir string) (*ResultStore, error) {
 	return &ResultStore{baseDir: baseDir}, nil
 }
 
+// FormatPreviewMessage returns the XML-wrapped preview message that replaces
+// the original tool result content in the LLM conversation.
+func (pr *PersistedResult) FormatPreviewMessage() string {
+	return fmt.Sprintf(
+		"<persisted-tool-result path=%q original_size=%q>\n%s</persisted-tool-result>\n"+
+			"This tool result was too large to include in full (%d bytes). "+
+			"A preview is shown above. Use read_file to access the complete output at the path above.",
+		pr.FilePath,
+		fmt.Sprintf("%d", pr.OrigSize),
+		pr.Preview,
+		pr.OrigSize,
+	)
+}
+
 // Persist writes the full content to disk as {toolUseID}.txt and returns a
 // PersistedResult with the file path, a preview truncated to previewMaxBytes,
 // and the original content size.

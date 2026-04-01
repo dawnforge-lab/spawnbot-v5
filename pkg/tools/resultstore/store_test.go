@@ -113,3 +113,26 @@ func TestPersist_FileNameFromToolUseID(t *testing.T) {
 		t.Errorf("file should be named after toolUseID: got %s", result.FilePath)
 	}
 }
+
+func TestFormatPreviewMessage(t *testing.T) {
+	pr := &PersistedResult{
+		FilePath: "/home/user/.spawnbot/workspace/sessions/abc/tool-results/toolu_123.txt",
+		Preview:  "first line\nsecond line\n",
+		OrigSize: 125430,
+	}
+
+	msg := pr.FormatPreviewMessage()
+
+	if !strings.Contains(msg, `path="/home/user/.spawnbot/workspace/sessions/abc/tool-results/toolu_123.txt"`) {
+		t.Error("message should contain file path")
+	}
+	if !strings.Contains(msg, `original_size="125430"`) {
+		t.Error("message should contain original size")
+	}
+	if !strings.Contains(msg, "first line\nsecond line\n") {
+		t.Error("message should contain preview content")
+	}
+	if !strings.Contains(msg, "read_file") {
+		t.Error("message should instruct model to use read_file")
+	}
+}
