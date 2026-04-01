@@ -988,17 +988,23 @@ func (m *artifactThenSendProvider) Chat(
 		if messages[i].Role != "tool" {
 			continue
 		}
-		start := strings.Index(messages[i].Content, "[file:")
-		if start < 0 {
-			continue
+		// Artifact may be tagged as [image:path] or [file:path] depending on MIME.
+		for _, prefix := range []string{"[image:", "[file:"} {
+			start := strings.Index(messages[i].Content, prefix)
+			if start < 0 {
+				continue
+			}
+			rest := messages[i].Content[start+len(prefix):]
+			end := strings.Index(rest, "]")
+			if end < 0 {
+				continue
+			}
+			artifactPath = rest[:end]
+			break
 		}
-		rest := messages[i].Content[start+len("[file:"):]
-		end := strings.Index(rest, "]")
-		if end < 0 {
-			continue
+		if artifactPath != "" {
+			break
 		}
-		artifactPath = rest[:end]
-		break
 	}
 	if artifactPath == "" {
 		return nil, fmt.Errorf("provider did not receive artifact path in tool result")
@@ -2482,11 +2488,11 @@ func TestResolveMediaRefs_ResolvesToBase64(t *testing.T) {
 	}
 	result := resolveMediaRefs(messages, store, config.DefaultMaxMediaSize)
 
-	if len(result[0].Media) != 1 {
-		t.Fatalf("expected 1 resolved media, got %d", len(result[0].Media))
+	if len(result[0].Media) != 0 {
+		t.Fatalf("expected 0 media (resolved to path tag), got %d", len(result[0].Media))
 	}
-	if !strings.HasPrefix(result[0].Media[0], "data:image/png;base64,") {
-		t.Fatalf("expected data:image/png;base64, prefix, got %q", result[0].Media[0][:40])
+	if !strings.Contains(result[0].Content, "[image:") {
+		t.Fatalf("expected [image: path tag in content, got %q", result[0].Content)
 	}
 }
 
@@ -2589,11 +2595,11 @@ func TestResolveMediaRefs_UsesMetaContentType(t *testing.T) {
 	}
 	result := resolveMediaRefs(messages, store, config.DefaultMaxMediaSize)
 
-	if len(result[0].Media) != 1 {
-		t.Fatalf("expected 1 media, got %d", len(result[0].Media))
+	if len(result[0].Media) != 0 {
+		t.Fatalf("expected 0 media (resolved to path tag), got %d", len(result[0].Media))
 	}
-	if !strings.HasPrefix(result[0].Media[0], "data:image/jpeg;base64,") {
-		t.Fatalf("expected jpeg prefix, got %q", result[0].Media[0][:30])
+	if !strings.Contains(result[0].Content, "[image:") {
+		t.Fatalf("expected [image: path tag in content, got %q", result[0].Content)
 	}
 }
 
@@ -2726,15 +2732,14 @@ func TestResolveMediaRefs_MixedImageAndFile(t *testing.T) {
 	}
 	result := resolveMediaRefs(messages, store, config.DefaultMaxMediaSize)
 
-	if len(result[0].Media) != 1 {
-		t.Fatalf("expected 1 media (image only), got %d", len(result[0].Media))
+	if len(result[0].Media) != 0 {
+		t.Fatalf("expected 0 media (all resolved to path tags), got %d", len(result[0].Media))
 	}
-	if !strings.HasPrefix(result[0].Media[0], "data:image/png;base64,") {
-		t.Fatal("expected image to be base64 encoded")
+	if !strings.Contains(result[0].Content, "[image:"+pngPath+"]") {
+		t.Fatalf("expected [image: path tag for PNG in content, got %q", result[0].Content)
 	}
-	expectedContent := "check these [file:" + pdfPath + "]"
-	if result[0].Content != expectedContent {
-		t.Fatalf("expected content %q, got %q", expectedContent, result[0].Content)
+	if !strings.Contains(result[0].Content, "[file:"+pdfPath+"]") {
+		t.Fatalf("expected [file: path tag for PDF in content, got %q", result[0].Content)
 	}
 }
 

@@ -472,10 +472,9 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				}()
 				// Release inbound media files after the turn completes. This defer fires after
 				// processMessage returns, at which point all media has been fully consumed:
-				// - Images are base64-encoded into data URLs in resolveMediaRefs before the LLM call.
+				// - Media refs are resolved to path tags injected into message content by resolveMediaRefs before the LLM call.
 				// - Audio is read from disk by transcribeAudioInMessage before the turn loop.
-				// - Non-image/audio files have their path injected into message content; any tool
-				//   reads happen synchronously inside runTurn before processMessage returns.
+				// - Any tool reads happen synchronously inside runTurn before processMessage returns.
 				defer func() {
 					if al.mediaStore != nil && msg.MediaScope != "" {
 						if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
