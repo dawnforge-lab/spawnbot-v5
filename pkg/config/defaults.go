@@ -489,6 +489,12 @@ func DefaultConfig() *Config {
 			WriteFile: ToolConfig{
 				Enabled: true,
 			},
+			ResultPersistence: ToolResultPersistenceConfig{
+				Enabled:            true,
+				DefaultMaxChars:    50000,
+				PerTurnBudgetChars: 200000,
+				PreviewSizeBytes:   2000,
+			},
 		},
 		Heartbeat: HeartbeatConfig{
 			Enabled:  true,

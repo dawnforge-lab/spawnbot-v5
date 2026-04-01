@@ -1166,6 +1166,15 @@ type ReadFileToolConfig struct {
 	MaxReadFileSize int  `json:"max_read_file_size"`
 }
 
+// ToolResultPersistenceConfig controls disk persistence of large tool results.
+type ToolResultPersistenceConfig struct {
+	Enabled            bool           `json:"enabled"`
+	DefaultMaxChars    int            `json:"default_max_chars"`
+	PerTurnBudgetChars int            `json:"per_turn_budget_chars"`
+	PreviewSizeBytes   int            `json:"preview_size_bytes"`
+	ToolOverrides      map[string]int `json:"tool_overrides,omitempty"`
+}
+
 type ToolsConfig struct {
 	AllowReadPaths  []string `json:"allow_read_paths"  env:"SPAWNBOT_TOOLS_ALLOW_READ_PATHS"`
 	AllowWritePaths []string `json:"allow_write_paths" env:"SPAWNBOT_TOOLS_ALLOW_WRITE_PATHS"`
@@ -1197,7 +1206,8 @@ type ToolsConfig struct {
 	SPI             ToolConfig         `json:"spi"                                                      envPrefix:"SPAWNBOT_TOOLS_SPI_"`
 	Subagent        ToolConfig         `json:"subagent"                                                 envPrefix:"SPAWNBOT_TOOLS_SUBAGENT_"`
 	WebFetch        ToolConfig         `json:"web_fetch"                                                envPrefix:"SPAWNBOT_TOOLS_WEB_FETCH_"`
-	WriteFile       ToolConfig         `json:"write_file"                                               envPrefix:"SPAWNBOT_TOOLS_WRITE_FILE_"`
+	WriteFile         ToolConfig                   `json:"write_file"                                               envPrefix:"SPAWNBOT_TOOLS_WRITE_FILE_"`
+	ResultPersistence ToolResultPersistenceConfig  `json:"result_persistence"`
 }
 
 // IsFilterSensitiveDataEnabled returns true if sensitive data filtering is enabled
