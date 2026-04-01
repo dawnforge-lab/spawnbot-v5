@@ -136,18 +136,6 @@ var toolCatalog = []toolCatalogEntry{
 		Category:    "hardware",
 		ConfigKey:   "spi",
 	},
-	{
-		Name:        "tool_search_tool_regex",
-		Description: "Discover hidden MCP tools by regex search when tool discovery is enabled.",
-		Category:    "discovery",
-		ConfigKey:   "mcp.discovery.use_regex",
-	},
-	{
-		Name:        "tool_search_tool_bm25",
-		Description: "Discover hidden MCP tools by semantic ranking when tool discovery is enabled.",
-		Category:    "discovery",
-		ConfigKey:   "mcp.discovery.use_bm25",
-	},
 }
 
 func (h *Handler) registerToolRoutes(mux *http.ServeMux) {
@@ -220,10 +208,6 @@ func buildToolSupport(cfg *config.Config) []toolSupportItem {
 					reasonCode = "requires_subagent"
 				}
 			}
-		case "tool_search_tool_regex":
-			status, reasonCode = resolveDiscoveryToolSupport(cfg, cfg.Tools.MCP.Discovery.UseRegex)
-		case "tool_search_tool_bm25":
-			status, reasonCode = resolveDiscoveryToolSupport(cfg, cfg.Tools.MCP.Discovery.UseBM25)
 		case "i2c", "spi":
 			status, reasonCode = resolveHardwareToolSupport(cfg.Tools.IsToolEnabled(entry.ConfigKey))
 		default:
@@ -250,19 +234,6 @@ func resolveHardwareToolSupport(enabled bool) (string, string) {
 	}
 	if runtime.GOOS != "linux" {
 		return "blocked", "requires_linux"
-	}
-	return "enabled", ""
-}
-
-func resolveDiscoveryToolSupport(cfg *config.Config, methodEnabled bool) (string, string) {
-	if !cfg.Tools.IsToolEnabled("mcp") {
-		return "disabled", ""
-	}
-	if !cfg.Tools.MCP.Discovery.Enabled {
-		return "blocked", "requires_mcp_discovery"
-	}
-	if !methodEnabled {
-		return "disabled", ""
 	}
 	return "enabled", ""
 }
@@ -316,18 +287,6 @@ func applyToolState(cfg *config.Config, toolName string, enabled bool) error {
 		cfg.Tools.I2C.Enabled = enabled
 	case "spi":
 		cfg.Tools.SPI.Enabled = enabled
-	case "tool_search_tool_regex":
-		cfg.Tools.MCP.Discovery.UseRegex = enabled
-		if enabled {
-			cfg.Tools.MCP.Enabled = true
-			cfg.Tools.MCP.Discovery.Enabled = true
-		}
-	case "tool_search_tool_bm25":
-		cfg.Tools.MCP.Discovery.UseBM25 = enabled
-		if enabled {
-			cfg.Tools.MCP.Enabled = true
-			cfg.Tools.MCP.Discovery.Enabled = true
-		}
 	default:
 		return fmt.Errorf("tool %q cannot be updated", toolName)
 	}
