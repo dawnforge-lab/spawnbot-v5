@@ -26,8 +26,6 @@ import (
 type ContextBuilder struct {
 	workspace          string
 	skillsLoader       *skills.SkillsLoader
-	toolDiscoveryBM25  bool
-	toolDiscoveryRegex bool
 	splitOnMarker      bool
 	agentRegistry      *agents.Registry
 	taskStore          *tasks.TaskStore
@@ -49,12 +47,6 @@ type ContextBuilder struct {
 	// build time. This catches nested file creations/deletions/mtime changes
 	// that may not update the top-level skill root directory mtime.
 	skillFilesAtCache map[string]time.Time
-}
-
-func (cb *ContextBuilder) WithToolDiscovery(useBM25, useRegex bool) *ContextBuilder {
-	cb.toolDiscoveryBM25 = useBM25
-	cb.toolDiscoveryRegex = useRegex
-	return cb
 }
 
 func (cb *ContextBuilder) WithSplitOnMarker(enabled bool) *ContextBuilder {
@@ -117,22 +109,7 @@ func (cb *ContextBuilder) getIdentity() string {
 }
 
 func (cb *ContextBuilder) getDiscoveryRule() string {
-	if !cb.toolDiscoveryBM25 && !cb.toolDiscoveryRegex {
-		return ""
-	}
-
-	var toolNames []string
-	if cb.toolDiscoveryBM25 {
-		toolNames = append(toolNames, `"tool_search_tool_bm25"`)
-	}
-	if cb.toolDiscoveryRegex {
-		toolNames = append(toolNames, `"tool_search_tool_regex"`)
-	}
-
-	return fmt.Sprintf(
-		`5. **Tool Discovery** - Your visible tools are limited to save memory, but a vast hidden library exists. If you lack the right tool for a task, BEFORE giving up, you MUST search using the %s tool. Do not refuse a request unless the search returns nothing. Found tools will temporarily unlock for your next turn.`,
-		strings.Join(toolNames, " or "),
-	)
+	return `5. **Tool Discovery** - Your visible tools are limited to save memory, but many more exist. If you lack the right tool for a task, BEFORE giving up, use the "search_tools" tool to find and activate what you need. Use keywords to search, then "select:name" to activate. Do not refuse a request unless search returns nothing.`
 }
 
 func (cb *ContextBuilder) BuildSystemPrompt() string {

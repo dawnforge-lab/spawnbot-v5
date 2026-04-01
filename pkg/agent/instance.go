@@ -117,12 +117,7 @@ func NewAgentInstance(
 
 	memStore := NewMemoryStore(workspace)
 
-	mcpDiscoveryActive := cfg.Tools.MCP.Enabled && cfg.Tools.MCP.Discovery.Enabled
 	contextBuilder := NewContextBuilder(workspace).
-		WithToolDiscovery(
-			mcpDiscoveryActive && cfg.Tools.MCP.Discovery.UseBM25,
-			mcpDiscoveryActive && cfg.Tools.MCP.Discovery.UseRegex,
-		).
 		WithSplitOnMarker(cfg.Agents.Defaults.SplitOnMarker)
 
 	// Semantic memory: register SQLite-backed memory tools when an

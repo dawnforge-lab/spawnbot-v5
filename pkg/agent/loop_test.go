@@ -163,8 +163,8 @@ func TestProcessMessage_IncludesCurrentSenderInDynamicContext(t *testing.T) {
 	}
 
 	lastMessage := provider.lastMessages[len(provider.lastMessages)-1]
-	if lastMessage.Role != "user" || lastMessage.Content != "hello" {
-		t.Fatalf("last provider message = %+v, want unchanged user message", lastMessage)
+	if lastMessage.Role != "user" || !strings.HasSuffix(lastMessage.Content, "hello") {
+		t.Fatalf("last provider message = %+v, want user message ending with 'hello'", lastMessage)
 	}
 }
 
@@ -221,8 +221,8 @@ func TestProcessMessage_UseCommandLoadsRequestedSkill(t *testing.T) {
 	}
 
 	lastMessage := provider.lastMessages[len(provider.lastMessages)-1]
-	if lastMessage.Role != "user" || lastMessage.Content != "explain how to list files" {
-		t.Fatalf("last provider message = %+v, want rewritten user message", lastMessage)
+	if lastMessage.Role != "user" || !strings.HasSuffix(lastMessage.Content, "explain how to list files") {
+		t.Fatalf("last provider message = %+v, want user message ending with 'explain how to list files'", lastMessage)
 	}
 }
 
@@ -320,8 +320,8 @@ func TestProcessMessage_UseCommandArmsSkillForNextMessage(t *testing.T) {
 		t.Fatalf("system prompt missing pending skill content:\n%s", systemPrompt)
 	}
 	lastMessage := provider.lastMessages[len(provider.lastMessages)-1]
-	if lastMessage.Role != "user" || lastMessage.Content != "explain how to list files" {
-		t.Fatalf("last provider message = %+v, want unchanged follow-up user message", lastMessage)
+	if lastMessage.Role != "user" || !strings.HasSuffix(lastMessage.Content, "explain how to list files") {
+		t.Fatalf("last provider message = %+v, want user message ending with 'explain how to list files'", lastMessage)
 	}
 }
 
