@@ -89,14 +89,14 @@ func TestRegexSearchTool_Execute(t *testing.T) {
 			t.Errorf("Expected 'mcp_read_file' in results")
 		}
 
-		// Verify that the TTL has been updated for the tools found
+		// Verify that the tools found have been discovered
 		reg.mu.RLock()
 		defer reg.mu.RUnlock()
-		if reg.tools["mcp_read_file"].TTL != 5 {
-			t.Errorf("Expected TTL of 'mcp_read_file' to be promoted to 5, got %d", reg.tools["mcp_read_file"].TTL)
+		if !reg.discovered["mcp_read_file"] {
+			t.Errorf("Expected 'mcp_read_file' to be discovered")
 		}
-		if reg.tools["mcp_fetch_net"].TTL != 0 {
-			t.Errorf("Expected 'mcp_fetch_net' to NOT be promoted (TTL=0)")
+		if reg.discovered["mcp_fetch_net"] {
+			t.Errorf("Expected 'mcp_fetch_net' to NOT be discovered")
 		}
 	})
 }
@@ -132,8 +132,8 @@ func TestBM25SearchTool_Execute(t *testing.T) {
 
 		reg.mu.RLock()
 		defer reg.mu.RUnlock()
-		if reg.tools["mcp_read_file"].TTL != 3 {
-			t.Errorf("Expected TTL of 'mcp_read_file' to be promoted to 3")
+		if !reg.discovered["mcp_read_file"] {
+			t.Errorf("Expected 'mcp_read_file' to be discovered")
 		}
 	})
 }
@@ -252,30 +252,27 @@ func TestToolRegistry_SearchLimitsAndCoreFiltering(t *testing.T) {
 	})
 }
 
-func TestGet_HiddenToolTTLLifecycle(t *testing.T) {
+func TestGet_HiddenToolDiscoveryLifecycle(t *testing.T) {
 	reg := NewToolRegistry()
 	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "test"})
 
-	// TTL=0 at registration → not gettable
+	// Not discovered → not gettable
 	_, ok := reg.Get("hidden_tool")
 	if ok {
-		t.Error("Expected hidden tool with TTL=0 to NOT be gettable")
+		t.Error("Expected undiscovered hidden tool to NOT be gettable")
 	}
 
-	// Promote → gettable
-	reg.PromoteTools([]string{"hidden_tool"}, 3)
+	// Promote → gettable (session-persistent)
+	reg.PromoteTools([]string{"hidden_tool"})
 	_, ok = reg.Get("hidden_tool")
 	if !ok {
 		t.Error("Expected promoted hidden tool to be gettable")
 	}
 
-	// Tick down to 0 → not gettable again
-	reg.TickTTL() // 3→2
-	reg.TickTTL() // 2→1
-	reg.TickTTL() // 1→0
+	// Stays gettable (no TTL decay)
 	_, ok = reg.Get("hidden_tool")
-	if ok {
-		t.Error("Expected hidden tool with TTL ticked to 0 to NOT be gettable")
+	if !ok {
+		t.Error("Expected discovered tool to stay gettable")
 	}
 
 	// Core tools remain always gettable
@@ -309,7 +306,7 @@ func TestBM25CacheInvalidation(t *testing.T) {
 	}
 }
 
-func TestPromoteTools_ConcurrentWithTickTTL(t *testing.T) {
+func TestPromoteTools_ConcurrentAccess(t *testing.T) {
 	reg := NewToolRegistry()
 	for i := 0; i < 20; i++ {
 		reg.RegisterHidden(&mockSearchableTool{
@@ -323,17 +320,17 @@ func TestPromoteTools_ConcurrentWithTickTTL(t *testing.T) {
 		names[i] = fmt.Sprintf("concurrent_tool_%d", i)
 	}
 
-	// Hammer PromoteTools and TickTTL concurrently to detect races
+	// Hammer PromoteTools and Get concurrently to detect races
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < 1000; i++ {
-			reg.PromoteTools(names, 5)
+			reg.PromoteTools(names)
 		}
 		close(done)
 	}()
 
 	for i := 0; i < 1000; i++ {
-		reg.TickTTL()
+		reg.Get(fmt.Sprintf("concurrent_tool_%d", i%20))
 	}
 	<-done
 }

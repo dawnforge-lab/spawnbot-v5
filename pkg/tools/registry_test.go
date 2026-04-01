@@ -402,9 +402,9 @@ func TestToolRegistry_Clone_PreservesHiddenToolState(t *testing.T) {
 
 	clone := r.Clone()
 
-	// Hidden tools with TTL=0 should not be gettable (same behavior as parent)
+	// Undiscovered hidden tools should not be gettable (same behavior as parent)
 	if _, ok := clone.Get("mcp_tool"); ok {
-		t.Error("expected hidden tool with TTL=0 to be invisible in clone")
+		t.Error("expected undiscovered hidden tool to be invisible in clone")
 	}
 
 	// But the entry should exist (count includes hidden tools)
@@ -413,28 +413,18 @@ func TestToolRegistry_Clone_PreservesHiddenToolState(t *testing.T) {
 	}
 }
 
-func TestToolRegistry_Clone_PreservesTTLValue(t *testing.T) {
+func TestToolRegistry_Clone_PreservesDiscoveredState(t *testing.T) {
 	r := NewToolRegistry()
-	r.RegisterHidden(newMockTool("ttl_tool", "tool with TTL"))
+	r.RegisterHidden(newMockTool("disc_tool", "tool to discover"))
 
-	// Manually set a non-zero TTL on the entry
-	r.mu.RLock()
-	if entry, ok := r.tools["ttl_tool"]; ok {
-		entry.TTL = 5
-	}
-	r.mu.RUnlock()
+	// Discover the tool
+	r.PromoteTools([]string{"disc_tool"})
 
 	clone := r.Clone()
 
-	// Verify TTL value is preserved in the clone
-	clone.mu.RLock()
-	defer clone.mu.RUnlock()
-	entry, ok := clone.tools["ttl_tool"]
-	if !ok {
-		t.Fatal("expected ttl_tool to exist in clone")
-	}
-	if entry.TTL != 5 {
-		t.Errorf("expected TTL=5 in clone, got %d", entry.TTL)
+	// Verify discovered state is preserved in the clone
+	if _, ok := clone.Get("disc_tool"); !ok {
+		t.Fatal("expected discovered tool to be gettable in clone")
 	}
 }
 
@@ -730,5 +720,170 @@ func TestToolRegistry_ExecuteWithContext_SanitizesInlineMediaWithoutStore(t *tes
 	}
 	if !strings.Contains(result.ForLLM, inlineMediaOmittedMessage) {
 		t.Fatalf("expected inline media omission note, got %q", result.ForLLM)
+	}
+}
+
+// --- Session-persistent discovery tests ---
+
+func TestRegistry_DiscoveredToolIsGettable(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "a hidden tool"})
+
+	// Before discovery, Get should fail
+	if _, ok := reg.Get("hidden_tool"); ok {
+		t.Fatal("hidden tool should not be gettable before discovery")
+	}
+
+	// After discovery, Get should succeed
+	reg.PromoteTools([]string{"hidden_tool"})
+	tool, ok := reg.Get("hidden_tool")
+	if !ok {
+		t.Fatal("discovered tool should be gettable")
+	}
+	if tool.Name() != "hidden_tool" {
+		t.Fatalf("expected tool name 'hidden_tool', got %q", tool.Name())
+	}
+}
+
+func TestRegistry_DiscoveryPersistsAcrossCalls(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.RegisterHidden(&mockSearchableTool{name: "persistent", desc: "persists"})
+
+	reg.PromoteTools([]string{"persistent"})
+
+	// Call Get multiple times — should always work (no TTL decay)
+	for i := 0; i < 10; i++ {
+		if _, ok := reg.Get("persistent"); !ok {
+			t.Fatalf("discovered tool should persist, failed on call %d", i)
+		}
+	}
+}
+
+func TestRegistry_GetDeferredNames(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.Register(&mockSearchableTool{name: "core_tool", desc: "core"})
+	reg.RegisterHidden(&mockSearchableTool{name: "z_tool", desc: "z"})
+	reg.RegisterHidden(&mockSearchableTool{name: "a_tool", desc: "a"})
+	reg.RegisterHidden(&mockSearchableTool{name: "m_tool", desc: "m"})
+
+	names := reg.GetDeferredNames()
+	expected := []string{"a_tool", "m_tool", "z_tool"}
+	if len(names) != len(expected) {
+		t.Fatalf("expected %d deferred names, got %d: %v", len(expected), len(names), names)
+	}
+	for i, name := range names {
+		if name != expected[i] {
+			t.Errorf("expected names[%d] = %q, got %q", i, expected[i], name)
+		}
+	}
+
+	// Discover one, list should shrink
+	reg.PromoteTools([]string{"m_tool"})
+	names = reg.GetDeferredNames()
+	expected = []string{"a_tool", "z_tool"}
+	if len(names) != len(expected) {
+		t.Fatalf("after discovery, expected %d deferred names, got %d: %v", len(expected), len(names), names)
+	}
+	for i, name := range names {
+		if name != expected[i] {
+			t.Errorf("after discovery, expected names[%d] = %q, got %q", i, expected[i], name)
+		}
+	}
+}
+
+func TestRegistry_ToProviderDefs_ExcludesUndiscovered(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.Register(&mockSearchableTool{name: "core_tool", desc: "core"})
+	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "hidden"})
+
+	defs := reg.ToProviderDefs()
+	for _, d := range defs {
+		if d.Function.Name == "hidden_tool" {
+			t.Fatal("undiscovered hidden tool should not appear in ToProviderDefs")
+		}
+	}
+
+	// After discovery it should appear
+	reg.PromoteTools([]string{"hidden_tool"})
+	defs = reg.ToProviderDefs()
+	found := false
+	for _, d := range defs {
+		if d.Function.Name == "hidden_tool" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("discovered tool should appear in ToProviderDefs")
+	}
+}
+
+func TestRegistry_GetDeferredTools(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.Register(&mockSearchableTool{name: "core_tool", desc: "core"})
+	reg.RegisterHidden(&mockSearchableTool{name: "deferred1", desc: "d1"})
+	reg.RegisterHidden(&mockSearchableTool{name: "deferred2", desc: "d2"})
+
+	entries := reg.GetDeferredTools()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 deferred tools, got %d", len(entries))
+	}
+
+	// Discover one
+	reg.PromoteTools([]string{"deferred1"})
+	entries = reg.GetDeferredTools()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 deferred tool after discovery, got %d", len(entries))
+	}
+	if entries[0].Tool.Name() != "deferred2" {
+		t.Errorf("expected remaining deferred tool to be 'deferred2', got %q", entries[0].Tool.Name())
+	}
+}
+
+func TestRegistry_RegisterHiddenWithHint(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.RegisterHiddenWithHint(&mockSearchableTool{name: "hinted", desc: "a hinted tool"}, "search keyword")
+
+	entry, exists := reg.tools["hinted"]
+	if !exists {
+		t.Fatal("tool should be registered")
+	}
+	if entry.SearchHint != "search keyword" {
+		t.Errorf("expected SearchHint %q, got %q", "search keyword", entry.SearchHint)
+	}
+	if entry.IsCore {
+		t.Error("tool registered with RegisterHiddenWithHint should not be core")
+	}
+}
+
+func TestRegistry_Clone_CopiesDiscovered(t *testing.T) {
+	reg := NewToolRegistry()
+	reg.Register(&mockSearchableTool{name: "core_tool", desc: "core"})
+	reg.RegisterHiddenWithHint(&mockSearchableTool{name: "hidden_tool", desc: "hidden"}, "my hint")
+
+	// Discover the hidden tool
+	reg.PromoteTools([]string{"hidden_tool"})
+
+	clone := reg.Clone()
+
+	// Clone should have the discovered state
+	if _, ok := clone.Get("hidden_tool"); !ok {
+		t.Fatal("cloned registry should preserve discovered state")
+	}
+
+	// Clone should have the SearchHint
+	entry, exists := clone.tools["hidden_tool"]
+	if !exists {
+		t.Fatal("hidden_tool should exist in clone")
+	}
+	if entry.SearchHint != "my hint" {
+		t.Errorf("expected SearchHint %q in clone, got %q", "my hint", entry.SearchHint)
+	}
+
+	// Discovering in clone should not affect original
+	reg.RegisterHidden(&mockSearchableTool{name: "another", desc: "another"})
+	clone.PromoteTools([]string{"another"}) // should not exist in clone
+	if _, ok := reg.Get("another"); ok {
+		t.Fatal("discovering in clone should not affect original (tool was not in clone)")
 	}
 }

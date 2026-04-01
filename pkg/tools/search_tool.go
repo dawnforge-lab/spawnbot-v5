@@ -197,8 +197,8 @@ func formatDiscoveryResponse(registry *ToolRegistry, results []ToolSearchResult,
 	for i, r := range results {
 		names[i] = r.Name
 	}
-	registry.PromoteTools(names, ttl)
-	logger.InfoCF("discovery", "Promoted tools", map[string]any{"tools": names, "ttl": ttl})
+	registry.PromoteTools(names)
+	logger.InfoCF("discovery", "Promoted tools", map[string]any{"tools": names})
 
 	b, err := json.Marshal(results)
 	if err != nil {
