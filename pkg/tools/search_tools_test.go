@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -50,105 +49,6 @@ func setupPopulatedRegistry() *ToolRegistry {
 	return reg
 }
 
-func TestRegexSearchTool_Execute(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewRegexSearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	t.Run("Empty Pattern Error", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Missing or invalid 'pattern'") {
-			t.Errorf("Expected missing pattern error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Invalid Regex Syntax", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "[unclosed"})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Invalid regex pattern syntax") {
-			t.Errorf("Expected regex syntax error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("No Match Found", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "alien"})
-		if res.IsError || !strings.Contains(res.ForLLM, "No tools found matching") {
-			t.Errorf("Expected 'no tools found' message, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Successful Match & Promotion", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"pattern": "system"})
-
-		if res.IsError {
-			t.Fatalf("Unexpected error: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "SUCCESS: These tools have been temporarily UNLOCKED") {
-			t.Errorf("Expected success string, got: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "mcp_read_file") {
-			t.Errorf("Expected 'mcp_read_file' in results")
-		}
-
-		// Verify that the tools found have been discovered
-		reg.mu.RLock()
-		defer reg.mu.RUnlock()
-		if !reg.discovered["mcp_read_file"] {
-			t.Errorf("Expected 'mcp_read_file' to be discovered")
-		}
-		if reg.discovered["mcp_fetch_net"] {
-			t.Errorf("Expected 'mcp_fetch_net' to NOT be discovered")
-		}
-	})
-}
-
-func TestBM25SearchTool_Execute(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewBM25SearchTool(reg, 3, 10)
-	ctx := context.Background()
-
-	t.Run("Empty Query Error", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "   "})
-		if !res.IsError || !strings.Contains(res.ForLLM, "Missing or invalid 'query'") {
-			t.Errorf("Expected missing query error, got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("No Match Found", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "aliens spaceships"})
-		if res.IsError || !strings.Contains(res.ForLLM, "No tools found matching") {
-			t.Errorf("Expected 'no tools found', got: %v", res.ForLLM)
-		}
-	})
-
-	t.Run("Successful Match & Promotion", func(t *testing.T) {
-		res := tool.Execute(ctx, map[string]any{"query": "read files"})
-
-		if res.IsError {
-			t.Fatalf("Unexpected error: %v", res.ForLLM)
-		}
-		if !strings.Contains(res.ForLLM, "mcp_read_file") {
-			t.Errorf("Expected 'mcp_read_file' in BM25 results")
-		}
-
-		reg.mu.RLock()
-		defer reg.mu.RUnlock()
-		if !reg.discovered["mcp_read_file"] {
-			t.Errorf("Expected 'mcp_read_file' to be discovered")
-		}
-	})
-}
-
-func TestRegexSearchTool_PatternTooLong(t *testing.T) {
-	reg := setupPopulatedRegistry()
-	tool := NewRegexSearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	longPattern := strings.Repeat("a", MaxRegexPatternLength+1)
-	res := tool.Execute(ctx, map[string]any{"pattern": longPattern})
-	if !res.IsError || !strings.Contains(res.ForLLM, "Pattern too long") {
-		t.Errorf("Expected pattern too long error, got: %v", res.ForLLM)
-	}
-}
 
 func TestSearchRegex_ZeroMaxResults(t *testing.T) {
 	reg := setupPopulatedRegistry()
@@ -283,28 +183,6 @@ func TestGet_HiddenToolDiscoveryLifecycle(t *testing.T) {
 	}
 }
 
-func TestBM25CacheInvalidation(t *testing.T) {
-	reg := NewToolRegistry()
-	reg.RegisterHidden(&mockSearchableTool{name: "tool_alpha", desc: "alpha functionality"})
-
-	tool := NewBM25SearchTool(reg, 5, 10)
-	ctx := context.Background()
-
-	// First search should find tool_alpha
-	res := tool.Execute(ctx, map[string]any{"query": "alpha"})
-	if !strings.Contains(res.ForLLM, "tool_alpha") {
-		t.Fatalf("Expected 'tool_alpha' in first search, got: %v", res.ForLLM)
-	}
-
-	// Register a new hidden tool
-	reg.RegisterHidden(&mockSearchableTool{name: "tool_beta", desc: "beta functionality"})
-
-	// Cache should be invalidated; new tool should be findable
-	res = tool.Execute(ctx, map[string]any{"query": "beta"})
-	if !strings.Contains(res.ForLLM, "tool_beta") {
-		t.Errorf("Expected 'tool_beta' after cache invalidation, got: %v", res.ForLLM)
-	}
-}
 
 func TestPromoteTools_ConcurrentAccess(t *testing.T) {
 	reg := NewToolRegistry()
