@@ -14,8 +14,9 @@ import (
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
-	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/skills"
@@ -451,6 +452,23 @@ func skillFilesChangedSince(skillRoots []string, filesAtCache map[string]time.Ti
 	}
 
 	return false
+}
+
+// BuildDeferredToolsAnnouncement returns an XML block listing all deferred
+// (undiscovered) tool names, or "" if none exist.
+func BuildDeferredToolsAnnouncement(registry *tools.ToolRegistry) string {
+	names := registry.GetDeferredNames()
+	if len(names) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("<available-deferred-tools>\n")
+	for _, name := range names {
+		sb.WriteString(name)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("</available-deferred-tools>")
+	return sb.String()
 }
 
 func (cb *ContextBuilder) LoadBootstrapFiles() (string, error) {

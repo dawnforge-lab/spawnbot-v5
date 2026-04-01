@@ -2765,10 +2765,7 @@ turnLoop:
 			}, nil
 		}
 
-		ts.agent.Tools.TickTTL()
-		logger.DebugCF("agent", "TTL tick after tool execution", map[string]any{
-			"agent_id": ts.agent.ID, "iteration": iteration,
-		})
+		// TTL ticking removed: discovered tools are now session-persistent (Task 1).
 	}
 
 	if steerMsgs := al.dequeueSteeringMessagesForScope(ts.sessionKey); len(steerMsgs) > 0 {
