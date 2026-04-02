@@ -824,3 +824,30 @@ func TestIsOverContextBudget_RealisticSession(t *testing.T) {
 		t.Error("realistic session should exceed 500 context window")
 	}
 }
+
+func TestCheckContextBudgetTier_Normal(t *testing.T) {
+	// 1000 token window, ~100 tokens of messages, 100 max_tokens = 20% usage
+	msgs := []providers.Message{{Role: "user", Content: strings.Repeat("a", 250)}}
+	tier := checkContextBudgetTier(1000, msgs, nil, 100)
+	if tier != BudgetTierNormal {
+		t.Fatalf("expected BudgetTierNormal, got %d", tier)
+	}
+}
+
+func TestCheckContextBudgetTier_Warning(t *testing.T) {
+	// 1000 token window, ~600 tokens of messages + 200 max_tokens = ~85% → warning
+	msgs := []providers.Message{{Role: "user", Content: strings.Repeat("a", 1500)}}
+	tier := checkContextBudgetTier(1000, msgs, nil, 200)
+	if tier != BudgetTierWarning {
+		t.Fatalf("expected BudgetTierWarning, got %d", tier)
+	}
+}
+
+func TestCheckContextBudgetTier_Compact(t *testing.T) {
+	// 1000 token window, ~800 tokens of messages + 200 max_tokens = ~105% → compact
+	msgs := []providers.Message{{Role: "user", Content: strings.Repeat("a", 2000)}}
+	tier := checkContextBudgetTier(1000, msgs, nil, 200)
+	if tier != BudgetTierCompact {
+		t.Fatalf("expected BudgetTierCompact, got %d", tier)
+	}
+}

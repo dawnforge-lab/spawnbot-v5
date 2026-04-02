@@ -174,3 +174,39 @@ func isOverContextBudget(
 
 	return total > contextWindow
 }
+
+// ContextBudgetTier indicates the urgency level for context management.
+type ContextBudgetTier int
+
+const (
+	// BudgetTierNormal means context is within comfortable limits.
+	BudgetTierNormal ContextBudgetTier = iota
+	// BudgetTierWarning means context is approaching the limit (>80%).
+	BudgetTierWarning
+	// BudgetTierCompact means context has exceeded the limit and compaction is needed (>90%).
+	BudgetTierCompact
+)
+
+// checkContextBudgetTier returns the current budget tier based on usage percentage.
+func checkContextBudgetTier(
+	contextWindow int,
+	messages []providers.Message,
+	toolDefs []providers.ToolDefinition,
+	maxTokens int,
+) ContextBudgetTier {
+	msgTokens := 0
+	for _, m := range messages {
+		msgTokens += estimateMessageTokens(m)
+	}
+	toolTokens := estimateToolDefsTokens(toolDefs)
+	total := msgTokens + toolTokens + maxTokens
+
+	usage := float64(total) / float64(contextWindow)
+	if usage > 0.9 {
+		return BudgetTierCompact
+	}
+	if usage > 0.8 {
+		return BudgetTierWarning
+	}
+	return BudgetTierNormal
+}
