@@ -1,345 +1,320 @@
 # Spawnbot
 
-A lightweight, self-evolving personal AI agent. Single binary, 16 channels, 25+ LLM providers, semantic memory, skills, MCP, and autonomous operation.
+A lightweight, self-evolving personal AI agent. Single binary, 16 channels, 25+ LLM providers, semantic memory, skills, and autonomous operation.
 
-## Install
+## Quick Start
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dawnforge-lab/spawnbot-v5/main/scripts/install.sh | bash
+spawnbot onboard
+spawnbot gateway
 ```
 
-Installs to `~/.spawnbot/bin/` and adds to PATH automatically. Go is installed locally if not found.
+## CLI Reference
 
-Then:
+### Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot onboard` | Interactive first-run setup wizard |
+| `spawnbot gateway` | Start gateway (all channels + background services) |
+| `spawnbot gateway -d` | Start gateway with debug logging |
+| `spawnbot agent` | Interactive CLI chat |
+| `spawnbot agent -m "msg"` | Single message (non-interactive) |
+| `spawnbot agent --model <name>` | Chat with a specific model |
+| `spawnbot status` | Show agent status |
+| `spawnbot version` | Show version and build info |
+| `spawnbot model` | Show or change default model |
+| `spawnbot auth` | Manage authentication and credentials |
+| `spawnbot migrate` | Migrate config from older versions |
+
+### Service Management
+
+Spawnbot runs as two systemd user services:
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `spawnbot.service` | 18790 | Gateway (API, channels, agent) |
+| `spawnbot-web.service` | 18800 | Web UI (React SPA) |
 
 ```bash
-spawnbot onboard          # Interactive setup wizard
-spawnbot agent -m "Hello" # Chat via CLI
-spawnbot gateway          # Start all channels
+# Start / stop / restart
+systemctl --user start spawnbot
+systemctl --user stop spawnbot
+systemctl --user restart spawnbot
+
+# Same for web UI
+systemctl --user restart spawnbot-web
+
+# Check status
+systemctl --user status spawnbot
+systemctl --user status spawnbot-web
+
+# View logs
+journalctl --user -u spawnbot -f
+journalctl --user -u spawnbot-web -f
+
+# Enable on boot
+systemctl --user enable spawnbot spawnbot-web
 ```
 
-## Features
+Health check: `curl http://localhost:18790/health`
 
-### Multi-Provider LLM Support
+### Scheduled Tasks
 
-25+ providers through protocol-based routing. Configure multiple models with automatic fallback chains:
+| Command | Description |
+|---------|-------------|
+| `spawnbot cron list` | List all scheduled tasks |
+| `spawnbot cron add` | Add a new scheduled task |
+| `spawnbot cron remove <id>` | Remove a scheduled task |
+| `spawnbot cron enable <id>` | Enable a task |
+| `spawnbot cron disable <id>` | Disable a task |
 
-| Protocol | Providers |
-|----------|-----------|
-| OpenAI-compatible | OpenAI, OpenRouter, Groq, Ollama, LiteLLM, vLLM, DeepSeek, Mistral, Moonshot, Cerebras, NVIDIA, Qwen, VolcEngine |
-| Anthropic native | Anthropic (Claude) |
-| Azure | Azure OpenAI (MSI + key auth) |
-| AWS | Bedrock |
-| Other | GitHub Copilot, Antigravity (Google Cloud OAuth) |
+### Heartbeat
 
-**Model routing**: Automatically routes simple queries to a cheaper/faster light model and complex queries to the primary model based on a configurable complexity threshold.
-
-**Fallback chains**: If the primary provider fails, the system automatically tries fallback models with cooldown tracking and round-robin load balancing.
-
-### Communication Channels (16)
-
-All channels share a unified message bus. Each can be independently enabled:
-
-| Channel | | Channel | | Channel |
-|---------|---|---------|---|---------|
-| Telegram | | Discord | | Slack |
-| WhatsApp | | Matrix (E2EE) | | WeChat |
-| Wecom | | DingTalk | | Feishu |
-| QQ | | Line | | IRC |
-| OneBot | | Pico (Web) | | MaixCam |
-| WebSocket | | | | |
-
-### Identity System
-
-The agent's personality and rules live in markdown files in the workspace:
-
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Core identity, personality, rules (guarded against self-modification) |
-| `USER.md` | User profile, preferences, timezone |
-| `GOALS.md` | Current objectives and priorities |
-| `PLAYBOOK.md` | Standard operating procedures, skill creation guides |
-| `HEARTBEAT.md` | Periodic autonomous tasks |
-
-### Memory (3-Tier)
-
-1. **Session history** (JSONL) -- Per-conversation message logs with append-only crash-safe storage. Two-tier compaction: proactive summarization at 20 messages or 75% context window, emergency compression as fallback.
-
-2. **Daily notes** (`memory/YYYYMM/YYYYMMDD.md`) + long-term memory (`memory/MEMORY.md`) -- Key facts automatically flushed from conversation before compaction and every 15 messages. LLM-based deduplication prevents redundant entries. Included in agent context via on-demand tool reads.
-
-3. **Semantic memory** (SQLite + vector embeddings, requires CGO) -- FTS5 full-text search plus vector similarity with temporal decay scoring. Configurable embedding provider (Gemini, OpenAI).
-
-### Task Tracking
-
-Persistent task system for tracking work across sessions and heartbeats:
-
-- **JSON-backed store** (`~/.spawnbot/workspace/tasks.json`) with atomic writes
-- **Single `tasks` tool** with actions: `create`, `list`, `get`, `update`, `complete`, `fail`
-- **System prompt integration**: active tasks shown in agent context (full list under 10, count + top 5 above)
-- **Heartbeat integration**: pending tasks injected into heartbeat prompt for autonomous follow-up
-- **7-day TTL**: completed/failed tasks auto-cleaned on startup
-- **Agent tracking**: records which agent type worked on each task
-- **Corruption recovery**: if `tasks.json` is corrupted, warning shown in system prompt so the agent can fix it
+| Command | Description |
+|---------|-------------|
+| `spawnbot heartbeat status` | Show heartbeat config |
+| `spawnbot heartbeat set-interval -m <min>` | Set interval (minimum 5 min) |
 
 ### Skills
 
-Extensible capability system with 3-tier priority (workspace > global > builtin):
+| Command | Description |
+|---------|-------------|
+| `spawnbot skills install <name>` | Install from registry |
 
-- **SKILL.md** with YAML frontmatter defines each skill's metadata, triggers, and instructions
-- **Progressive disclosure**: metadata loaded at startup, body loaded on activation, resources loaded on demand
-- **Argument substitution**: Skills accept parameters via `${ARGUMENTS}`, `${ARG1}`..`${ARGN}`, `${SKILL_DIR}`, `${WORKSPACE}`
-- **Execution contexts**: Skills run inline (default), as sync subagent (`fork`), or async subagent (`spawn`)
-- **Slash commands**: Users invoke skills via `/skill name args`; agent invokes via `use_skill` tool
-- **Tool permissions**: Skills can declare `allowed_tools` for subagent execution
-- **Skill creator**: Built-in skill with scaffolding scripts (`init_skill.py`, `package_skill.py`) and reference docs
-- **ClawHub registry**: Remote skill search and installation
+### Reset and Uninstall
+
+| Command | Description |
+|---------|-------------|
+| `spawnbot reset` | Delete configs, memories, sessions. Keeps binary. |
+| `spawnbot reset -y` | Skip confirmation |
+| `spawnbot nuke` | Full uninstall (removes `~/.spawnbot/`, services, PATH) |
+| `spawnbot nuke -y` | Skip confirmation |
+
+---
+
+## Features
+
+### LLM Providers (25+)
+
+Protocol-based routing with automatic fallback chains:
+
+| Protocol | Providers |
+|----------|-----------|
+| OpenAI-compatible | OpenAI, OpenRouter, Groq, Ollama, DeepSeek, Mistral, Moonshot, Cerebras, NVIDIA, Qwen, VolcEngine, LiteLLM, vLLM |
+| Native | Anthropic (Claude), Gemini |
+| Cloud | Azure OpenAI, AWS Bedrock |
+| Other | GitHub Copilot, Antigravity (Google Cloud OAuth) |
+
+Model routing sends simple queries to a cheaper model and complex queries to the primary model.
+
+### Channels (16)
+
+All channels share a unified message bus and can be independently enabled:
+
+Telegram, Discord, Slack, WhatsApp, Matrix (E2EE), WeChat, Wecom, DingTalk, Feishu, QQ, Line, IRC, OneBot, Pico (Web), MaixCam, WebSocket
+
+### Identity
+
+Markdown files in the workspace define the agent's personality and behavior:
+
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Core identity and personality (guarded against self-modification) |
+| `AGENTS.md` | Behavioral instructions and operating procedures |
+| `USER.md` | User profile and preferences |
+| `GOALS.md` | Current objectives |
+| `HEARTBEAT.md` | Periodic autonomous tasks |
+
+### Memory
+
+1. **Session history** -- JSONL per-conversation logs. Two-tier compaction: proactive summarization at 20 messages or 75% context, emergency compression as fallback.
+2. **Daily notes** (`memory/YYYYMM/YYYYMMDD.md`) + long-term (`memory/MEMORY.md`) -- Key facts flushed from conversation before compaction. LLM-based deduplication.
+3. **Semantic memory** (SQLite + vector embeddings) -- FTS5 full-text search plus vector similarity with temporal decay. Configurable embedding provider (Gemini, OpenAI).
+
+### Tasks
+
+Persistent task tracking across sessions:
+- JSON-backed store with atomic writes
+- Actions: create, list, get, update, complete, fail
+- Active tasks shown in agent context
+- Pending tasks injected into heartbeat for autonomous follow-up
+- 7-day TTL auto-cleanup
+
+### Skills
+
+Extensible capabilities with 3-tier priority (workspace > global > builtin):
+
+- `SKILL.md` with YAML frontmatter per skill
+- Argument substitution (`${ARGUMENTS}`, `${ARG1}`, etc.)
+- Execution contexts: inline (default), fork (sync subagent), spawn (async subagent)
+- Slash commands: `/skill name args`
+- ClawHub registry for remote search and install
+- Built-in skill creator with scaffolding tools
+
+**Default skills:**
+
+| Skill | Purpose |
+|-------|---------|
+| `weather` | Weather lookups via wttr.in and Open-Meteo |
+| `agent-browser` | Browser automation via Chrome CDP (requires `npm i -g agent-browser`) |
+| `poller` | Create background polling jobs (RSS, email, web changes) via cron |
+| `wallet` | Coinbase agentic wallet (send USDC, trade, x402 marketplace) |
+| `summarize` | Conversation summarization |
+| `skill-creator` | Scaffold new skills |
+| `github` | GitHub operations |
+| `tmux` | Terminal multiplexing |
 
 ### Agent Definitions
 
-Specialized subagents defined as markdown files with YAML frontmatter. Each agent type has its own system prompt, tool restrictions, model override, and execution limits.
+Specialized subagents as markdown files with YAML frontmatter. Each has its own system prompt, tool restrictions, model override, and limits.
 
-**4 builtin agents:**
+| Agent | Purpose |
+|-------|---------|
+| `researcher` | Gather information (read-only) |
+| `coder` | Write code (file + exec, no messaging) |
+| `reviewer` | Review work (read-only) |
+| `planner` | Break down tasks (read + write, no exec) |
+| `self-improver` | Analyze struggles and create skills/agents |
 
-| Agent | Purpose | Tool Access |
-|-------|---------|-------------|
-| `researcher` | Gather information without side effects | Read-only (no writes, no exec, no messaging) |
-| `coder` | Write code, scripts, config files | Full file + exec access, no messaging |
-| `reviewer` | Review work for bugs and security issues | Read-only |
-| `planner` | Break down tasks into structured plans | Read + write (for plan files), no exec |
-| `self-improver` | Analyze struggles and create skills/agents | read + write + create_agent + subagent, no exec/messaging |
-
-**Custom agents:** Create new agent types in `~/.spawnbot/workspace/agents/<name>/AGENT.md` or let the agent create them autonomously via the `create_agent` tool.
-
-**AGENT.md format:**
-```yaml
----
-name: sql-expert
-description: Specializes in database queries and schema design
-tools_deny:
-  - message
-  - send_file
-max_iterations: 20
-timeout: 5m
----
-
-You are a SQL expert agent. Focus on database queries and schema design...
-```
-
-Spawn agents via tools: `spawn` (async) or `subagent` (sync) with `agent_type` parameter. Workspace agents override builtins with the same name.
+Custom agents: `~/.spawnbot/workspace/agents/<name>/AGENT.md`
 
 ### Tools
 
-Built-in tools with configurable approval modes (YOLO / approval / review):
+Built-in tools with configurable approval modes:
 
-| Tool | Purpose |
-|------|---------|
-| `read_file`, `write_file`, `edit_file`, `append_file` | Workspace file operations |
-| `list_dir` | Directory listing |
-| `exec`, `shell` | Shell command execution |
-| `send_file`, `message` | Channel communication |
-| `spawn`, `subagent` | Sub-agent execution (async/sync) with agent type selection |
-| `create_agent` | Create new agent type definitions at runtime |
-| `connect_mcp`, `disconnect_mcp`, `list_mcp` | Runtime MCP server management |
-| `memory_store`, `memory_search` | Semantic memory operations |
-| `search_tools` | Skill/tool discovery |
-| `use_skill` | Activate skills with arguments (inline/fork/spawn) |
-| `skills_install`, `skills_search` | Skill management |
-| `tasks` | Persistent task tracking (create, list, update, complete, fail) |
-| `cron` | Scheduled task management |
-| `i2c`, `spi` | Hardware I/O (Linux embedded) |
+| Category | Tools |
+|----------|-------|
+| Files | `read_file`, `write_file`, `edit_file`, `append_file`, `list_dir` |
+| Execution | `exec` (shell commands) |
+| Communication | `message`, `send_file` |
+| Agents | `spawn` (async), `subagent` (sync), `create_agent` |
+| Memory | `memory_store`, `memory_search` |
+| Skills | `use_skill`, `search_tools`, `skills_install`, `skills_search` |
+| Tasks | `tasks` (create, list, get, update, complete, fail) |
+| Scheduling | `cron` (one-time, recurring, cron expressions) |
+| Wallet | `wallet` (status, login, verify, balance, send, trade, x402) |
+| MCP | `connect_mcp`, `disconnect_mcp`, `list_mcp` |
+| Hardware | `i2c`, `spi` (Linux embedded) |
 
 ### MCP (Model Context Protocol)
 
-Connect any MCP server at runtime -- no restart required:
-
-```json
-{
-  "mcp": {
-    "servers": [
-      {
-        "name": "postgres",
-        "command": ["python", "-m", "mcp_postgres"],
-        "args": ["--db-url", "postgresql://..."],
-        "transport": "stdio"
-      }
-    ]
-  }
-}
-```
-
-- Supports stdio, SSE, and HTTP transports
-- Hot-reload: the agent can `connect_mcp` / `disconnect_mcp` during conversation
-- Tool discovery with TTL-based promotion
-- Environment variable injection
+Connect MCP servers at runtime -- no restart required. Supports stdio, SSE, and HTTP transports. Hot-reload via `connect_mcp` / `disconnect_mcp`.
 
 ### Autonomy
 
-The agent can operate without user interaction:
-
-- **Heartbeat**: Periodic prompt execution (configurable interval, minimum 5 minutes, default 30 minutes), with main session context injection for situational awareness
-  - **HEARTBEAT_OK suppression**: When the agent has nothing to report, it replies `HEARTBEAT_OK` which is silently suppressed instead of sent to the user
-  - **Deduplication**: Identical alert messages are suppressed within a 24-hour window to prevent spam
-  - **Structured events**: Every heartbeat run emits a structured event (`sent`, `ok`, `skipped`, `failed`) with duration, preview, skip reason, and channel -- enabling monitoring and UI integration
-  - **Retry**: A retry channel allows re-triggering heartbeats when the main agent queue clears
-  - **Runtime interval changes**: The heartbeat interval can be changed at runtime via `SetInterval()` or the CLI
-- **Self-improvement loop**: Daily automated review of agent struggles. A `StruggleCollector` logs tool failures, user corrections, and repeated tool patterns during conversations. At a configurable hour (default 3 AM), a dedicated `self-improver` agent analyzes the log, creates skills or agent definitions to address recurring patterns, validates each creation with a test subagent, and reports results to the user. Failed creations are retried up to `max_retries` times before being reported as unresolved.
-- **Idle triggers**: Fire after channel inactivity threshold
-- **RSS polling**: Monitor feeds, summarize new items
-- **Cron scheduling**: Standard cron expressions for recurring tasks
+- **Heartbeat**: Periodic prompt execution (configurable interval, min 5 min). HEARTBEAT_OK suppression, deduplication, structured events, retry.
+- **Self-improvement**: Daily review of struggles. Collector logs tool failures, corrections, repeated patterns. Self-improver agent creates skills/agents to fix recurring issues.
+- **Idle triggers**: Fire after channel inactivity threshold.
+- **RSS polling**: Monitor feeds, notify on new items.
+- **Cron**: Standard cron expressions, shell command execution, direct message delivery.
 
 ### Security
 
-- **Credential encryption**: AES-256-GCM with SSH key derivation (HKDF-SHA256). Supports plaintext, file refs, encrypted, and environment variable formats
-- **Workspace restrictions**: Tools confined to workspace by default, configurable read/write path whitelists
-- **Approval modes**: YOLO (auto-approve), Approval (ask before dangerous ops), Review (audit all)
-- **Sensitive data filtering**: Credentials stripped from tool output before sending to LLM
+- AES-256-GCM credential encryption with SSH key derivation
+- Workspace restriction with configurable read/write path whitelists
+- Approval modes: YOLO, Approval, Review
+- Sensitive data filtering in tool output
 
 ### Voice
 
-Audio transcription via Groq Whisper, ElevenLabs Scribe, or audio-capable LLM models (GPT-4o-audio).
+Audio transcription via Groq Whisper, ElevenLabs Scribe, or audio-capable LLM models.
 
 ### Web UI
 
-React SPA (Vite + TanStack Router) with:
-- Streaming chat interface
-- Configuration editor with validation
-- Credential management
-- Model/provider setup
-- Skill browser
-- Channel configuration
-- Onboarding wizard
-- Real-time log viewer
+React SPA at http://localhost:18800 with streaming chat, config editor, credential management, skill browser, onboarding wizard, and real-time log viewer.
 
-## Architecture
-
-```
-cmd/spawnbot/          CLI entry point (Cobra)
-cmd/spawnbot-launcher-tui/  TUI launcher
-web/backend/           Go HTTP + WebSocket server
-web/frontend/          React SPA (embedded in binary)
-
-pkg/
-  agent/      Core loop, turn state machine, context building, memory flush
-  bus/        Inbound/outbound message routing
-  channels/   16 communication adapters
-  providers/  25+ LLM provider implementations + fallback chains
-  tools/      Tool registry + built-in tools + MCP wrappers
-  agents/     Agent definitions, registry, AGENT.md loader, builtins
-  tasks/      Persistent task store, summary generation, TTL cleanup
-  skills/     Skill loading, discovery, registry
-  memory/     JSONL session store + SQLite semantic memory
-  session/    Session management (JSONL backend)
-  config/     Configuration loading, validation, migration
-  routing/    Model routing (light/heavy) + agent binding
-  mcp/        MCP server lifecycle management
-  autonomy/   Idle monitor, RSS poller
-  heartbeat/  Periodic autonomous tasks + self-improvement loop trigger
-  struggles/  Struggle signal collection and log management
-  voice/      Audio transcription
-  identity/   SOUL.md loading
-  credential/ SSH-key encryption
-  workspace/  Workspace deployment (shared CLI + web)
-  state/      Persistent channel state
-  commands/   Built-in slash commands
-```
-
-### Message Flow
-
-```
-Channel (Telegram, Discord, web, CLI, ...)
-    |
-MessageBus (inbound)
-    |
-AgentLoop.Incoming()
-    |-- Resolve agent via bindings
-    |-- Load session history + summary
-    |-- Build context (identity + skills + tools + history)
-    |-- Route to light or heavy model
-    |
-    |  TURN LOOP:
-    |    LLM call --> tool calls --> execute --> feed results back
-    |    (up to MaxIterations)
-    |
-    |-- Save session
-    |-- Maybe summarize (background)
-    |-- Maybe flush memory (every 15 msgs)
-    |
-MessageBus (outbound)
-    |
-Channel.Send()
-```
+---
 
 ## Configuration
 
 ```
 ~/.spawnbot/
-  config.json            Main configuration
-  .security.yml          Encrypted credentials
+  config.json              Main configuration
+  .security.yml            Encrypted credentials
   workspace/
-    SOUL.md              Agent identity
-    USER.md              User profile
-    GOALS.md             Objectives
-    PLAYBOOK.md          Operating procedures
-    HEARTBEAT.md         Periodic tasks (user-editable checklist)
-    heartbeat.log        Heartbeat execution log
-    struggles.jsonl      Struggle signal log (tool errors, corrections, repeated patterns)
-    memory/              Daily notes + long-term memory
-      MEMORY.md
-      YYYYMM/YYYYMMDD.md
-    sessions/            Conversation history (JSONL)
-      heartbeat/         Isolated heartbeat session store
-    skills/              Installed skills
-    agents/              Custom agent definitions (AGENT.md)
-    state/               Persistent state
+    SOUL.md                Agent identity
+    AGENTS.md              Behavioral instructions
+    USER.md                User profile
+    GOALS.md               Objectives
+    HEARTBEAT.md           Periodic tasks
+    tasks.json             Task store
+    struggles.jsonl        Struggle signals
+    memory/                Daily notes + long-term memory
+    sessions/              Conversation history (JSONL)
+    skills/                Installed skills
+    agents/                Custom agent definitions
+    state/                 Persistent state
 ```
 
-### Heartbeat Configuration
+### Key Config Sections
 
-In `config.json`:
-
-```json
+```jsonc
 {
+  "agents": {
+    "defaults": {
+      "provider": "gemini-3-flash-preview",  // Default LLM provider
+      "max_tokens": 32768,
+      "max_tool_iterations": 30,
+      "approval_mode": "yolo"                // yolo | approval | review
+    }
+  },
   "heartbeat": {
     "enabled": true,
-    "interval": 30
-  }
-}
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `true` | Enable/disable the heartbeat service |
-| `interval` | int | `30` | Interval in minutes between heartbeat runs (minimum 5) |
-
-Environment variables: `SPAWNBOT_HEARTBEAT_ENABLED`, `SPAWNBOT_HEARTBEAT_INTERVAL`
-
-The heartbeat reads tasks from `HEARTBEAT.md` in the workspace. If the file is missing, a default template is created. If the file has no user tasks (nothing below the marker line), the heartbeat is silently skipped. The agent runs with a lightweight clone (5 iterations max, read-only tools: `read_file`, `list_dir`, `message`) to keep executions fast and safe.
-
-### Self-Improvement Configuration
-
-In `config.json`:
-
-```json
-{
+    "interval": 30                           // Minutes (min 5)
+  },
   "self_improve": {
     "enabled": true,
-    "hour": 3,
+    "hour": 3,                               // Daily review hour (0-23)
     "max_creations": 3,
     "max_retries": 2
+  },
+  "tools": {
+    "wallet": {
+      "enabled": true,
+      "email": "agent@example.com",          // Wallet auth email
+      "chain": "base",                       // base | base-sepolia
+      "max_send_amount": 100.0,
+      "max_trade_amount": 50.0,
+      "max_pay_amount": 1.0
+    }
   }
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `true` | Enable/disable the self-improvement loop |
-| `hour` | int | `3` | Hour (0-23) to run the daily review |
-| `max_creations` | int | `3` | Max skills/agents created per daily run |
-| `max_retries` | int | `2` | Max retry attempts per creation after test failure |
+---
 
-Environment variables: `SPAWNBOT_SELF_IMPROVE_ENABLED`, `SPAWNBOT_SELF_IMPROVE_HOUR`
+## Architecture
 
-The self-improvement loop writes struggle signals to `struggles.jsonl` during normal conversations (always on, negligible cost). The daily review only runs when `enabled: true`. Signals carry over if the review fails.
+```
+cmd/spawnbot/                CLI (Cobra)
+cmd/spawnbot-launcher-tui/   TUI launcher
+web/backend/                 Go HTTP + WebSocket server
+web/frontend/                React SPA (embedded in binary)
+
+pkg/
+  agent/       Core loop, turn state, context building, memory flush
+  bus/         Message routing (inbound/outbound)
+  channels/    16 communication adapters
+  providers/   25+ LLM providers + fallback chains
+  tools/       Tool registry + built-in tools + MCP wrappers
+  agents/      Agent definitions and registry
+  tasks/       Persistent task store
+  skills/      Skill loading and discovery
+  memory/      JSONL session store + SQLite semantic memory
+  config/      Configuration, validation, migration
+  routing/     Model routing (light/heavy)
+  mcp/         MCP server lifecycle
+  autonomy/    Idle monitor, RSS poller
+  heartbeat/   Periodic tasks + self-improvement trigger
+  struggles/   Struggle signal collection
+  cron/        Job scheduling
+  voice/       Audio transcription
+  identity/    SOUL.md loading
+  credential/  SSH-key encryption
+  workspace/   Workspace deployment
+```
 
 ## Building from Source
 
@@ -347,84 +322,14 @@ The self-improvement loop writes struggle signals to `struggles.jsonl` during no
 git clone https://github.com/dawnforge-lab/spawnbot-v5.git
 cd spawnbot-v5
 
-make build              # Build binary to ./build/
-make install            # Build + install to ~/.spawnbot/bin/
-
-# Full build with semantic memory (requires SQLite dev headers)
-CGO_ENABLED=1 make build
-
-# Cross-compile all platforms
-make build-all
-
-# Web launcher (includes React frontend)
-make build-launcher
-
-# Docker
-make docker-build       # Minimal Alpine
-make docker-build-full  # With Node.js for MCP servers
+make build                # Build to ./build/
+make install              # Build + install to ~/.spawnbot/bin/
+CGO_ENABLED=1 make build  # With semantic memory (requires SQLite headers)
+make build-all            # Cross-compile all platforms
+make docker-build         # Minimal Alpine container
 ```
 
-**Supported platforms**: linux/amd64, linux/arm64, linux/arm, linux/riscv64, linux/loong64, linux/mipsle, darwin/arm64, windows/amd64, netbsd/amd64, netbsd/arm64
-
-**Build tags**: `goolm` (Matrix crypto), `stdjson` (standard JSON), `fts5` (SQLite FTS), `whatsapp_native` (native WhatsApp)
-
-## CLI Commands
-
-### Core
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot onboard` | Interactive first-run setup wizard |
-| `spawnbot agent` | CLI chat mode (interactive) |
-| `spawnbot agent -m "message"` | Single message mode (non-interactive) |
-| `spawnbot gateway` | Start all channels and background services |
-| `spawnbot status` | Show agent status |
-| `spawnbot version` | Show version and build info |
-| `spawnbot migrate` | Migrate config from older versions |
-
-### Heartbeat
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot heartbeat status` | Show current heartbeat configuration (enabled, interval) |
-| `spawnbot heartbeat set-interval -m <minutes>` | Set heartbeat interval in minutes (minimum 5). Requires gateway restart. |
-
-### Scheduled Tasks (Cron)
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot cron list` | List all scheduled tasks |
-| `spawnbot cron add` | Add a new scheduled task |
-| `spawnbot cron remove <id>` | Remove a scheduled task |
-| `spawnbot cron enable <id>` | Enable a scheduled task |
-| `spawnbot cron disable <id>` | Disable a scheduled task |
-
-### Skills
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot skills install <name>` | Install a skill from the registry |
-
-### Model Configuration
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot model` | Manage model configuration |
-
-### Authentication
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot auth` | Manage authentication and credentials |
-
-### Reset & Uninstall
-
-| Command | Description |
-|---------|-------------|
-| `spawnbot reset` | Delete all configs, memories, sessions, skills, and cron jobs. Keeps the binary and Go runtime so you can re-run `spawnbot onboard`. Stops and removes systemd services. |
-| `spawnbot reset -y` | Same as above, skip confirmation prompt |
-| `spawnbot nuke` | Completely remove spawnbot from the system: deletes `~/.spawnbot/` entirely, removes systemd services, SSH encryption key, and PATH entry from shell rc files. |
-| `spawnbot nuke -y` | Same as above, skip confirmation prompt |
+**Platforms**: linux/amd64, linux/arm64, linux/arm, linux/riscv64, linux/loong64, linux/mipsle, darwin/arm64, windows/amd64, netbsd/amd64, netbsd/arm64
 
 ## License
 
