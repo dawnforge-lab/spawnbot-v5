@@ -105,6 +105,7 @@ const (
 	defaultResponse            = "The model returned an empty response. This may indicate a provider error or token limit."
 	toolLimitResponse          = "I ran out of tool steps for this task. Here's a summary of what I accomplished and what remains to be done."
 	toolWindDownWarning        = "[SYSTEM] You are approaching the tool iteration limit. You have 2 iterations left. Stop calling tools and respond NOW with: (1) what you've completed so far, (2) what still needs to be done. Do NOT call any more tools."
+	toolRepetitionWarning      = "[SYSTEM] You have called '%s' %d times this turn. You may be stuck in a loop. Pause and consider: why do you keep needing this tool? Try a different approach to achieve your goal."
 	handledToolResponseSummary = "Requested output delivered via tool attachment."
 	sessionKeyAgentPrefix      = "agent:"
 	metadataKeyAccountID       = "account_id"
@@ -1777,6 +1778,9 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 	var finalContent string
 	consecutiveToolErrors := 0
 	const maxConsecutiveToolErrors = 3
+	toolCallCounts := make(map[string]int)
+	toolLoopWarned := make(map[string]bool)
+	const repeatedToolThreshold = 3
 
 turnLoop:
 	for ts.currentIteration() < ts.agent.MaxIterations || len(pendingMessages) > 0 || func() bool {
@@ -2655,6 +2659,22 @@ turnLoop:
 				ts.agent.Sessions.AddFullMessage(ts.sessionKey, windDown)
 				messages = append(messages, windDown)
 				consecutiveToolErrors = 0
+			}
+
+			toolCallCounts[toolName]++
+			if toolCallCounts[toolName] >= repeatedToolThreshold && !toolLoopWarned[toolName] {
+				toolLoopWarned[toolName] = true
+				repWarn := providers.Message{
+					Role:    "user",
+					Content: fmt.Sprintf(toolRepetitionWarning, toolName, toolCallCounts[toolName]),
+				}
+				ts.agent.Sessions.AddFullMessage(ts.sessionKey, repWarn)
+				messages = append(messages, repWarn)
+				logger.WarnCF("agent", "Tool repetition warning injected", map[string]any{
+					"agent_id": ts.agent.ID,
+					"tool":     toolName,
+					"count":    toolCallCounts[toolName],
+				})
 			}
 
 			if steerMsgs := al.dequeueSteeringMessagesForScope(ts.sessionKey); len(steerMsgs) > 0 {
