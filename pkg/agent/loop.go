@@ -72,6 +72,8 @@ type AgentLoop struct {
 
 	reloadFunc   func() error
 	inboundHook  func(msg bus.InboundMessage) // optional hook called on every inbound message
+
+	compactionFailures int // consecutive compaction failures for circuit breaker
 }
 
 // processOptions configures how a message is processed
@@ -106,6 +108,7 @@ const (
 	toolLimitResponse          = "I ran out of tool steps for this task. Here's a summary of what I accomplished and what remains to be done."
 	toolWindDownWarning        = "[SYSTEM] You are approaching the tool iteration limit. You have 2 iterations left. Stop calling tools and respond NOW with: (1) what you've completed so far, (2) what still needs to be done. Do NOT call any more tools."
 	toolRepetitionWarning      = "[SYSTEM] You have called '%s' %d times this turn. You may be stuck in a loop. Pause and consider: why do you keep needing this tool? Try a different approach to achieve your goal."
+	compactionSummaryPrompt    = "Provide a concise summary of this conversation segment, preserving core context, key decisions, and task progress. Focus on what was accomplished, what was decided, and what is still in progress.\n\nCONVERSATION:\n%s"
 	handledToolResponseSummary = "Requested output delivered via tool attachment."
 	sessionKeyAgentPrefix      = "agent:"
 	metadataKeyAccountID       = "account_id"
@@ -2984,62 +2987,138 @@ func (al *AgentLoop) forceCompression(agent *AgentInstance, sessionKey string) (
 		return compressionResult{}, false
 	}
 
+	// Circuit breaker: after 3 consecutive failures, skip summarization.
+	const maxCompactionFailures = 3
+	skipSummarization := al.compactionFailures >= maxCompactionFailures
+
 	// Split at a Turn boundary so no tool-call sequence is torn apart.
-	// parseTurnBoundaries gives us the start of each Turn; we drop the
-	// oldest half of Turns and keep the most recent ones.
 	turns := parseTurnBoundaries(history)
 	var mid int
 	if len(turns) >= 2 {
 		mid = turns[len(turns)/2]
 	} else {
-		// Fewer than 2 Turns — fall back to message-level midpoint
-		// aligned to the nearest Turn boundary.
 		mid = findSafeBoundary(history, len(history)/2)
 	}
+
 	var keptHistory []providers.Message
+	var droppedMessages []providers.Message
+
 	if mid <= 0 {
-		// No safe Turn boundary — the entire history is a single Turn
-		// (e.g. one user message followed by a massive tool response).
-		// Keeping everything would leave the agent stuck in a context-
-		// exceeded loop, so fall back to keeping only the most recent
-		// user message. This breaks Turn atomicity as a last resort.
+		// No safe Turn boundary — keep only the most recent user message.
 		for i := len(history) - 1; i >= 0; i-- {
 			if history[i].Role == "user" {
 				keptHistory = []providers.Message{history[i]}
+				droppedMessages = history[:i]
 				break
 			}
 		}
 	} else {
+		droppedMessages = history[:mid]
 		keptHistory = history[mid:]
 	}
 
-	droppedCount := len(history) - len(keptHistory)
+	droppedCount := len(droppedMessages)
 
-	// Record compression in the session summary so BuildMessages includes it
-	// in the system prompt. We do not modify history messages themselves.
-	existingSummary := agent.Sessions.GetSummary(sessionKey)
-	compressionNote := fmt.Sprintf(
-		"[Emergency compression dropped %d oldest messages due to context limit]",
-		droppedCount,
-	)
-	if existingSummary != "" {
-		compressionNote = existingSummary + "\n\n" + compressionNote
+	// Stage 1: Flush key facts to daily notes before messages are lost.
+	al.flushMemoryPreCompaction(agent, droppedMessages)
+
+	// Stage 2: Summarize dropped messages and inject as replacement.
+	var summaryMsg string
+	if !skipSummarization && len(droppedMessages) > 0 {
+		summaryMsg = al.summarizeForCompaction(agent, droppedMessages)
 	}
-	agent.Sessions.SetSummary(sessionKey, compressionNote)
+
+	if summaryMsg != "" {
+		al.compactionFailures = 0 // reset circuit breaker on success
+
+		// Build post-compact restoration content.
+		var restoration strings.Builder
+		restoration.WriteString("[SYSTEM] Previous conversation was compacted. Summary of what was discussed:\n\n")
+		restoration.WriteString(summaryMsg)
+
+		// Re-inject deferred tools announcement.
+		if announcement := BuildDeferredToolsAnnouncement(agent.Tools); announcement != "" {
+			restoration.WriteString("\n\n")
+			restoration.WriteString(announcement)
+		}
+
+		compactMsg := providers.Message{
+			Role:    "user",
+			Content: restoration.String(),
+		}
+		keptHistory = append([]providers.Message{compactMsg}, keptHistory...)
+	} else {
+		if !skipSummarization {
+			al.compactionFailures++
+		}
+		// Fallback: record compression note in session summary (original behavior).
+		existingSummary := agent.Sessions.GetSummary(sessionKey)
+		compressionNote := fmt.Sprintf(
+			"[Emergency compression dropped %d oldest messages due to context limit]",
+			droppedCount,
+		)
+		if existingSummary != "" {
+			compressionNote = existingSummary + "\n\n" + compressionNote
+		}
+		agent.Sessions.SetSummary(sessionKey, compressionNote)
+	}
 
 	agent.Sessions.SetHistory(sessionKey, keptHistory)
 	agent.Sessions.Save(sessionKey)
 
 	logger.WarnCF("agent", "Forced compression executed", map[string]any{
-		"session_key":  sessionKey,
-		"dropped_msgs": droppedCount,
-		"new_count":    len(keptHistory),
+		"session_key":    sessionKey,
+		"dropped_msgs":   droppedCount,
+		"new_count":      len(keptHistory),
+		"has_summary":    summaryMsg != "",
+		"circuit_broken": skipSummarization,
 	})
 
 	return compressionResult{
 		DroppedMessages:   droppedCount,
 		RemainingMessages: len(keptHistory),
 	}, true
+}
+
+// summarizeForCompaction builds a concise LLM summary of messages being dropped.
+// Returns empty string on failure (caller falls back to blunt drop).
+func (al *AgentLoop) summarizeForCompaction(
+	agent *AgentInstance,
+	messages []providers.Message,
+) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Build conversation text, skipping tool results and oversized messages.
+	maxMessageChars := agent.ContextWindow // rough char limit per message
+	var convBuf strings.Builder
+	for _, m := range messages {
+		if m.Role != "user" && m.Role != "assistant" {
+			continue
+		}
+		content := strings.TrimSpace(m.Content)
+		if content == "" {
+			continue
+		}
+		if len(content) > maxMessageChars {
+			content = content[:maxMessageChars] + "..."
+		}
+		fmt.Fprintf(&convBuf, "%s: %s\n", m.Role, content)
+	}
+
+	if convBuf.Len() == 0 {
+		return ""
+	}
+
+	prompt := fmt.Sprintf(compactionSummaryPrompt, convBuf.String())
+	resp, err := al.retryLLMCall(ctx, agent, prompt, 2)
+	if err != nil || resp == nil || resp.Content == "" {
+		logger.WarnCF("agent", "Compaction summarization failed",
+			map[string]any{"error": fmt.Sprintf("%v", err), "agent_id": agent.ID})
+		return ""
+	}
+
+	return strings.TrimSpace(resp.Content)
 }
 
 // GetStartupInfo returns information about loaded tools and skills for logging.
