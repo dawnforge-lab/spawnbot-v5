@@ -22,5 +22,15 @@ Added in commit `9bb3095`. Preserves conversation context across sessions and co
 ## Session Architecture
 - Sessions never auto-rotate (no TTL/expiry)
 - JSONL backend with `.meta.json` for summary/skip offset
-- Two-tier compaction: proactive (background summarize at 20 msgs or 75% tokens) + reactive (emergency drop oldest 50% turns)
+- Two-tier compaction: proactive (background summarize at 20 msgs or 75% tokens) + reactive (emergency forceCompression)
 - `MemoryStore` reads daily notes on demand via tools, not injected into system prompt
+
+## forceCompression (rewritten in commit `fa2f2e1`)
+- Drops oldest ~50% of turns (same split logic as before)
+- **Stage 1**: `flushMemoryPreCompaction()` saves key facts to daily notes before messages are lost
+- **Stage 2**: `summarizeForCompaction()` calls LLM (30s timeout, 2 retries) to summarize dropped messages
+  - On success: injects `[SYSTEM] Previous conversation was compacted...` message with summary + deferred tools announcement
+  - On failure: falls back to original behavior (compression note in session summary)
+- **Circuit breaker**: `compactionFailures` field on `AgentLoop` tracks consecutive failures; after 3 failures, skips summarization entirely (avoids wasting tokens on a broken provider)
+- `compactionSummaryPrompt` constant formats the summarization prompt
+- Only user/assistant messages included in summarization input; tool results skipped; messages truncated to `agent.ContextWindow` chars

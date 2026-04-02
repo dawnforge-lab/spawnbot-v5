@@ -4,7 +4,7 @@
 `20d5e31` feat(struggles): add collector for tool errors, user corrections, repeated tools
 
 ## Files Created
-- `pkg/struggles/collector.go` — Collector struct with OnToolResult, OnUserMessage, OnTurnEnd methods
+- `pkg/struggles/collector.go` — Collector struct with HandleTurnStart, HandleToolEnd, HandleTurnEnd methods (owns per-turn tool counters internally via sync.Mutex). Old On* methods removed.
 - `pkg/struggles/reader.go` — ReadLog function reads JSONL signal log
 
 ## Files Modified

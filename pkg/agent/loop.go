@@ -1739,8 +1739,13 @@ func (al *AgentLoop) runTurn(ctx context.Context, ts *turnState) (turnResult, er
 
 	if !ts.opts.NoHistory {
 		toolDefs := ts.agent.Tools.ToProviderDefs()
-		if isOverContextBudget(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens) {
-			logger.WarnCF("agent", "Proactive compression: context budget exceeded before LLM call",
+		budgetTier := checkContextBudgetTier(ts.agent.ContextWindow, messages, toolDefs, ts.agent.MaxTokens)
+		if budgetTier == BudgetTierWarning {
+			logger.WarnCF("agent", "Context budget warning: approaching limit (>80%)",
+				map[string]any{"session_key": ts.sessionKey})
+		}
+		if budgetTier == BudgetTierCompact {
+			logger.WarnCF("agent", "Proactive compaction: context budget exceeded (>90%)",
 				map[string]any{"session_key": ts.sessionKey})
 			if compression, ok := al.forceCompression(ts.agent, ts.sessionKey); ok {
 				al.emitEvent(
