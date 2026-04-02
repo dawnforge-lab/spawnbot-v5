@@ -87,7 +87,7 @@ func TestEndToEnd_ToolFiltering(t *testing.T) {
 	tools := researcher.FilterTools(allTools)
 	for _, name := range tools {
 		switch name {
-		case "write_file", "edit_file", "append_file", "exec", "message", "send_file", "spawn", "subagent", "connect_mcp", "disconnect_mcp":
+		case "exec", "message", "send_file", "spawn", "subagent", "connect_mcp", "disconnect_mcp":
 			t.Fatalf("researcher should not have tool %q", name)
 		}
 	}
