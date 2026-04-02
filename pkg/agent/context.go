@@ -228,6 +228,7 @@ func (cb *ContextBuilder) InvalidateCache() {
 func (cb *ContextBuilder) sourcePaths() []string {
 	return []string{
 		filepath.Join(cb.workspace, "SOUL.md"),
+		filepath.Join(cb.workspace, "AGENTS.md"),
 	}
 }
 
@@ -454,7 +455,15 @@ func (cb *ContextBuilder) LoadBootstrapFiles() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("SOUL.md not found at %s — run 'spawnbot onboard' to create it: %w", soulPath, err)
 	}
-	return fmt.Sprintf("## SOUL.md\n\n%s\n\n", string(data)), nil
+	result := fmt.Sprintf("## SOUL.md\n\n%s\n\n", string(data))
+
+	agentsPath := filepath.Join(cb.workspace, "AGENTS.md")
+	agentsData, err := os.ReadFile(agentsPath)
+	if err == nil {
+		result += fmt.Sprintf("## AGENTS.md\n\n%s\n\n", string(agentsData))
+	}
+
+	return result, nil
 }
 
 // buildDynamicContext returns a short dynamic context string with per-request info.
