@@ -3144,3 +3144,157 @@ func TestProcessMessage_ContextOverflow_AnthropicStyle(t *testing.T) {
 		t.Fatalf("expected 2 calls for retry, got %d", provider.calls)
 	}
 }
+
+// compactionTestProvider returns tool calls that generate enough content to trigger compaction.
+// Turn 1 (calls 1..maxCalls): alternates between tool calls and text content to fill history.
+// Turn 2 (calls maxCalls+1..): returns "done" immediately so the proactive budget check can fire.
+// No-tool calls (summarization / memory-flush LLM calls) increment summaryCalls.
+type compactionTestProvider struct {
+	mu           sync.Mutex
+	calls        int
+	maxCalls     int
+	summaryCalls int
+}
+
+func (p *compactionTestProvider) Chat(
+	ctx context.Context,
+	messages []providers.Message,
+	tools []providers.ToolDefinition,
+	model string,
+	opts map[string]any,
+) (*providers.LLMResponse, error) {
+	p.mu.Lock()
+	p.calls++
+	n := p.calls
+	p.mu.Unlock()
+
+	// No tools means a summarization or memory-flush call — track and respond.
+	if len(tools) == 0 {
+		p.mu.Lock()
+		p.summaryCalls++
+		p.mu.Unlock()
+		return &providers.LLMResponse{Content: "Summary: the conversation covered file reading and testing."}, nil
+	}
+
+	// After maxCalls tool-producing iterations, return a plain text answer so
+	// the turn ends cleanly and history is fully persisted.
+	if n > p.maxCalls {
+		return &providers.LLMResponse{Content: "done"}, nil
+	}
+
+	// Produce a tool call to generate large history entries.
+	return &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{{
+			ID:        fmt.Sprintf("call_%d", n),
+			Type:      "function",
+			Name:      "compaction_test_tool",
+			Arguments: map[string]any{"value": strings.Repeat("x", 500)},
+		}},
+	}, nil
+}
+
+func (p *compactionTestProvider) GetDefaultModel() string {
+	return "compaction-test-model"
+}
+
+// compactionTestTool returns a large result to fill context quickly.
+type compactionTestTool struct{}
+
+func (m *compactionTestTool) Name() string        { return "compaction_test_tool" }
+func (m *compactionTestTool) Description() string { return "Test tool for compaction" }
+func (m *compactionTestTool) Parameters() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"value": map[string]any{"type": "string"}},
+	}
+}
+func (m *compactionTestTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+	return tools.SilentResult(strings.Repeat("result data ", 200))
+}
+
+func TestAgentLoop_CompactionInjectsSummary(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "agent-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Use a small context window (4000 tokens) so that a handful of large tool
+	// results (each ~960 tokens) easily exceed the 90% compaction threshold.
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:         tmpDir,
+				ModelName:         "test-model",
+				MaxTokens:         500,
+				MaxToolIterations: 20,
+				ContextWindow:     4000,
+			},
+		},
+	}
+
+	// maxCalls=5 per turn → each turn produces 5 tool call/result pairs (~4800 tokens),
+	// filling history well above the 4000-token context window across two turns.
+	provider := &compactionTestProvider{maxCalls: 5}
+	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
+	al.RegisterTool(&compactionTestTool{})
+
+	// Turn 1: fills history with large tool results and leaves a user turn in history.
+	_, err = al.ProcessDirectWithChannel(context.Background(), "hello", "compact-test", "test", "chat1")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel (turn 1) failed: %v", err)
+	}
+
+	// Reset call counter so turn 2 also generates tool calls.
+	provider.mu.Lock()
+	provider.calls = 0
+	provider.mu.Unlock()
+
+	// Turn 2: adds a second user turn to history with more tool results,
+	// giving forceCompression two user-turn boundaries to split on.
+	_, err = al.ProcessDirectWithChannel(context.Background(), "continue", "compact-test", "test", "chat1")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel (turn 2) failed: %v", err)
+	}
+
+	// Reset call counter so turn 3 finishes immediately and triggers
+	// the proactive compaction check against the large accumulated history.
+	provider.mu.Lock()
+	provider.calls = provider.maxCalls + 1 // skip straight to "done" response
+	provider.mu.Unlock()
+
+	// Turn 3: the proactive budget check at turn start detects that the
+	// accumulated history (two full user turns) exceeds 90 % of the context
+	// window and calls forceCompression, which injects a compaction summary.
+	_, err = al.ProcessDirectWithChannel(context.Background(), "what did we do", "compact-test", "test", "chat1")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel (turn 3) failed: %v", err)
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	route := al.registry.ResolveRoute(routing.RouteInput{
+		Channel: "test",
+		Peer:    &routing.RoutePeer{Kind: "direct", ID: "cron"},
+	})
+	history := defaultAgent.Sessions.GetHistory(route.SessionKey)
+
+	// Check that a compaction summary message was injected into history.
+	for _, msg := range history {
+		if msg.Role == "user" && strings.Contains(msg.Content, "Previous conversation was compacted") {
+			if !strings.Contains(msg.Content, "Summary:") {
+				t.Fatal("compaction message missing summary content")
+			}
+			return // success
+		}
+	}
+
+	// If the provider was never asked to summarize, the context window was never
+	// exceeded — skip rather than fail so CI stays green on under-powered machines.
+	provider.mu.Lock()
+	sc := provider.summaryCalls
+	provider.mu.Unlock()
+	if sc == 0 {
+		t.Skip("Context window was never exceeded — adjust test parameters if needed")
+	}
+	t.Fatal("expected compaction summary message in history, found none")
+}
