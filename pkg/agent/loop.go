@@ -32,6 +32,7 @@ import (
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/skills"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/state"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools/resultstore"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/utils"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/voice"
 )
@@ -2292,6 +2293,20 @@ turnLoop:
 			ts.recordPersistedMessage(assistantMsg)
 		}
 
+		// Tool result persistence: init store and budget counter
+		var resultStore *resultstore.ResultStore
+		turnBudgetUsed := 0
+		persistCfg := al.cfg.Tools.ResultPersistence
+		if persistCfg.Enabled {
+			storeDir := filepath.Join(al.cfg.Agents.Defaults.Workspace, "sessions", ts.sessionKey, "tool-results")
+			var storeErr error
+			resultStore, storeErr = resultstore.NewResultStore(storeDir)
+			if storeErr != nil {
+				logger.WarnCF("agent", "Failed to create result store, persistence disabled for this turn",
+					map[string]any{"error": storeErr.Error()})
+			}
+		}
+
 		ts.setPhase(TurnPhaseTools)
 		for i, tc := range normalizedToolCalls {
 			if ts.hardAbortRequested() {
@@ -2573,6 +2588,13 @@ turnLoop:
 						"tool":        toolName,
 						"content_len": len(toolResult.ForUser),
 					})
+			}
+
+			// Persist large results to disk if enabled
+			if resultStore != nil {
+				if err := maybePersistResult(resultStore, persistCfg, toolName, toolCallID, toolResult, &turnBudgetUsed); err != nil {
+					toolResult = tools.ErrorResult(fmt.Sprintf("Failed to persist large tool result: %v", err))
+				}
 			}
 
 			contentForLLM := toolResult.ContentForLLM()
