@@ -165,7 +165,7 @@ func TestWalletTool_SendAmountExceedsLimit(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error when send amount exceeds limit")
 	}
-	if !strings.Contains(result.ForLLM, "exceeds limit") {
+	if !strings.Contains(result.ForLLM, "exceeds configured limit") {
 		t.Errorf("expected exceeds limit error, got: %s", result.ForLLM)
 	}
 }
@@ -198,7 +198,7 @@ func TestWalletTool_SendDollarPrefixAmount(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error when $15 exceeds $10 limit")
 	}
-	if !strings.Contains(result.ForLLM, "exceeds limit") {
+	if !strings.Contains(result.ForLLM, "exceeds configured limit") {
 		t.Errorf("expected exceeds limit error, got: %s", result.ForLLM)
 	}
 }
@@ -215,7 +215,7 @@ func TestWalletTool_TradeAmountExceedsLimit(t *testing.T) {
 	if !result.IsError {
 		t.Fatal("expected error when trade amount exceeds limit")
 	}
-	if !strings.Contains(result.ForLLM, "exceeds limit") {
+	if !strings.Contains(result.ForLLM, "exceeds configured limit") {
 		t.Errorf("expected exceeds limit error, got: %s", result.ForLLM)
 	}
 }
@@ -253,20 +253,30 @@ func TestWalletTool_TradeMissingTokens(t *testing.T) {
 
 func TestWalletTool_ParseAmount(t *testing.T) {
 	tests := []struct {
-		input string
-		want  float64
+		input   string
+		want    float64
+		wantErr bool
 	}{
-		{"1.00", 1.0},
-		{"$5.00", 5.0},
-		{"0.50", 0.5},
-		{"$0.01", 0.01},
-		{"100", 100.0},
-		{"garbage", 0.0},
+		{"1.00", 1.0, false},
+		{"$5.00", 5.0, false},
+		{"0.50", 0.5, false},
+		{"$0.01", 0.01, false},
+		{"100", 100.0, false},
+		{"garbage", 0.0, true},
 	}
 	for _, tc := range tests {
-		got := parseAmount(tc.input)
-		if got != tc.want {
-			t.Errorf("parseAmount(%q) = %v, want %v", tc.input, got, tc.want)
+		got, err := parseAmount(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("parseAmount(%q): expected error, got nil (value %v)", tc.input, got)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("parseAmount(%q): unexpected error: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Errorf("parseAmount(%q) = %v, want %v", tc.input, got, tc.want)
+			}
 		}
 	}
 }
@@ -373,6 +383,43 @@ func TestWalletTool_PayMissingURL(t *testing.T) {
 	result := tool.Execute(ctx, map[string]any{"action": "pay"})
 	if !result.IsError {
 		t.Fatal("expected error when url is missing")
+	}
+	if !strings.Contains(result.ForLLM, "url is required") {
+		t.Errorf("expected url error, got: %s", result.ForLLM)
+	}
+}
+
+func TestWalletTool_PayInjectsConfigLimitWhenMaxAmountOmitted(t *testing.T) {
+	tool := newTestWalletTool(t) // maxPayAmount = 0.50 → 500000 atomic units
+	args := map[string]any{"url": "https://example.com/api"}
+	cmd := tool.buildCommand("pay", args)
+	if !strings.Contains(cmd, "--max-amount 500000") {
+		t.Errorf("expected '--max-amount 500000' injected from config, got: %s", cmd)
+	}
+}
+
+func TestWalletTool_PayMaxAmountExceedsConfigLimit(t *testing.T) {
+	tool := newTestWalletTool(t) // maxPayAmount = 0.50
+	ctx := WithToolContext(context.Background(), "pico", "chat-1")
+	result := tool.Execute(ctx, map[string]any{
+		"action":     "pay",
+		"url":        "https://example.com/api",
+		"max_amount": "1.00",
+	})
+	if !result.IsError {
+		t.Fatal("expected error when pay max_amount exceeds config limit")
+	}
+	if !strings.Contains(result.ForLLM, "exceeds configured limit") {
+		t.Errorf("expected exceeds configured limit error, got: %s", result.ForLLM)
+	}
+}
+
+func TestWalletTool_DetailsMissingURL(t *testing.T) {
+	tool := newTestWalletTool(t)
+	ctx := WithToolContext(context.Background(), "pico", "chat-1")
+	result := tool.Execute(ctx, map[string]any{"action": "details"})
+	if !result.IsError {
+		t.Fatal("expected error when url is missing for details action")
 	}
 	if !strings.Contains(result.ForLLM, "url is required") {
 		t.Errorf("expected url error, got: %s", result.ForLLM)

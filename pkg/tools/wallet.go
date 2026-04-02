@@ -134,8 +134,12 @@ func (t *WalletTool) Execute(ctx context.Context, args map[string]any) *ToolResu
 		if recipient == "" {
 			return ErrorResult("recipient is required for send action")
 		}
-		if t.maxSendAmount > 0 && parseAmount(amount) > t.maxSendAmount {
-			return ErrorResult(fmt.Sprintf("send amount %.2f exceeds limit of %.2f", parseAmount(amount), t.maxSendAmount))
+		parsed, err := parseAmount(amount)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("invalid amount %q: %v", amount, err))
+		}
+		if t.maxSendAmount > 0 && parsed > t.maxSendAmount {
+			return ErrorResult(fmt.Sprintf("amount $%.2f exceeds configured limit of $%.2f for send", parsed, t.maxSendAmount))
 		}
 	case "trade":
 		amount, _ := args["amount"].(string)
@@ -150,8 +154,12 @@ func (t *WalletTool) Execute(ctx context.Context, args map[string]any) *ToolResu
 		if toToken == "" {
 			return ErrorResult("to_token is required for trade action")
 		}
-		if t.maxTradeAmount > 0 && parseAmount(amount) > t.maxTradeAmount {
-			return ErrorResult(fmt.Sprintf("trade amount %.2f exceeds limit of %.2f", parseAmount(amount), t.maxTradeAmount))
+		parsed, err := parseAmount(amount)
+		if err != nil {
+			return ErrorResult(fmt.Sprintf("invalid amount %q: %v", amount, err))
+		}
+		if t.maxTradeAmount > 0 && parsed > t.maxTradeAmount {
+			return ErrorResult(fmt.Sprintf("amount $%.2f exceeds configured limit of $%.2f for trade", parsed, t.maxTradeAmount))
 		}
 	case "search":
 		query, _ := args["query"].(string)
@@ -169,8 +177,14 @@ func (t *WalletTool) Execute(ctx context.Context, args map[string]any) *ToolResu
 			return ErrorResult("url is required for pay action")
 		}
 		maxAmount, _ := args["max_amount"].(string)
-		if maxAmount != "" && t.maxPayAmount > 0 && parseAmount(maxAmount) > t.maxPayAmount {
-			return ErrorResult(fmt.Sprintf("pay max_amount %.2f exceeds limit of %.2f", parseAmount(maxAmount), t.maxPayAmount))
+		if maxAmount != "" {
+			parsed, err := parseAmount(maxAmount)
+			if err != nil {
+				return ErrorResult(fmt.Sprintf("invalid max_amount %q: %v", maxAmount, err))
+			}
+			if t.maxPayAmount > 0 && parsed > t.maxPayAmount {
+				return ErrorResult(fmt.Sprintf("amount $%.2f exceeds configured limit of $%.2f for pay", parsed, t.maxPayAmount))
+			}
 		}
 	default:
 		return ErrorResult(fmt.Sprintf("unknown wallet action: %s", action))
@@ -236,23 +250,21 @@ func (t *WalletTool) buildCommand(action string, args map[string]any) string {
 		}
 		if maxAmount, ok := args["max_amount"].(string); ok && maxAmount != "" {
 			cmd += fmt.Sprintf(" --max-amount %s", shellescape(maxAmount))
+		} else if t.maxPayAmount > 0 {
+			atomicUnits := int64(t.maxPayAmount * 1_000_000)
+			cmd += fmt.Sprintf(" --max-amount %d", atomicUnits)
 		}
 		cmd += " --json"
 		return cmd
 	default:
-		return ""
+		return "echo 'BUG: unknown wallet action'"
 	}
 }
 
 // parseAmount strips a leading '$' and parses the string as a float64.
-// Returns 0.0 if the string cannot be parsed.
-func parseAmount(s string) float64 {
+func parseAmount(s string) (float64, error) {
 	s = strings.TrimPrefix(s, "$")
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0.0
-	}
-	return v
+	return strconv.ParseFloat(s, 64)
 }
 
 // shellescape wraps a string in single quotes, escaping any embedded single quotes.
