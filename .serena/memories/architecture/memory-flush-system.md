@@ -34,3 +34,13 @@ Added in commit `9bb3095`. Preserves conversation context across sessions and co
 - **Circuit breaker**: `compactionFailures` field on `AgentLoop` tracks consecutive failures; after 3 failures, skips summarization entirely (avoids wasting tokens on a broken provider)
 - `compactionSummaryPrompt` constant formats the summarization prompt
 - Only user/assistant messages included in summarization input; tool results skipped; messages truncated to `agent.ContextWindow` chars
+
+## Test Coverage — compaction with summarization (commit `171f3a5`)
+- `TestAgentLoop_CompactionInjectsSummary` in `pkg/agent/loop_test.go`
+- Uses `compactionTestProvider` + `compactionTestTool` helpers
+- Pattern: 3 turns across a 4000-token context window
+  - Turn 1 & 2: generate large tool results filling history above threshold
+  - Turn 3: triggers proactive budget check (`>90%`) → `forceCompression` → `summarizeForCompaction`
+- Asserts history contains a "Previous conversation was compacted" user message with "Summary:" content
+- Falls back to `t.Skip` if summaryCalls==0 (provider never called for summarization)
+- Key insight: proactive check runs once per turn at turn start with existing history, so multiple turns are needed to accumulate history before compaction fires
