@@ -431,6 +431,14 @@ func registerSharedTools(
 		agent.TaskStore = taskStore
 		agent.ContextBuilder.SetTaskStore(taskStore)
 		agent.Tools.RegisterHidden(tools.NewTasksTool(taskStore))
+
+		// Wallet tool (awal CLI wrapper)
+		if cfg.Tools.Wallet.Enabled {
+			agent.Tools.RegisterHiddenWithHint(
+				tools.NewWalletTool(&cfg.Tools.Wallet),
+				"crypto wallet USDC send trade pay x402 coinbase agentic",
+			)
+		}
 	}
 }
 
