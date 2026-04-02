@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1255,6 +1256,218 @@ func (m *toolLimitTestTool) Parameters() map[string]any {
 
 func (m *toolLimitTestTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
 	return tools.SilentResult("tool limit test result")
+}
+
+// repeatedToolProvider always asks to call the same tool, up to a max number of turns.
+type repeatedToolProvider struct {
+	mu       sync.Mutex
+	calls    int
+	maxCalls int
+}
+
+func (p *repeatedToolProvider) Chat(
+	ctx context.Context,
+	messages []providers.Message,
+	tools []providers.ToolDefinition,
+	model string,
+	opts map[string]any,
+) (*providers.LLMResponse, error) {
+	p.mu.Lock()
+	p.calls++
+	n := p.calls
+	p.mu.Unlock()
+
+	if n > p.maxCalls {
+		return &providers.LLMResponse{Content: "done"}, nil
+	}
+	return &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{{
+			ID:        fmt.Sprintf("call_%d", n),
+			Type:      "function",
+			Name:      "repeated_test_tool",
+			Arguments: map[string]any{"value": "x"},
+		}},
+	}, nil
+}
+
+func (p *repeatedToolProvider) GetDefaultModel() string {
+	return "repeated-tool-model"
+}
+
+// repeatedTestTool is a tool that always succeeds.
+type repeatedTestTool struct{}
+
+func (m *repeatedTestTool) Name() string        { return "repeated_test_tool" }
+func (m *repeatedTestTool) Description() string  { return "Test tool for repetition detection" }
+func (m *repeatedTestTool) Parameters() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"value": map[string]any{"type": "string"}},
+	}
+}
+func (m *repeatedTestTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+	return tools.SilentResult("ok")
+}
+
+func TestAgentLoop_ToolRepetitionWarningInjected(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "agent-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:         tmpDir,
+				ModelName:         "test-model",
+				MaxTokens:         4096,
+				MaxToolIterations: 10,
+			},
+		},
+	}
+
+	provider := &repeatedToolProvider{maxCalls: 4}
+	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
+	al.RegisterTool(&repeatedTestTool{})
+
+	_, err = al.ProcessDirectWithChannel(context.Background(), "hello", "rep-warn", "test", "chat1")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	route := al.registry.ResolveRoute(routing.RouteInput{
+		Channel: "test",
+		Peer:    &routing.RoutePeer{Kind: "direct", ID: "cron"},
+	})
+	history := defaultAgent.Sessions.GetHistory(route.SessionKey)
+
+	// Find the repetition warning in history
+	found := 0
+	for _, msg := range history {
+		if msg.Role == "user" && strings.Contains(msg.Content, "stuck in a loop") {
+			found++
+		}
+	}
+	if found == 0 {
+		t.Fatal("expected tool repetition warning in session history, found none")
+	}
+	if found > 1 {
+		t.Fatalf("expected exactly 1 repetition warning, got %d", found)
+	}
+}
+
+// twoToolProvider alternates between two different tools.
+type twoToolProvider struct {
+	mu       sync.Mutex
+	calls    int
+	maxCalls int
+}
+
+func (p *twoToolProvider) Chat(
+	ctx context.Context,
+	messages []providers.Message,
+	tools []providers.ToolDefinition,
+	model string,
+	opts map[string]any,
+) (*providers.LLMResponse, error) {
+	p.mu.Lock()
+	p.calls++
+	n := p.calls
+	p.mu.Unlock()
+
+	if n > p.maxCalls {
+		return &providers.LLMResponse{Content: "done"}, nil
+	}
+	// Alternate: tool_a, tool_b, tool_a, tool_b — neither hits threshold of 3
+	toolName := "two_test_tool_a"
+	if n%2 == 0 {
+		toolName = "two_test_tool_b"
+	}
+	return &providers.LLMResponse{
+		ToolCalls: []providers.ToolCall{{
+			ID:        fmt.Sprintf("call_%d", n),
+			Type:      "function",
+			Name:      toolName,
+			Arguments: map[string]any{"value": "x"},
+		}},
+	}, nil
+}
+
+func (p *twoToolProvider) GetDefaultModel() string {
+	return "two-tool-model"
+}
+
+type twoTestToolA struct{}
+
+func (m *twoTestToolA) Name() string        { return "two_test_tool_a" }
+func (m *twoTestToolA) Description() string  { return "Test tool A" }
+func (m *twoTestToolA) Parameters() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"value": map[string]any{"type": "string"}},
+	}
+}
+func (m *twoTestToolA) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+	return tools.SilentResult("ok")
+}
+
+type twoTestToolB struct{}
+
+func (m *twoTestToolB) Name() string        { return "two_test_tool_b" }
+func (m *twoTestToolB) Description() string  { return "Test tool B" }
+func (m *twoTestToolB) Parameters() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"value": map[string]any{"type": "string"}},
+	}
+}
+func (m *twoTestToolB) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
+	return tools.SilentResult("ok")
+}
+
+func TestAgentLoop_ToolRepetitionCountersIndependent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "agent-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:         tmpDir,
+				ModelName:         "test-model",
+				MaxTokens:         4096,
+				MaxToolIterations: 10,
+			},
+		},
+	}
+
+	// 4 calls alternating: a, b, a, b — each tool called only 2 times, below threshold
+	provider := &twoToolProvider{maxCalls: 4}
+	al := NewAgentLoop(cfg, bus.NewMessageBus(), provider)
+	al.RegisterTool(&twoTestToolA{})
+	al.RegisterTool(&twoTestToolB{})
+
+	_, err = al.ProcessDirectWithChannel(context.Background(), "hello", "rep-indep", "test", "chat1")
+	if err != nil {
+		t.Fatalf("ProcessDirectWithChannel failed: %v", err)
+	}
+
+	defaultAgent := al.registry.GetDefaultAgent()
+	route := al.registry.ResolveRoute(routing.RouteInput{
+		Channel: "test",
+		Peer:    &routing.RoutePeer{Kind: "direct", ID: "cron"},
+	})
+	history := defaultAgent.Sessions.GetHistory(route.SessionKey)
+
+	for _, msg := range history {
+		if msg.Role == "user" && strings.Contains(msg.Content, "stuck in a loop") {
+			t.Fatal("no repetition warning expected when tools alternate below threshold")
+		}
+	}
 }
 
 // testHelper executes a message and returns the response
