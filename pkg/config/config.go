@@ -1207,6 +1207,7 @@ type ToolsConfig struct {
 	Subagent        ToolConfig         `json:"subagent"                                                 envPrefix:"SPAWNBOT_TOOLS_SUBAGENT_"`
 	WebFetch        ToolConfig         `json:"web_fetch"                                                envPrefix:"SPAWNBOT_TOOLS_WEB_FETCH_"`
 	WriteFile         ToolConfig                   `json:"write_file"                                               envPrefix:"SPAWNBOT_TOOLS_WRITE_FILE_"`
+	Wallet            WalletConfig                 `json:"wallet"`
 	ResultPersistence ToolResultPersistenceConfig  `json:"result_persistence"`
 }
 

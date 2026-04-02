@@ -489,6 +489,13 @@ func DefaultConfig() *Config {
 			WriteFile: ToolConfig{
 				Enabled: true,
 			},
+			Wallet: WalletConfig{
+				ToolConfig:     ToolConfig{Enabled: false},
+				Chain:          "base",
+				MaxSendAmount:  100.0,
+				MaxTradeAmount: 50.0,
+				MaxPayAmount:   1.0,
+			},
 			ResultPersistence: ToolResultPersistenceConfig{
 				Enabled:            true,
 				DefaultMaxChars:    50000,
