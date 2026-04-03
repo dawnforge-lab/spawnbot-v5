@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -362,8 +363,14 @@ func registerSharedTools(
 				// 3. System Prompt
 				systemPrompt := "You are a subagent. Complete the given task independently and report the result.\n" +
 					"You have access to tools - use them as needed to complete your task.\n" +
-					"After completing the task, provide a clear summary of what was done.\n\n" +
-					"Task: " + task
+					"After completing the task, provide a clear summary of what was done.\n\n"
+
+				// Inject AGENTS.md so subagents get operational guidance (path layout, rules, capabilities)
+				if agentsData, err := os.ReadFile(filepath.Join(agent.Workspace, "AGENTS.md")); err == nil {
+					systemPrompt += "## AGENTS.md\n\n" + string(agentsData) + "\n\n"
+				}
+
+				systemPrompt += "Task: " + task
 
 				// 4. Resolve Model
 				modelToUse := agent.Model
