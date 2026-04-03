@@ -36,6 +36,7 @@ var Providers = []Provider{
 	{Key: "gemini", Name: "Google Gemini", APIBase: "https://generativelanguage.googleapis.com/v1beta", KeyHint: "https://aistudio.google.com/apikey"},
 	{Key: "deepseek", Name: "DeepSeek", APIBase: "https://api.deepseek.com/v1", KeyHint: "https://platform.deepseek.com/api_keys"},
 	{Key: "groq", Name: "Groq", APIBase: "https://api.groq.com/openai/v1", KeyHint: "https://console.groq.com/keys"},
+	{Key: "xai", Name: "xAI (Grok)", APIBase: "https://api.x.ai/v1", KeyHint: "https://console.x.ai/"},
 	{Key: "mistral", Name: "Mistral", APIBase: "https://api.mistral.ai/v1", KeyHint: "https://console.mistral.ai/api-keys"},
 	{Key: "cerebras", Name: "Cerebras", APIBase: "https://api.cerebras.ai/v1", KeyHint: "https://cloud.cerebras.ai/"},
 	{Key: "nvidia", Name: "NVIDIA NIM", APIBase: "https://integrate.api.nvidia.com/v1", KeyHint: "https://build.nvidia.com/"},
