@@ -496,7 +496,7 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				// - Audio is read from disk by transcribeAudioInMessage before the turn loop.
 				// - Any tool reads happen synchronously inside runTurn before processMessage returns.
 				defer func() {
-					if al.mediaStore != nil && msg.MediaScope != "" {
+					if al.mediaStore != nil && msg.MediaScope != "" && al.cfg.Tools.MediaCleanup.Enabled {
 						if releaseErr := al.mediaStore.ReleaseAll(msg.MediaScope); releaseErr != nil {
 							logger.WarnCF("agent", "Failed to release media", map[string]any{
 								"scope": msg.MediaScope,

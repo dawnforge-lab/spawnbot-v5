@@ -570,16 +570,10 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, message *telego.Mes
 	// Helper to register a local file with the media store
 	storeMedia := func(localPath, filename string) string {
 		if store := c.GetMediaStore(); store != nil {
-			// When media cleanup is disabled, keep files on disk after the
-			// turn ends so they remain accessible for inspection.
-			policy := media.CleanupPolicyDeleteOnCleanup
-			if !c.config.Tools.MediaCleanup.Enabled {
-				policy = media.CleanupPolicyForgetOnly
-			}
 			ref, err := store.Store(localPath, media.MediaMeta{
 				Filename:      filename,
 				Source:        "telegram",
-				CleanupPolicy: policy,
+				CleanupPolicy: media.CleanupPolicyDeleteOnCleanup,
 			}, scope)
 			if err == nil {
 				return ref
