@@ -1,5 +1,37 @@
 # Instructions
 
+## Directory Layout
+
+Your working directory is `~/.spawnbot/workspace/`. Here's where everything lives:
+
+```
+~/.spawnbot/                    ← SPAWNBOT_ROOT
+├── config.json                 ← main config (model, channels, tools)
+├── logs/                       ← application logs
+├── bin/                        ← installed binaries (awal, etc.)
+├── workspace/                  ← YOUR WORKING DIRECTORY (CWD)
+│   ├── SOUL.md                 ← identity
+│   ├── USER.md                 ← what you know about the user
+│   ├── GOALS.md                ← current objectives
+│   ├── AGENTS.md               ← this file
+│   ├── HEARTBEAT.md            ← autonomy triggers
+│   ├── PLAYBOOK.md             ← extended guidelines
+│   ├── memory/
+│   │   ├── MEMORY.md           ← long-term memory
+│   │   └── YYYYMM/YYYYMMDD.md ← daily notes
+│   ├── skills/                 ← installed skills
+│   └── struggles.jsonl         ← self-improvement log
+├── poller-state/               ← poller state files
+└── poller-scripts/             ← poller shell scripts
+```
+
+**Path rules:**
+- Workspace files (SOUL.md, skills/, memory/, struggles.jsonl): use relative paths from CWD
+- Config and logs: use `~/.spawnbot/config.json`, `~/.spawnbot/logs/` (one level up from CWD)
+- Poller state/scripts: use `~/.spawnbot/poller-state/`, `~/.spawnbot/poller-scripts/`
+- User home files: use absolute paths (`/home/eugen-dev/...`)
+- When in doubt, use absolute paths starting with `~/.spawnbot/`
+
 ## Rules
 1. Update memory when something seems worth remembering
 2. Self-improve — create skills for repeated patterns, use connect_mcp for new capabilities

@@ -189,14 +189,20 @@ func TestSearchTools_EmptyQuery(t *testing.T) {
 	tool := &SearchTools{registry: reg}
 	ctx := context.Background()
 
-	for _, q := range []any{"", "   ", nil} {
-		args := map[string]any{}
-		if q != nil {
-			args["query"] = q
+	// nil query (missing arg) should error
+	res := tool.Execute(ctx, map[string]any{})
+	if !res.IsError {
+		t.Errorf("Expected error for nil query, got success: %s", res.ForLLM)
+	}
+
+	// Empty and whitespace queries should list deferred tools
+	for _, q := range []string{"", "   ", "list", "list:"} {
+		res := tool.Execute(ctx, map[string]any{"query": q})
+		if res.IsError {
+			t.Errorf("Expected list result for query=%q, got error: %s", q, res.ForLLM)
 		}
-		res := tool.Execute(ctx, args)
-		if !res.IsError {
-			t.Errorf("Expected error for query=%v, got success: %s", q, res.ForLLM)
+		if !strings.Contains(res.ForLLM, "Deferred tools") {
+			t.Errorf("Expected deferred tools list for query=%q, got: %s", q, res.ForLLM)
 		}
 	}
 }

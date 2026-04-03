@@ -24,10 +24,11 @@ func (s *SearchTools) Name() string {
 }
 
 func (s *SearchTools) Description() string {
-	return `Search for and activate deferred tools. Two modes:
+	return `Search for and activate deferred tools. Three modes:
+- "list" or "" — list all available deferred tools
 - "select:<tool1>,<tool2>" — activate specific tools by exact name (comma-separated)
 - "<keywords>" — search deferred tools by keyword (informational only, does not activate)
-Use keyword mode to discover tool names, then select: mode to activate them.`
+Use list or keyword mode to discover tool names, then select: mode to activate them.`
 }
 
 func (s *SearchTools) Parameters() map[string]any {
@@ -49,14 +50,31 @@ func (s *SearchTools) Parameters() map[string]any {
 
 func (s *SearchTools) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	query, ok := args["query"].(string)
-	if !ok || strings.TrimSpace(query) == "" {
-		return ErrorResult("Missing or empty 'query' argument.")
+	if !ok {
+		return ErrorResult("Missing 'query' argument.")
 	}
+	query = strings.TrimSpace(query)
 
+	if query == "" || query == "list" || query == "list:" {
+		return s.executeList()
+	}
 	if strings.HasPrefix(query, "select:") {
 		return s.executeSelect(query[len("select:"):])
 	}
 	return s.executeKeyword(query, args)
+}
+
+func (s *SearchTools) executeList() *ToolResult {
+	deferred := s.registry.GetDeferredNames()
+	if len(deferred) == 0 {
+		return SilentResult("No deferred tools available. All tools are already active.")
+	}
+	return SilentResult(fmt.Sprintf(
+		"Deferred tools (%d available):\n- %s\n\nTo activate, use select: mode, e.g. search_tools(query=\"select:%s\")",
+		len(deferred),
+		strings.Join(deferred, "\n- "),
+		deferred[0],
+	))
 }
 
 func (s *SearchTools) executeSelect(namesStr string) *ToolResult {
