@@ -118,8 +118,11 @@ func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
 
 	// Provider doesn't support listing — fall back to LiteLLM catalog
 	catalogModels, catalogErr := discoverFromCatalog(providerKey)
-	if catalogErr != nil || len(catalogModels) == 0 {
-		return nil, nil // silent — no models found from either source
+	if catalogErr != nil {
+		return nil, fmt.Errorf("provider API returned no models; catalog fallback failed: %w", catalogErr)
+	}
+	if len(catalogModels) == 0 {
+		return nil, nil
 	}
 	return catalogModels, nil
 }
@@ -183,10 +186,8 @@ func discoverFromCatalog(providerKey string) ([]Model, error) {
 	}
 
 	var catalog map[string]struct {
-		Provider  string `json:"litellm_provider"`
-		Mode      string `json:"mode"`
-		MaxInput  int    `json:"max_input_tokens"`
-		MaxOutput int    `json:"max_tokens"`
+		Provider string `json:"litellm_provider"`
+		Mode     string `json:"mode"`
 	}
 	if err := json.Unmarshal(body, &catalog); err != nil {
 		return nil, fmt.Errorf("parsing catalog: %w", err)

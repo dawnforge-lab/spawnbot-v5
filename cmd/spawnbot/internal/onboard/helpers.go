@@ -174,15 +174,20 @@ func onboard(encrypt bool) {
 		}
 	}
 
-	// Group 4: Model selection — discover from provider API
+	// Group 4: Model selection — discover from provider API or LiteLLM catalog
 	fmt.Println("\nDiscovering available models...")
 	models, discErr := discovery.DiscoverModels(providerKey, apiBase, apiKey)
 	if discErr != nil {
 		fmt.Printf("Warning: could not discover models: %v\n", discErr)
+	} else if len(models) == 0 {
+		fmt.Printf("No models found for provider %q\n", providerKey)
+	} else {
+		fmt.Printf("Found %d models\n", len(models))
 	}
 
+	const customModelKey = "__custom__"
 	if len(models) > 0 {
-		modelOpts := make([]huh.Option[string], 0, len(models))
+		modelOpts := make([]huh.Option[string], 0, len(models)+1)
 		for _, m := range models {
 			label := m.ID
 			if m.OwnedBy != "" {
@@ -190,6 +195,7 @@ func onboard(encrypt bool) {
 			}
 			modelOpts = append(modelOpts, huh.NewOption(label, m.ID))
 		}
+		modelOpts = append(modelOpts, huh.NewOption("Other (enter manually)", customModelKey))
 
 		modelForm := huh.NewForm(
 			huh.NewGroup(
@@ -204,8 +210,11 @@ func onboard(encrypt bool) {
 			fmt.Printf("Error: %v\n", err)
 			os.Exit(1)
 		}
-	} else {
-		// No discovery — ask the user to type a model name
+	}
+
+	if len(models) == 0 || selectedModel == customModelKey {
+		// No discovery or user wants a model not in the list
+		selectedModel = ""
 		modelInputForm := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
