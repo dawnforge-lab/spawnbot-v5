@@ -13,7 +13,9 @@ import (
 	"time"
 )
 
-// Provider describes a supported LLM provider for onboarding selection.
+// Provider describes a supported LLM provider for onboarding selection
+// and runtime routing. This is the single source of truth — the factory
+// and getDefaultAPIBase both read from this catalog.
 type Provider struct {
 	// Key is the internal identifier (matches factory protocol prefix).
 	Key string `json:"key"`
@@ -25,36 +27,73 @@ type Provider struct {
 	KeyHint string `json:"key_hint,omitempty"`
 	// Local indicates the provider runs locally (no API key needed).
 	Local bool `json:"local,omitempty"`
+	// OpenAICompat marks providers that use the standard OpenAI-compatible
+	// HTTP protocol. The factory creates them automatically — no switch case needed.
+	OpenAICompat bool `json:"openai_compat,omitempty"`
 }
 
 // Providers is the full catalog of supported providers for onboarding.
 // Ordered by popularity / ease of setup.
+//
+// To add a new OpenAI-compatible provider: add one entry here with
+// OpenAICompat: true. That's it — factory, API base lookup, and
+// onboarding all pick it up automatically.
 var Providers = []Provider{
-	{Key: "openrouter", Name: "OpenRouter (200+ models)", APIBase: "https://openrouter.ai/api/v1", KeyHint: "https://openrouter.ai/keys"},
+	{Key: "openrouter", Name: "OpenRouter (200+ models)", APIBase: "https://openrouter.ai/api/v1", KeyHint: "https://openrouter.ai/keys", OpenAICompat: true},
 	{Key: "anthropic", Name: "Anthropic (Claude)", APIBase: "https://api.anthropic.com", KeyHint: "https://console.anthropic.com/settings/keys"},
 	{Key: "openai", Name: "OpenAI", APIBase: "https://api.openai.com/v1", KeyHint: "https://platform.openai.com/api-keys"},
 	{Key: "gemini", Name: "Google Gemini", APIBase: "https://generativelanguage.googleapis.com/v1beta", KeyHint: "https://aistudio.google.com/apikey"},
-	{Key: "deepseek", Name: "DeepSeek", APIBase: "https://api.deepseek.com/v1", KeyHint: "https://platform.deepseek.com/api_keys"},
-	{Key: "groq", Name: "Groq", APIBase: "https://api.groq.com/openai/v1", KeyHint: "https://console.groq.com/keys"},
-	{Key: "xai", Name: "xAI (Grok)", APIBase: "https://api.x.ai/v1", KeyHint: "https://console.x.ai/"},
-	{Key: "mistral", Name: "Mistral", APIBase: "https://api.mistral.ai/v1", KeyHint: "https://console.mistral.ai/api-keys"},
-	{Key: "cerebras", Name: "Cerebras", APIBase: "https://api.cerebras.ai/v1", KeyHint: "https://cloud.cerebras.ai/"},
-	{Key: "nvidia", Name: "NVIDIA NIM", APIBase: "https://integrate.api.nvidia.com/v1", KeyHint: "https://build.nvidia.com/"},
-	{Key: "ollama", Name: "Ollama (local)", APIBase: "http://localhost:11434/v1", Local: true},
-	{Key: "vllm", Name: "vLLM (local)", APIBase: "http://localhost:8000/v1", Local: true},
-	{Key: "litellm", Name: "LiteLLM (proxy)", APIBase: "http://localhost:4000/v1", Local: true},
+	{Key: "deepseek", Name: "DeepSeek", APIBase: "https://api.deepseek.com/v1", KeyHint: "https://platform.deepseek.com/api_keys", OpenAICompat: true},
+	{Key: "groq", Name: "Groq", APIBase: "https://api.groq.com/openai/v1", KeyHint: "https://console.groq.com/keys", OpenAICompat: true},
+	{Key: "xai", Name: "xAI (Grok)", APIBase: "https://api.x.ai/v1", KeyHint: "https://console.x.ai/", OpenAICompat: true},
+	{Key: "mistral", Name: "Mistral", APIBase: "https://api.mistral.ai/v1", KeyHint: "https://console.mistral.ai/api-keys", OpenAICompat: true},
+	{Key: "cerebras", Name: "Cerebras", APIBase: "https://api.cerebras.ai/v1", KeyHint: "https://cloud.cerebras.ai/", OpenAICompat: true},
+	{Key: "nvidia", Name: "NVIDIA NIM", APIBase: "https://integrate.api.nvidia.com/v1", KeyHint: "https://build.nvidia.com/", OpenAICompat: true},
+	{Key: "ollama", Name: "Ollama (local)", APIBase: "http://localhost:11434/v1", Local: true, OpenAICompat: true},
+	{Key: "vllm", Name: "vLLM (local)", APIBase: "http://localhost:8000/v1", Local: true, OpenAICompat: true},
+	{Key: "litellm", Name: "LiteLLM (proxy)", APIBase: "http://localhost:4000/v1", Local: true, OpenAICompat: true},
 	{Key: "azure", Name: "Azure OpenAI", APIBase: "", KeyHint: "https://portal.azure.com/"},
 	{Key: "bedrock", Name: "AWS Bedrock", APIBase: "", KeyHint: "Uses AWS credentials (env/profile)"},
-	{Key: "novita", Name: "Novita AI", APIBase: "https://api.novita.ai/openai", KeyHint: "https://novita.ai/"},
-	{Key: "moonshot", Name: "Moonshot (Kimi)", APIBase: "https://api.moonshot.cn/v1"},
+	{Key: "novita", Name: "Novita AI", APIBase: "https://api.novita.ai/openai", KeyHint: "https://novita.ai/", OpenAICompat: true},
+	{Key: "moonshot", Name: "Moonshot (Kimi)", APIBase: "https://api.moonshot.cn/v1", OpenAICompat: true},
 	{Key: "minimax", Name: "MiniMax", APIBase: "https://api.minimaxi.com/v1"},
-	{Key: "volcengine", Name: "VolcEngine (ByteDance)", APIBase: "https://ark.cn-beijing.volces.com/api/v3"},
+	{Key: "volcengine", Name: "VolcEngine (ByteDance)", APIBase: "https://ark.cn-beijing.volces.com/api/v3", OpenAICompat: true},
 	{Key: "qwen", Name: "Qwen (Alibaba)", APIBase: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
-	{Key: "zhipu", Name: "Zhipu AI (GLM)", APIBase: "https://open.bigmodel.cn/api/paas/v4"},
+	{Key: "zhipu", Name: "Zhipu AI (GLM)", APIBase: "https://open.bigmodel.cn/api/paas/v4", OpenAICompat: true},
 	{Key: "qwen-intl", Name: "Qwen International (Alibaba)", APIBase: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
-	{Key: "vivgrid", Name: "VivGrid", APIBase: "https://api.vivgrid.com/v1"},
-	{Key: "modelscope", Name: "ModelScope", APIBase: "https://api-inference.modelscope.cn/v1"},
-	{Key: "mimo", Name: "Xiaomi MiMo", APIBase: "https://api.xiaomimimo.com/v1"},
+	{Key: "vivgrid", Name: "VivGrid", APIBase: "https://api.vivgrid.com/v1", OpenAICompat: true},
+	{Key: "modelscope", Name: "ModelScope", APIBase: "https://api-inference.modelscope.cn/v1", OpenAICompat: true},
+	{Key: "mimo", Name: "Xiaomi MiMo", APIBase: "https://api.xiaomimimo.com/v1", OpenAICompat: true},
+	{Key: "avian", Name: "Avian", APIBase: "https://api.avian.io/v1", OpenAICompat: true},
+	{Key: "longcat", Name: "LongCat", APIBase: "https://api.longcat.chat/openai", OpenAICompat: true},
+	{Key: "shengsuanyun", Name: "ShengSuanYun", APIBase: "https://router.shengsuanyun.com/api/v1", OpenAICompat: true},
+}
+
+// providerIndex is a lookup map built once from Providers.
+var providerIndex map[string]*Provider
+
+func init() {
+	providerIndex = make(map[string]*Provider, len(Providers))
+	for i := range Providers {
+		providerIndex[Providers[i].Key] = &Providers[i]
+	}
+}
+
+// IsOpenAICompat returns true if the protocol key maps to a registered
+// OpenAI-compatible provider. Used by the factory to avoid hardcoded case lists.
+func IsOpenAICompat(key string) bool {
+	if p, ok := providerIndex[key]; ok {
+		return p.OpenAICompat
+	}
+	return false
+}
+
+// DefaultAPIBase returns the default API base for a protocol key, or "".
+func DefaultAPIBase(key string) string {
+	if p, ok := providerIndex[key]; ok {
+		return p.APIBase
+	}
+	return ""
 }
 
 // Model represents a discovered model from a provider API.
@@ -181,10 +220,5 @@ func parseModelsResponse(body []byte) ([]Model, error) {
 
 // FindProvider returns the Provider entry for a given key, or nil if not found.
 func FindProvider(key string) *Provider {
-	for i := range Providers {
-		if Providers[i].Key == key {
-			return &Providers[i]
-		}
-	}
-	return nil
+	return providerIndex[key]
 }

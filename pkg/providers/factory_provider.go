@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/discovery"
 	anthropicmessages "github.com/dawnforge-lab/spawnbot-v5/pkg/providers/anthropic_messages"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/azure"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/bedrock"
@@ -194,27 +195,6 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			}),
 		), modelID, nil
 
-	case "litellm", "openrouter", "groq", "xai", "zhipu", "nvidia",
-		"ollama", "moonshot", "shengsuanyun", "deepseek", "cerebras",
-		"vivgrid", "volcengine", "vllm", "mistral", "avian", "longcat", "modelscope", "novita",
-		"mimo":
-		// All other OpenAI-compatible HTTP providers
-		if cfg.APIKey() == "" && cfg.APIBase == "" {
-			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
-		}
-		apiBase := cfg.APIBase
-		if apiBase == "" {
-			apiBase = getDefaultAPIBase(protocol)
-		}
-		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
-			cfg.APIKey(),
-			apiBase,
-			cfg.Proxy,
-			cfg.MaxTokensField,
-			cfg.RequestTimeout,
-			cfg.ExtraBody,
-		), modelID, nil
-
 	case "minimax":
 		// Minimax requires reasoning_split: true in the request body
 		if cfg.APIKey() == "" && cfg.APIBase == "" {
@@ -329,48 +309,40 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 		return provider, modelID, nil
 
 	default:
+		// Check the provider registry — any OpenAI-compatible provider
+		// registered in discovery.Providers works automatically.
+		if discovery.IsOpenAICompat(protocol) {
+			if cfg.APIKey() == "" && cfg.APIBase == "" {
+				return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
+			}
+			apiBase := cfg.APIBase
+			if apiBase == "" {
+				apiBase = discovery.DefaultAPIBase(protocol)
+			}
+			return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+				cfg.APIKey(),
+				apiBase,
+				cfg.Proxy,
+				cfg.MaxTokensField,
+				cfg.RequestTimeout,
+				cfg.ExtraBody,
+			), modelID, nil
+		}
 		return nil, "", fmt.Errorf("unknown protocol %q in model %q", protocol, cfg.Model)
 	}
 }
 
 // getDefaultAPIBase returns the default API base URL for a given protocol.
+// Most providers are looked up from the discovery registry. Only aliases
+// not in the registry need explicit entries here.
 func getDefaultAPIBase(protocol string) string {
+	// Check the registry first (single source of truth)
+	if base := discovery.DefaultAPIBase(protocol); base != "" {
+		return base
+	}
+	// Aliases and internal protocols not in the public registry
 	switch protocol {
-	case "openai":
-		return "https://api.openai.com/v1"
-	case "openrouter":
-		return "https://openrouter.ai/api/v1"
-	case "litellm":
-		return "http://localhost:4000/v1"
-	case "novita":
-		return "https://api.novita.ai/openai"
-	case "groq":
-		return "https://api.groq.com/openai/v1"
-	case "xai":
-		return "https://api.x.ai/v1"
-	case "zhipu":
-		return "https://open.bigmodel.cn/api/paas/v4"
-	case "gemini":
-		return "https://generativelanguage.googleapis.com/v1beta"
-	case "nvidia":
-		return "https://integrate.api.nvidia.com/v1"
-	case "ollama":
-		return "http://localhost:11434/v1"
-	case "moonshot":
-		return "https://api.moonshot.cn/v1"
-	case "shengsuanyun":
-		return "https://router.shengsuanyun.com/api/v1"
-	case "deepseek":
-		return "https://api.deepseek.com/v1"
-	case "cerebras":
-		return "https://api.cerebras.ai/v1"
-	case "vivgrid":
-		return "https://api.vivgrid.com/v1"
-	case "volcengine":
-		return "https://ark.cn-beijing.volces.com/api/v3"
-	case "qwen":
-		return "https://dashscope.aliyuncs.com/compatible-mode/v1"
-	case "qwen-intl", "qwen-international", "dashscope-intl":
+	case "qwen-international", "dashscope-intl":
 		return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 	case "qwen-us", "dashscope-us":
 		return "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
@@ -378,20 +350,6 @@ func getDefaultAPIBase(protocol string) string {
 		return "https://coding-intl.dashscope.aliyuncs.com/v1"
 	case "coding-plan-anthropic", "alibaba-coding-anthropic":
 		return "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"
-	case "vllm":
-		return "http://localhost:8000/v1"
-	case "mistral":
-		return "https://api.mistral.ai/v1"
-	case "avian":
-		return "https://api.avian.io/v1"
-	case "minimax":
-		return "https://api.minimaxi.com/v1"
-	case "longcat":
-		return "https://api.longcat.chat/openai"
-	case "modelscope":
-		return "https://api-inference.modelscope.cn/v1"
-	case "mimo":
-		return "https://api.xiaomimimo.com/v1"
 	default:
 		return ""
 	}
