@@ -34,28 +34,28 @@ Spawnbot runs as two systemd user services:
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| `spawnbot.service` | 18790 | Gateway (API, channels, agent) |
+| `spawnbot-gateway.service` | 18790 | Gateway (API, channels, agent) |
 | `spawnbot-web.service` | 18800 | Web UI (React SPA) |
 
 ```bash
 # Start / stop / restart
-systemctl --user start spawnbot
-systemctl --user stop spawnbot
-systemctl --user restart spawnbot
+systemctl --user start spawnbot-gateway
+systemctl --user stop spawnbot-gateway
+systemctl --user restart spawnbot-gateway
 
 # Same for web UI
 systemctl --user restart spawnbot-web
 
 # Check status
-systemctl --user status spawnbot
+systemctl --user status spawnbot-gateway
 systemctl --user status spawnbot-web
 
 # View logs
-journalctl --user -u spawnbot -f
+journalctl --user -u spawnbot-gateway -f
 journalctl --user -u spawnbot-web -f
 
 # Enable on boot
-systemctl --user enable spawnbot spawnbot-web
+systemctl --user enable spawnbot-gateway spawnbot-web
 ```
 
 Health check: `curl http://localhost:18790/health`
