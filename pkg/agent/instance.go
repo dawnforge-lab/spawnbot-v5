@@ -228,16 +228,24 @@ func NewAgentInstance(
 // CloneForHeartbeat creates a lightweight copy of the agent for heartbeat
 // processing. It shares the same provider, workspace, and tools but has its
 // own session store and context builder so it doesn't pollute the main agent's
-// context window or state.
-func (ai *AgentInstance) CloneForHeartbeat() *AgentInstance {
+// context window or state. If modelName is non-empty, it overrides the model
+// used for heartbeat processing (e.g. a lighter model to avoid contention).
+func (ai *AgentInstance) CloneForHeartbeat(modelName string) *AgentInstance {
 	sessionsDir := filepath.Join(ai.Workspace, "sessions", "heartbeat")
 	os.MkdirAll(sessionsDir, 0o755)
+
+	model := ai.Model
+	fallbacks := ai.Fallbacks
+	if modelName != "" {
+		model = modelName
+		fallbacks = nil
+	}
 
 	return &AgentInstance{
 		ID:                        ai.ID + "-heartbeat",
 		Name:                      ai.Name + " (heartbeat)",
-		Model:                     ai.Model,
-		Fallbacks:                 ai.Fallbacks,
+		Model:                     model,
+		Fallbacks:                 fallbacks,
 		Workspace:                 ai.Workspace,
 		MaxIterations:             5, // Heartbeat is lightweight
 		MaxTokens:                 ai.MaxTokens,

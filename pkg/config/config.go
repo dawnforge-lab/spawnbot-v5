@@ -841,8 +841,9 @@ func (c *IRCConfig) SetSASLPassword(password string) {
 }
 
 type HeartbeatConfig struct {
-	Enabled  bool `json:"enabled"  env:"SPAWNBOT_HEARTBEAT_ENABLED"`
-	Interval int  `json:"interval" env:"SPAWNBOT_HEARTBEAT_INTERVAL"` // minutes, min 5
+	Enabled   bool   `json:"enabled"    env:"SPAWNBOT_HEARTBEAT_ENABLED"`
+	Interval  int    `json:"interval"   env:"SPAWNBOT_HEARTBEAT_INTERVAL"`   // minutes, min 5
+	ModelName string `json:"model_name" env:"SPAWNBOT_HEARTBEAT_MODEL_NAME"` // optional lighter model
 }
 
 type SelfImproveConfig struct {

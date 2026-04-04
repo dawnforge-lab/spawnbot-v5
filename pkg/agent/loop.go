@@ -1351,7 +1351,10 @@ func (al *AgentLoop) ProcessHeartbeat(
 	}
 
 	// Create a dedicated agent clone with its own session store and context.
-	heartbeatAgent := mainAgent.CloneForHeartbeat()
+	heartbeatAgent := mainAgent.CloneForHeartbeat(al.cfg.Heartbeat.ModelName)
+	if al.cfg.Heartbeat.ModelName != "" {
+		heartbeatAgent.Candidates = resolveModelCandidates(al.cfg, "", al.cfg.Heartbeat.ModelName, nil)
+	}
 
 	return al.runAgentLoop(ctx, heartbeatAgent, processOptions{
 		SessionKey:           "heartbeat",
