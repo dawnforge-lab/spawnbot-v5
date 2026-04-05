@@ -197,7 +197,7 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 
 	case "kimi-coding":
 		// Kimi Coding uses a dedicated coding endpoint with OpenAI-compatible API.
-		// Separate subscription key from standard Moonshot API.
+		// Requires User-Agent identifying a coding agent, separate subscription key.
 		if cfg.APIKey() == "" {
 			return nil, "", fmt.Errorf("api_key is required for kimi-coding protocol (get one at https://www.kimi.com/code/en)")
 		}
@@ -212,6 +212,9 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			cfg.MaxTokensField,
 			cfg.RequestTimeout,
 			cfg.ExtraBody,
+			openai_compat.WithExtraHeaders(map[string]string{
+				"User-Agent": "claude-code/0.1.0",
+			}),
 		), modelID, nil
 
 	case "zhipu-coding":
