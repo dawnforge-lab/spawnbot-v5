@@ -282,11 +282,18 @@ func DefaultConfig() *Config {
 			//   spawnbot auth login --provider github-copilot
 			// After login, add them to model_list in config.json.
 
-			// Ollama (local) - https://ollama.com
+			// Ollama (local/network) - https://ollama.com
 			{
 				ModelName: "llama3",
 				Model:     "ollama/llama3",
 				APIBase:   "http://localhost:11434/v1",
+			},
+
+			// llama.cpp server (local/network) - https://github.com/ggml-org/llama.cpp
+			{
+				ModelName: "local-llama",
+				Model:     "llamacpp/model",
+				APIBase:   "http://localhost:8080/v1",
 			},
 
 			// Mistral AI - https://console.mistral.ai/api-keys

@@ -125,7 +125,11 @@ func onboard(encrypt bool) {
 		apiBase = prov.APIBase
 	}
 
-	// Group 2: Custom base URL (only for custom or providers without default base)
+	// Group 2: Custom base URL
+	// For custom/azure: always ask (no default base)
+	// For local providers (ollama, llamacpp, vllm, litellm): ask with default shown
+	// For cloud providers: skip (they have fixed endpoints)
+	isLocal := prov != nil && prov.Local
 	if providerKey == "custom" || apiBase == "" {
 		placeholder := "http://localhost:8080/v1"
 		if providerKey == "azure" {
@@ -148,10 +152,33 @@ func onboard(encrypt bool) {
 		} else if providerKey == "custom" {
 			apiBase = "http://localhost:8080/v1"
 		}
+	} else if isLocal {
+		// Local providers have a default but the user may run on a different host/port
+		title := fmt.Sprintf("Server URL (default: %s)", apiBase)
+		if providerKey == "ollama" {
+			title = fmt.Sprintf("Ollama server URL (default: %s)", apiBase)
+		} else if providerKey == "llamacpp" {
+			title = fmt.Sprintf("llama.cpp server URL (default: %s)", apiBase)
+		}
+		customForm := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title(title).
+					Description("Press Enter for localhost, or enter IP/hostname for remote server").
+					Placeholder(apiBase).
+					Value(&customBaseURL),
+			),
+		)
+		if err := customForm.Run(); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		if customBaseURL != "" {
+			apiBase = customBaseURL
+		}
 	}
 
 	// Group 3: API key input (skip for local providers)
-	isLocal := prov != nil && prov.Local
 	if !isLocal {
 		keyHint := ""
 		if prov != nil && prov.KeyHint != "" {
