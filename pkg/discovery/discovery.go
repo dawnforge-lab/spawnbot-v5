@@ -109,7 +109,7 @@ type Model struct {
 
 // DiscoverModels queries a provider's models endpoint and returns available models.
 // For providers without a /models endpoint, uses a hardcoded catalog.
-// Falls back to the LiteLLM community model catalog as a last resort.
+// Returns nil with no error if the provider doesn't support model listing.
 func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
 	// Check for a hardcoded catalog first (providers without /models endpoint)
 	if staticModels := staticCatalog(providerKey); staticModels != nil {
@@ -117,24 +117,7 @@ func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
 	}
 
 	// Try the provider's own /models endpoint
-	models, err := discoverFromProvider(providerKey, apiBase, apiKey)
-	if err != nil {
-		// Auth errors are real — don't fall back, let the user fix the key
-		return nil, err
-	}
-	if len(models) > 0 {
-		return models, nil
-	}
-
-	// Provider doesn't support listing — fall back to LiteLLM catalog
-	catalogModels, catalogErr := discoverFromCatalog(providerKey)
-	if catalogErr != nil {
-		return nil, fmt.Errorf("provider API returned no models; catalog fallback failed: %w", catalogErr)
-	}
-	if len(catalogModels) == 0 {
-		return nil, nil
-	}
-	return catalogModels, nil
+	return discoverFromProvider(providerKey, apiBase, apiKey)
 }
 
 // staticCatalog returns a hardcoded model list for providers that don't expose
@@ -190,59 +173,6 @@ func discoverFromProvider(providerKey, apiBase, apiKey string) ([]Model, error) 
 	}
 
 	return parseModelsResponse(body)
-}
-
-// litellmCatalogURL is the LiteLLM community model catalog.
-// This is a static JSON data file — no code is fetched or executed.
-const litellmCatalogURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
-
-// discoverFromCatalog fetches the LiteLLM model catalog and filters by provider.
-func discoverFromCatalog(providerKey string) ([]Model, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Get(litellmCatalogURL)
-	if err != nil {
-		return nil, fmt.Errorf("fetching catalog: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("catalog returned HTTP %d", resp.StatusCode)
-	}
-
-	// Limit to 10MB — the file is ~2MB currently
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-	if err != nil {
-		return nil, fmt.Errorf("reading catalog: %w", err)
-	}
-
-	var catalog map[string]struct {
-		Provider string `json:"litellm_provider"`
-		Mode     string `json:"mode"`
-	}
-	if err := json.Unmarshal(body, &catalog); err != nil {
-		return nil, fmt.Errorf("parsing catalog: %w", err)
-	}
-
-	var models []Model
-	seen := make(map[string]bool)
-	for key, entry := range catalog {
-		if entry.Provider != providerKey || entry.Mode != "chat" {
-			continue
-		}
-		// Model keys are like "groq/llama-3.3-70b" — strip provider prefix
-		modelID := key
-		if idx := strings.Index(key, "/"); idx >= 0 {
-			modelID = key[idx+1:]
-		}
-		if seen[modelID] {
-			continue
-		}
-		seen[modelID] = true
-		models = append(models, Model{ID: modelID, OwnedBy: entry.Provider})
-	}
-
-	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
-	return models, nil
 }
 
 // buildDiscoveryRequest returns the URL and headers for model discovery
