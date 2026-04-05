@@ -44,6 +44,7 @@ func TestExecuteHeartbeat_Async(t *testing.T) {
 
 	// Execute heartbeat directly (internal method for testing)
 	hs.executeHeartbeat()
+	hs.waitDone()
 
 	if !asyncCalled {
 		t.Error("Expected handler to be called")
@@ -97,6 +98,7 @@ func TestExecuteHeartbeat_ResultLogging(t *testing.T) {
 
 			os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Test task"), 0o644)
 			hs.executeHeartbeat()
+			hs.waitDone()
 
 			logFile := filepath.Join(tmpDir, "heartbeat.log")
 			data, err := os.ReadFile(logFile)
@@ -165,6 +167,7 @@ func TestExecuteHeartbeat_NilResult(t *testing.T) {
 
 	// Should not panic with nil result
 	hs.executeHeartbeat()
+	hs.waitDone()
 }
 
 // TestLogPath verifies heartbeat log is written to workspace directory
@@ -270,7 +273,9 @@ func TestExecuteHeartbeat_DeduplicatesIdenticalAlerts(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check disk"), 0o644)
 
 	hs.executeHeartbeat()
+	hs.waitDone()
 	hs.executeHeartbeat() // second call should be deduped
+	hs.waitDone()
 
 	assert.Equal(t, 1, sentCount, "duplicate alert should be suppressed")
 }
@@ -291,6 +296,7 @@ func TestExecuteHeartbeat_SuppressesHeartbeatOKResponse(t *testing.T) {
 
 	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check status"), 0o644)
 	hs.executeHeartbeat()
+	hs.waitDone()
 
 	require.NotNil(t, lastEvent)
 	assert.Equal(t, EventStatusOK, lastEvent.Status)
@@ -312,6 +318,7 @@ func TestExecuteHeartbeat_EmitsEventOnSuccess(t *testing.T) {
 
 	os.WriteFile(filepath.Join(tmpDir, "HEARTBEAT.md"), []byte("Check things"), 0o644)
 	hs.executeHeartbeat()
+	hs.waitDone()
 
 	require.NotNil(t, lastEvent)
 	assert.Equal(t, EventStatusSent, lastEvent.Status)

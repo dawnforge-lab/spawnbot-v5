@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
@@ -50,6 +51,7 @@ type HeartbeatService struct {
 	dedup     *Dedup
 	events    *EventEmitter
 	retryCh   chan struct{} // signals a retry after main-busy skip
+	running   atomic.Bool   // true while a heartbeat is executing
 	taskStore         *tasks.TaskStore
 	selfImproveConfig config.SelfImproveConfig
 }
@@ -189,6 +191,26 @@ func (hs *HeartbeatService) runLoop(stopChan chan struct{}) {
 }
 
 func (hs *HeartbeatService) executeHeartbeat() {
+	// Skip if a previous heartbeat is still running — don't queue up.
+	if !hs.running.CompareAndSwap(false, true) {
+		logger.InfoC("heartbeat", "Skipping heartbeat — previous run still in progress")
+		return
+	}
+
+	go hs.doHeartbeat()
+}
+
+// waitDone spins until no heartbeat is running. Test-only helper.
+func (hs *HeartbeatService) waitDone() {
+	for hs.running.Load() {
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// doHeartbeat runs the actual heartbeat work in a background goroutine.
+func (hs *HeartbeatService) doHeartbeat() {
+	defer hs.running.Store(false)
+
 	start := time.Now()
 
 	hs.mu.RLock()
