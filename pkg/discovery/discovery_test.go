@@ -158,6 +158,46 @@ func TestFindProvider(t *testing.T) {
 	}
 }
 
+func TestStaticCatalog_Minimax(t *testing.T) {
+	models := staticCatalog("minimax")
+	if models == nil {
+		t.Fatal("expected static catalog for minimax")
+	}
+	if len(models) != 8 {
+		t.Fatalf("expected 8 minimax models, got %d", len(models))
+	}
+	if models[0].ID != "MiniMax-M2.7" {
+		t.Errorf("expected first model MiniMax-M2.7, got %s", models[0].ID)
+	}
+}
+
+func TestStaticCatalog_MinimaxCoding(t *testing.T) {
+	models := staticCatalog("minimax-coding")
+	if models == nil {
+		t.Fatal("expected static catalog for minimax-coding")
+	}
+	if len(models) != 8 {
+		t.Fatalf("expected 8 minimax-coding models, got %d", len(models))
+	}
+}
+
+func TestStaticCatalog_UnknownReturnsNil(t *testing.T) {
+	if staticCatalog("openai") != nil {
+		t.Error("expected nil for provider with dynamic discovery")
+	}
+}
+
+func TestDiscoverModels_MinimaxUsesStaticCatalog(t *testing.T) {
+	// MiniMax has no /models endpoint — should return static catalog without hitting network
+	models, err := DiscoverModels("minimax", "https://api.minimaxi.com/v1", "any-key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(models) != 8 {
+		t.Fatalf("expected 8 models from static catalog, got %d", len(models))
+	}
+}
+
 func TestProvidersCatalogNoDuplicates(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, p := range Providers {

@@ -308,10 +308,32 @@ func DefaultConfig() *Config {
 				APIBase:   "https://api.avian.io/v1",
 			},
 
+			// Kimi Coding (subscription) - https://www.kimi.com/code/en
+			{
+				ModelName: "kimi-code",
+				Model:     "kimi-coding/kimi-code",
+				APIBase:   "https://api.kimi.com/coding/v1",
+			},
+
+			// Zhipu AI Coding (subscription) - https://open.bigmodel.cn/
+			{
+				ModelName: "glm-5",
+				Model:     "zhipu-coding/glm-5",
+				APIBase:   "https://open.bigmodel.cn/api/coding/paas/v4",
+			},
+
 			// Minimax - https://api.minimaxi.com/
 			{
 				ModelName: "MiniMax-M2.5",
 				Model:     "minimax/MiniMax-M2.5",
+				APIBase:   "https://api.minimaxi.com/v1",
+				ExtraBody: map[string]any{"reasoning_split": true},
+			},
+
+			// MiniMax Coding (subscription) - https://platform.minimax.io/
+			{
+				ModelName: "MiniMax-M2.7-coding",
+				Model:     "minimax-coding/MiniMax-M2.7",
 				APIBase:   "https://api.minimaxi.com/v1",
 				ExtraBody: map[string]any{"reasoning_split": true},
 			},

@@ -56,10 +56,13 @@ var Providers = []Provider{
 	{Key: "bedrock", Name: "AWS Bedrock", APIBase: "", KeyHint: "Uses AWS credentials (env/profile)"},
 	{Key: "novita", Name: "Novita AI", APIBase: "https://api.novita.ai/openai", KeyHint: "https://novita.ai/", OpenAICompat: true},
 	{Key: "moonshot", Name: "Moonshot (Kimi)", APIBase: "https://api.moonshot.cn/v1", OpenAICompat: true},
+	{Key: "kimi-coding", Name: "Kimi Coding (subscription)", APIBase: "https://api.kimi.com/coding/v1", KeyHint: "https://www.kimi.com/code/en", OpenAICompat: true},
 	{Key: "minimax", Name: "MiniMax", APIBase: "https://api.minimaxi.com/v1"},
+	{Key: "minimax-coding", Name: "MiniMax Coding (subscription)", APIBase: "https://api.minimaxi.com/v1", KeyHint: "https://platform.minimax.io/"},
 	{Key: "volcengine", Name: "VolcEngine (ByteDance)", APIBase: "https://ark.cn-beijing.volces.com/api/v3", OpenAICompat: true},
 	{Key: "qwen", Name: "Qwen (Alibaba)", APIBase: "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 	{Key: "zhipu", Name: "Zhipu AI (GLM)", APIBase: "https://open.bigmodel.cn/api/paas/v4", OpenAICompat: true},
+	{Key: "zhipu-coding", Name: "Zhipu AI Coding (subscription)", APIBase: "https://open.bigmodel.cn/api/coding/paas/v4", KeyHint: "https://open.bigmodel.cn/", OpenAICompat: true},
 	{Key: "qwen-intl", Name: "Qwen International (Alibaba)", APIBase: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"},
 	{Key: "vivgrid", Name: "VivGrid", APIBase: "https://api.vivgrid.com/v1", OpenAICompat: true},
 	{Key: "modelscope", Name: "ModelScope", APIBase: "https://api-inference.modelscope.cn/v1", OpenAICompat: true},
@@ -103,10 +106,15 @@ type Model struct {
 }
 
 // DiscoverModels queries a provider's models endpoint and returns available models.
-// If the provider's API doesn't support model listing, falls back to the LiteLLM
-// community model catalog (a static JSON on GitHub — no code is executed).
+// For providers without a /models endpoint, uses a hardcoded catalog.
+// Falls back to the LiteLLM community model catalog as a last resort.
 func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
-	// Try the provider's own /models endpoint first
+	// Check for a hardcoded catalog first (providers without /models endpoint)
+	if staticModels := staticCatalog(providerKey); staticModels != nil {
+		return staticModels, nil
+	}
+
+	// Try the provider's own /models endpoint
 	models, err := discoverFromProvider(providerKey, apiBase, apiKey)
 	if err != nil {
 		// Auth errors are real — don't fall back, let the user fix the key
@@ -125,6 +133,26 @@ func DiscoverModels(providerKey, apiBase, apiKey string) ([]Model, error) {
 		return nil, nil
 	}
 	return catalogModels, nil
+}
+
+// staticCatalog returns a hardcoded model list for providers that don't expose
+// a /models API endpoint. Returns nil if the provider supports dynamic discovery.
+func staticCatalog(providerKey string) []Model {
+	switch providerKey {
+	case "minimax", "minimax-coding":
+		return []Model{
+			{ID: "MiniMax-M2.7", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2.7-highspeed", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2.5", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2.5-highspeed", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2.1", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2.1-highspeed", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2", OwnedBy: "minimax"},
+			{ID: "MiniMax-M2-highspeed", OwnedBy: "minimax"},
+		}
+	default:
+		return nil
+	}
 }
 
 // discoverFromProvider queries the provider's own /models endpoint.
@@ -231,6 +259,20 @@ func buildDiscoveryRequest(providerKey, apiBase, apiKey string) (string, map[str
 	case "gemini":
 		// Gemini uses API key as query param or x-goog-api-key header
 		headers["x-goog-api-key"] = apiKey
+		return base + "/models", headers
+
+	case "kimi-coding":
+		// Kimi Coding uses the same Bearer auth as moonshot but different base URL
+		if apiKey != "" {
+			headers["Authorization"] = "Bearer " + apiKey
+		}
+		return base + "/models", headers
+
+	case "zhipu", "zhipu-coding":
+		// Zhipu uses Bearer auth with the API key directly
+		if apiKey != "" {
+			headers["Authorization"] = "Bearer " + apiKey
+		}
 		return base + "/models", headers
 
 	default:

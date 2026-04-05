@@ -195,8 +195,46 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			}),
 		), modelID, nil
 
-	case "minimax":
-		// Minimax requires reasoning_split: true in the request body
+	case "kimi-coding":
+		// Kimi Coding uses a dedicated coding endpoint with OpenAI-compatible API.
+		// Separate subscription key from standard Moonshot API.
+		if cfg.APIKey() == "" {
+			return nil, "", fmt.Errorf("api_key is required for kimi-coding protocol (get one at https://www.kimi.com/code/en)")
+		}
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = getDefaultAPIBase(protocol)
+		}
+		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+			cfg.APIKey(),
+			apiBase,
+			cfg.Proxy,
+			cfg.MaxTokensField,
+			cfg.RequestTimeout,
+			cfg.ExtraBody,
+		), modelID, nil
+
+	case "zhipu-coding":
+		// Zhipu AI Coding plan uses a different API path from standard Zhipu.
+		if cfg.APIKey() == "" {
+			return nil, "", fmt.Errorf("api_key is required for zhipu-coding protocol")
+		}
+		apiBase := cfg.APIBase
+		if apiBase == "" {
+			apiBase = getDefaultAPIBase(protocol)
+		}
+		return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+			cfg.APIKey(),
+			apiBase,
+			cfg.Proxy,
+			cfg.MaxTokensField,
+			cfg.RequestTimeout,
+			cfg.ExtraBody,
+		), modelID, nil
+
+	case "minimax", "minimax-coding":
+		// Minimax requires reasoning_split: true in the request body.
+		// minimax-coding uses the same API with a separate coding plan key.
 		if cfg.APIKey() == "" && cfg.APIBase == "" {
 			return nil, "", fmt.Errorf("api_key or api_base is required for HTTP-based protocol %q", protocol)
 		}
