@@ -50,7 +50,7 @@ var Providers = []Provider{
 	{Key: "cerebras", Name: "Cerebras", APIBase: "https://api.cerebras.ai/v1", KeyHint: "https://cloud.cerebras.ai/", OpenAICompat: true},
 	{Key: "nvidia", Name: "NVIDIA NIM", APIBase: "https://integrate.api.nvidia.com/v1", KeyHint: "https://build.nvidia.com/", OpenAICompat: true},
 	{Key: "ollama", Name: "Ollama (local/network)", APIBase: "http://localhost:11434/v1", Local: true, OpenAICompat: true},
-	{Key: "ollama-cloud", Name: "Ollama Cloud", APIBase: "https://api.ollama.com/v1", KeyHint: "https://ollama.com/settings/keys", OpenAICompat: true},
+	{Key: "ollama-cloud", Name: "Ollama Cloud", APIBase: "https://ollama.com/v1", KeyHint: "https://ollama.com/settings/keys", OpenAICompat: true},
 	{Key: "llamacpp", Name: "llama.cpp server (local/network)", APIBase: "http://localhost:8080/v1", Local: true, OpenAICompat: true},
 	{Key: "vllm", Name: "vLLM (local)", APIBase: "http://localhost:8000/v1", Local: true, OpenAICompat: true},
 	{Key: "litellm", Name: "LiteLLM (proxy)", APIBase: "http://localhost:4000/v1", Local: true, OpenAICompat: true},
