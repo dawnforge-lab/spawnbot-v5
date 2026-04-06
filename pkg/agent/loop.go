@@ -2249,6 +2249,20 @@ turnLoop:
 				"channel":        ts.channel,
 			})
 
+		// Fallback: some models (e.g. DeepSeek via Ollama) emit tool calls as
+		// XML/JSON in content text instead of using the structured tool_calls field.
+		if len(response.ToolCalls) == 0 && response.Content != "" {
+			if extracted, remaining := providers.ExtractToolCallsFromContent(response.Content); len(extracted) > 0 {
+				response.ToolCalls = extracted
+				response.Content = remaining
+				logger.InfoCF("agent", "Extracted tool calls from content text",
+					map[string]any{
+						"agent_id": ts.agent.ID,
+						"count":    len(extracted),
+					})
+			}
+		}
+
 		if len(response.ToolCalls) == 0 || gracefulTerminal {
 			responseContent := response.Content
 			if responseContent == "" && response.ReasoningContent != "" {
