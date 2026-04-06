@@ -672,10 +672,22 @@ type fileSystem interface {
 }
 
 // hostFs is an unrestricted fileReadWriter that operates directly on the host filesystem.
-type hostFs struct{}
+// When workspace is set, relative paths are resolved against it instead of the process cwd.
+type hostFs struct {
+	workspace string
+}
+
+// resolve turns relative paths into absolute ones anchored at the workspace.
+// Absolute paths and empty workspaces are returned as-is.
+func (h *hostFs) resolve(path string) string {
+	if filepath.IsAbs(path) || h.workspace == "" {
+		return path
+	}
+	return filepath.Join(h.workspace, path)
+}
 
 func (h *hostFs) ReadFile(path string) ([]byte, error) {
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(h.resolve(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to read file: file not found: %w", err)
@@ -689,17 +701,17 @@ func (h *hostFs) ReadFile(path string) ([]byte, error) {
 }
 
 func (h *hostFs) ReadDir(path string) ([]os.DirEntry, error) {
-	return os.ReadDir(path)
+	return os.ReadDir(h.resolve(path))
 }
 
 func (h *hostFs) WriteFile(path string, data []byte) error {
 	// Use unified atomic write utility with explicit sync for flash storage reliability.
 	// Using 0o600 (owner read/write only) for secure default permissions.
-	return fileutil.WriteFileAtomic(path, data, 0o600)
+	return fileutil.WriteFileAtomic(h.resolve(path), data, 0o600)
 }
 
 func (h *hostFs) Open(path string) (fs.File, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(h.resolve(path))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("failed to open file: file not found: %w", err)
@@ -887,7 +899,7 @@ func (w *whitelistFs) Open(path string) (fs.File, error) {
 // settings and optional path whitelist patterns.
 func buildFs(workspace string, restrict bool, patterns []*regexp.Regexp) fileSystem {
 	if !restrict {
-		return &hostFs{}
+		return &hostFs{workspace: workspace}
 	}
 	sandbox := &sandboxFs{workspace: workspace}
 	if len(patterns) > 0 {
@@ -902,10 +914,11 @@ func getSafeRelPath(workspace, path string) (string, error) {
 		return "", fmt.Errorf("workspace is not defined")
 	}
 
+	cleanWorkspace := filepath.Clean(workspace)
 	rel := filepath.Clean(path)
 	if filepath.IsAbs(rel) {
 		var err error
-		rel, err = filepath.Rel(workspace, rel)
+		rel, err = filepath.Rel(cleanWorkspace, rel)
 		if err != nil {
 			return "", fmt.Errorf("failed to calculate relative path: %w", err)
 		}
