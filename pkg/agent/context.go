@@ -495,7 +495,7 @@ func (cb *ContextBuilder) buildDynamicContext(channel, chatID, senderID, senderD
 	rt := fmt.Sprintf("%s %s, Go %s", runtime.GOOS, runtime.GOARCH, runtime.Version())
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Current Time\n%s\n\n## Runtime\n%s", now, rt)
+	fmt.Fprintf(&sb, "## Current Time\n%s\n\n## Runtime\n%s\n\n## Workspace\n%s", now, rt, cb.workspace)
 
 	if channel != "" && chatID != "" {
 		fmt.Fprintf(&sb, "\n\n## Current Session\nChannel: %s\nChat ID: %s", channel, chatID)

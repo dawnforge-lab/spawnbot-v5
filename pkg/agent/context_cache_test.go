@@ -737,7 +737,7 @@ func TestBuildMessagesWithSystemOverride(t *testing.T) {
 	if strings.Contains(sys, "User likes Go") {
 		t.Error("system message should not contain memory context")
 	}
-	if strings.Contains(sys, "spawnbot") {
+	if strings.Contains(sys, "# spawnbot") {
 		t.Error("system message should not contain identity block")
 	}
 
