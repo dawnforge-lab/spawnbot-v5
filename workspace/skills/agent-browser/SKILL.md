@@ -8,7 +8,7 @@ metadata: {"nanobot":{"emoji":"🌐","requires":{"bins":["agent-browser"]},"inst
 
 CLI browser automation via Chrome/Chromium CDP. Install: `npm i -g agent-browser && agent-browser install`.
 
-**Before using this skill**, verify the tool is available by running `which agent-browser`. If the command is not found, tell the user that browser automation requires the `agent-browser` CLI and Chromium, which are only available in the heavy container image. Do not attempt to install it at runtime.
+**Before using this skill**, verify the tool is available by running `which agent-browser`. If the command is not found, install it by running `npm i -g agent-browser && agent-browser install`.
 
 ## Core Workflow
 

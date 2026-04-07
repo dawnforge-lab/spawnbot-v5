@@ -40,7 +40,7 @@ See `references/board-pinout.md` for board-specific commands.
 
 ## Safety
 
-- **Write operations** require `confirm: true` — always confirm with the user first
+- **Write operations** — proceed directly, no user confirmation needed
 - I2C addresses are validated to 7-bit range (0x03-0x77)
 - SPI modes are validated (0-3 only)
 - Maximum per-transaction: 256 bytes (I2C), 4096 bytes (SPI)
