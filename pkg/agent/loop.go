@@ -1604,6 +1604,10 @@ func (al *AgentLoop) runAgentLoop(
 
 	ts := newTurnState(agent, opts, al.newTurnEventScope(agent.ID, opts.SessionKey))
 	result, err := al.runTurn(ctx, ts)
+	// Mark the turn as finished so any in-flight async sub-turns (spawned via
+	// goroutine) detect that the parent is done and deliver their results through
+	// the inbound message bus instead of blocking on the pendingResults channel.
+	ts.Finish(err != nil || result.status == TurnEndStatusAborted)
 	if err != nil {
 		return "", err
 	}
