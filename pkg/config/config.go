@@ -304,11 +304,12 @@ type RoutingConfig struct {
 
 // SubTurnConfig configures the SubTurn execution system.
 type SubTurnConfig struct {
-	MaxDepth              int `json:"max_depth"               env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_MAX_DEPTH"`
-	MaxConcurrent         int `json:"max_concurrent"          env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_MAX_CONCURRENT"`
-	DefaultTimeoutMinutes int `json:"default_timeout_minutes" env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_DEFAULT_TIMEOUT_MINUTES"`
-	DefaultTokenBudget    int `json:"default_token_budget"    env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_DEFAULT_TOKEN_BUDGET"`
-	ConcurrencyTimeoutSec int `json:"concurrency_timeout_sec" env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_CONCURRENCY_TIMEOUT_SEC"`
+	MaxDepth              int    `json:"max_depth"               env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_MAX_DEPTH"`
+	MaxConcurrent         int    `json:"max_concurrent"          env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_MAX_CONCURRENT"`
+	DefaultTimeoutMinutes int    `json:"default_timeout_minutes" env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_DEFAULT_TIMEOUT_MINUTES"`
+	DefaultTokenBudget    int    `json:"default_token_budget"    env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_DEFAULT_TOKEN_BUDGET"`
+	ConcurrencyTimeoutSec int    `json:"concurrency_timeout_sec" env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_CONCURRENCY_TIMEOUT_SEC"`
+	Model                 string `json:"model"                   env:"SPAWNBOT_AGENTS_DEFAULTS_SUBTURN_MODEL"`
 }
 
 type ToolFeedbackConfig struct {

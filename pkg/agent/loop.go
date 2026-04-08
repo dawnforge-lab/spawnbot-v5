@@ -325,7 +325,11 @@ func registerSharedTools(
 		spawnEnabled := cfg.Tools.IsToolEnabled("spawn")
 		spawnStatusEnabled := cfg.Tools.IsToolEnabled("spawn_status")
 		if (spawnEnabled || spawnStatusEnabled) && cfg.Tools.IsToolEnabled("subagent") {
-			subagentManager := tools.NewSubagentManager(provider, agent.Model, agent.Workspace)
+			subagentModel := agent.Model
+			if cfg.Agents.Defaults.SubTurn.Model != "" {
+				subagentModel = cfg.Agents.Defaults.SubTurn.Model
+			}
+			subagentManager := tools.NewSubagentManager(provider, subagentModel, agent.Workspace)
 			subagentManager.SetLLMOptions(agent.MaxTokens, agent.Temperature)
 
 			// Set the spawner that links into AgentLoop's turnState
