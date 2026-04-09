@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/council"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tasks"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
@@ -435,6 +436,17 @@ func registerSharedTools(
 		agent.AgentRegistry = agentDefs
 		agent.ContextBuilder.SetAgentRegistry(agentDefs)
 		agent.Tools.RegisterHidden(tools.NewCreateAgentTool(workspaceAgentsDir, agentDefs))
+
+		// Council tool
+		if cfg.Tools.IsToolEnabled("council") {
+			councilsDir := filepath.Join(agent.Workspace, "councils")
+			councilStore := council.NewStore(councilsDir)
+			emitter := &councilEventEmitter{bus: al.eventBus}
+			councilEngine := council.NewEngine(councilStore, agentDefs, provider, emitter)
+			councilTool := tools.NewCouncilTool(&councilRunnerAdapter{engine: councilEngine})
+			councilTool.SetLister(&councilListerAdapter{store: councilStore})
+			agent.Tools.RegisterHidden(councilTool)
+		}
 
 		// Initialize task store
 		taskStorePath := filepath.Join(agent.Workspace, "tasks.json")

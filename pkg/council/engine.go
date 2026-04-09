@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dawnforge-lab/spawnbot-v5/pkg/agent"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
@@ -19,16 +18,16 @@ type Engine struct {
 	store         *Store
 	agentRegistry *agents.Registry
 	provider      providers.LLMProvider
-	eventBus      *agent.EventBus
+	emitter       EventEmitter
 }
 
 // NewEngine creates a new council Engine.
-func NewEngine(store *Store, agentRegistry *agents.Registry, provider providers.LLMProvider, eventBus *agent.EventBus) *Engine {
+func NewEngine(store *Store, agentRegistry *agents.Registry, provider providers.LLMProvider, emitter EventEmitter) *Engine {
 	return &Engine{
 		store:         store,
 		agentRegistry: agentRegistry,
 		provider:      provider,
-		eventBus:      eventBus,
+		emitter:       emitter,
 	}
 }
 
@@ -39,9 +38,9 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		return nil, fmt.Errorf("init session: %w", err)
 	}
 
-	e.emitEvent(agent.Event{
-		Kind: agent.EventKindCouncilStart,
-		Payload: agent.CouncilStartPayload{
+	e.emitEvent(Event{
+		Kind: EventCouncilStart,
+		Payload: CouncilStartPayload{
 			CouncilID:   meta.ID,
 			Title:       meta.Title,
 			Description: meta.Description,
@@ -65,9 +64,9 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 
 	// Round loop
 	for round := meta.Rounds + 1; round <= meta.Rounds+maxRounds; round++ {
-		e.emitEvent(agent.Event{
-			Kind: agent.EventKindCouncilRoundStart,
-			Payload: agent.CouncilRoundStartPayload{
+		e.emitEvent(Event{
+			Kind: EventCouncilRoundStart,
+			Payload: CouncilRoundStartPayload{
 				CouncilID: meta.ID,
 				Round:     round,
 			},
@@ -105,9 +104,9 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 			return nil, fmt.Errorf("moderator decision: %w", err)
 		}
 
-		e.emitEvent(agent.Event{
-			Kind: agent.EventKindCouncilRoundEnd,
-			Payload: agent.CouncilRoundEndPayload{
+		e.emitEvent(Event{
+			Kind: EventCouncilRoundEnd,
+			Payload: CouncilRoundEndPayload{
 				CouncilID: meta.ID,
 				Round:     round,
 				Decision:  decision,
@@ -165,9 +164,9 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		Status:    StatusClosed,
 	}
 
-	e.emitEvent(agent.Event{
-		Kind: agent.EventKindCouncilEnd,
-		Payload: agent.CouncilEndPayload{
+	e.emitEvent(Event{
+		Kind: EventCouncilEnd,
+		Payload: CouncilEndPayload{
 			CouncilID: meta.ID,
 			Rounds:    meta.Rounds,
 			Synthesis: synthesis,
@@ -220,9 +219,9 @@ func (e *Engine) initSession(cfg CouncilConfig) (*CouncilMeta, []TranscriptEntry
 
 // callAgent builds messages and calls the LLM for a single agent.
 func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *agents.AgentDefinition, transcript []TranscriptEntry, round int) (string, error) {
-	e.emitEvent(agent.Event{
-		Kind: agent.EventKindCouncilAgentStart,
-		Payload: agent.CouncilAgentStartPayload{
+	e.emitEvent(Event{
+		Kind: EventCouncilAgentStart,
+		Payload: CouncilAgentStartPayload{
 			CouncilID: meta.ID,
 			AgentID:   agentDef.Name,
 			AgentType: agentDef.Name,
@@ -246,9 +245,9 @@ func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *age
 			delta := accumulated[len(lastAccumulated):]
 			lastAccumulated = accumulated
 			if delta != "" {
-				e.emitEvent(agent.Event{
-					Kind: agent.EventKindCouncilAgentDelta,
-					Payload: agent.CouncilAgentDeltaPayload{
+				e.emitEvent(Event{
+					Kind: EventCouncilAgentDelta,
+					Payload: CouncilAgentDeltaPayload{
 						CouncilID: meta.ID,
 						AgentID:   agentDef.Name,
 						Delta:     delta,
@@ -268,9 +267,9 @@ func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *age
 		response = resp.Content
 	}
 
-	e.emitEvent(agent.Event{
-		Kind: agent.EventKindCouncilAgentEnd,
-		Payload: agent.CouncilAgentEndPayload{
+	e.emitEvent(Event{
+		Kind: EventCouncilAgentEnd,
+		Payload: CouncilAgentEndPayload{
 			CouncilID: meta.ID,
 			AgentID:   agentDef.Name,
 			Content:   response,
@@ -407,10 +406,10 @@ func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, trans
 	return resp.Content, nil
 }
 
-// emitEvent safely emits an event, checking if eventBus is nil.
-func (e *Engine) emitEvent(evt agent.Event) {
-	if e.eventBus == nil {
+// emitEvent safely emits an event, checking if emitter is nil.
+func (e *Engine) emitEvent(evt Event) {
+	if e.emitter == nil {
 		return
 	}
-	e.eventBus.Emit(evt)
+	e.emitter.EmitCouncilEvent(evt)
 }
