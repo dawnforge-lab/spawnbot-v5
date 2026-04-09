@@ -7,10 +7,29 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dawnforge-lab/spawnbot-v5/pkg/agent"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
+
+// mockEventEmitter implements council.EventEmitter for testing.
+type mockEventEmitter struct {
+	mu     sync.Mutex
+	events []Event
+}
+
+func (m *mockEventEmitter) EmitCouncilEvent(evt Event) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, evt)
+}
+
+func (m *mockEventEmitter) allEvents() []Event {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]Event, len(m.events))
+	copy(cp, m.events)
+	return cp
+}
 
 // mockProvider implements providers.LLMProvider and returns responses in order.
 type mockProvider struct {
@@ -58,22 +77,7 @@ func TestEngine_RunBasicCouncil(t *testing.T) {
 	dir := t.TempDir()
 	store := NewStore(dir)
 	reg := setupRegistry()
-	eventBus := agent.NewEventBus()
-	defer eventBus.Close()
-
-	// Collect events
-	sub := eventBus.Subscribe(64)
-	var events []agent.Event
-	var eventsMu sync.Mutex
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for evt := range sub.C {
-			eventsMu.Lock()
-			events = append(events, evt)
-			eventsMu.Unlock()
-		}
-	}()
+	emitter := &mockEventEmitter{}
 
 	mock := &mockProvider{
 		responses: []string{
@@ -88,7 +92,7 @@ func TestEngine_RunBasicCouncil(t *testing.T) {
 		},
 	}
 
-	eng := NewEngine(store, reg, mock, eventBus)
+	eng := NewEngine(store, reg, mock, emitter)
 
 	result, err := eng.Run(context.Background(), CouncilConfig{
 		Title:  "Test Council",
@@ -98,10 +102,6 @@ func TestEngine_RunBasicCouncil(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error: %v", err)
 	}
-
-	// Close eventBus to flush events
-	eventBus.Close()
-	<-done
 
 	// Verify result
 	if result.ID == "" {
@@ -131,23 +131,21 @@ func TestEngine_RunBasicCouncil(t *testing.T) {
 	}
 
 	// Verify events were emitted
-	eventsMu.Lock()
-	defer eventsMu.Unlock()
-
+	events := emitter.allEvents()
 	var hasStart, hasEnd bool
 	for _, evt := range events {
-		if evt.Kind == agent.EventKindCouncilStart {
+		if evt.Kind == EventCouncilStart {
 			hasStart = true
 		}
-		if evt.Kind == agent.EventKindCouncilEnd {
+		if evt.Kind == EventCouncilEnd {
 			hasEnd = true
 		}
 	}
 	if !hasStart {
-		t.Error("expected EventKindCouncilStart event")
+		t.Error("expected EventCouncilStart event")
 	}
 	if !hasEnd {
-		t.Error("expected EventKindCouncilEnd event")
+		t.Error("expected EventCouncilEnd event")
 	}
 }
 
