@@ -156,23 +156,18 @@ func TestGet_HiddenToolDiscoveryLifecycle(t *testing.T) {
 	reg := NewToolRegistry()
 	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "test"})
 
-	// Not discovered → not gettable
+	// Get returns any registered tool regardless of discovery state.
+	// Discovery only controls visibility in GetAll (tool listing for LLM).
 	_, ok := reg.Get("hidden_tool")
-	if ok {
-		t.Error("Expected undiscovered hidden tool to NOT be gettable")
+	if !ok {
+		t.Error("Expected hidden tool to be gettable via Get")
 	}
 
-	// Promote → gettable (session-persistent)
+	// Promote → still gettable, and now visible in GetAll
 	reg.PromoteTools([]string{"hidden_tool"})
 	_, ok = reg.Get("hidden_tool")
 	if !ok {
 		t.Error("Expected promoted hidden tool to be gettable")
-	}
-
-	// Stays gettable (no TTL decay)
-	_, ok = reg.Get("hidden_tool")
-	if !ok {
-		t.Error("Expected discovered tool to stay gettable")
 	}
 
 	// Core tools remain always gettable
