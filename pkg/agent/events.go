@@ -48,6 +48,15 @@ const (
 	// EventKindError is emitted when a turn encounters an execution error.
 	EventKindError
 
+	// Council events
+	EventKindCouncilStart
+	EventKindCouncilRoundStart
+	EventKindCouncilAgentStart
+	EventKindCouncilAgentDelta
+	EventKindCouncilAgentEnd
+	EventKindCouncilRoundEnd
+	EventKindCouncilEnd
+
 	eventKindCount
 )
 
@@ -71,6 +80,14 @@ var eventKindNames = [...]string{
 	"subturn_result_delivered",
 	"subturn_orphan",
 	"error",
+	// Council events
+	"council_start",
+	"council_round_start",
+	"council_agent_start",
+	"council_agent_delta",
+	"council_agent_end",
+	"council_round_end",
+	"council_end",
 }
 
 // String returns the stable string form of an EventKind.
@@ -269,4 +286,49 @@ type SubTurnOrphanPayload struct {
 type ErrorPayload struct {
 	Stage   string
 	Message string
+}
+
+type CouncilStartPayload struct {
+	CouncilID   string   `json:"council_id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Roster      []string `json:"roster"`
+}
+
+type CouncilRoundStartPayload struct {
+	CouncilID string `json:"council_id"`
+	Round     int    `json:"round"`
+}
+
+type CouncilAgentStartPayload struct {
+	CouncilID string `json:"council_id"`
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+	Round     int    `json:"round"`
+}
+
+type CouncilAgentDeltaPayload struct {
+	CouncilID string `json:"council_id"`
+	AgentID   string `json:"agent_id"`
+	Delta     string `json:"delta"`
+}
+
+type CouncilAgentEndPayload struct {
+	CouncilID string `json:"council_id"`
+	AgentID   string `json:"agent_id"`
+	Content   string `json:"content"`
+	Round     int    `json:"round"`
+}
+
+type CouncilRoundEndPayload struct {
+	CouncilID string `json:"council_id"`
+	Round     int    `json:"round"`
+	Decision  string `json:"decision"`
+}
+
+type CouncilEndPayload struct {
+	CouncilID string `json:"council_id"`
+	Rounds    int    `json:"rounds"`
+	Synthesis string `json:"synthesis"`
+	Status    string `json:"status"`
 }
