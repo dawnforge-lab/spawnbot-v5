@@ -636,3 +636,72 @@ func truncate(s string, maxLen int) string {
 	}
 	return string(runes[:maxLen]) + "..."
 }
+
+// BeginStream implements channels.StreamingCapable.
+func (c *PicoChannel) BeginStream(ctx context.Context, chatID string) (channels.Streamer, error) {
+	if !c.IsRunning() {
+		return nil, channels.ErrNotRunning
+	}
+	return &picoStreamer{
+		channel:          c,
+		chatID:           chatID,
+		messageID:        fmt.Sprintf("stream-%d", time.Now().UnixMilli()),
+		throttleInterval: 50 * time.Millisecond,
+	}, nil
+}
+
+// picoStreamer streams partial LLM output via Pico Protocol WebSocket messages.
+type picoStreamer struct {
+	channel          *PicoChannel
+	chatID           string
+	messageID        string
+	throttleInterval time.Duration
+	lastAt           time.Time
+	mu               sync.Mutex
+	created          bool
+}
+
+// Update implements channels.Streamer — throttles WebSocket updates during streaming.
+func (s *picoStreamer) Update(ctx context.Context, content string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	if s.created && now.Sub(s.lastAt) < s.throttleInterval {
+		return nil
+	}
+
+	// First update: create the message placeholder
+	if !s.created {
+		createMsg := newMessage(TypeMessageCreate, map[string]any{
+			"message_id": s.messageID,
+			"content":    "",
+		})
+		s.channel.broadcastToSession(s.chatID, createMsg)
+		s.created = true
+	}
+
+	// Update with accumulated content
+	updateMsg := newMessage(TypeMessageUpdate, map[string]any{
+		"message_id": s.messageID,
+		"content":    content,
+	})
+	s.channel.broadcastToSession(s.chatID, updateMsg)
+	s.lastAt = now
+	return nil
+}
+
+// Finalize implements channels.Streamer — sends the final content.
+func (s *picoStreamer) Finalize(ctx context.Context, content string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	msg := newMessage(TypeMessageUpdate, map[string]any{
+		"message_id": s.messageID,
+		"content":    content,
+	})
+	return s.channel.broadcastToSession(s.chatID, msg)
+}
+
+// Cancel implements channels.Streamer — no-op for WebSocket.
+func (s *picoStreamer) Cancel(ctx context.Context) {}
