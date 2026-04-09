@@ -113,8 +113,6 @@ func TestStore_List(t *testing.T) {
 		if _, err := s.Create(meta); err != nil {
 			t.Fatalf("Create %q failed: %v", title, err)
 		}
-		// Small sleep to ensure distinct millisecond IDs
-		time.Sleep(2 * time.Millisecond)
 	}
 
 	list, err := s.List()

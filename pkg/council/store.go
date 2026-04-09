@@ -2,6 +2,8 @@ package council
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -33,7 +35,11 @@ func (s *Store) Create(meta *CouncilMeta) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	id := fmt.Sprintf("council-%d", time.Now().UnixMilli())
+	var suffix [2]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("generate random suffix: %w", err)
+	}
+	id := fmt.Sprintf("council-%d-%s", time.Now().UnixMilli(), hex.EncodeToString(suffix[:]))
 	meta.ID = id
 
 	councilDir := filepath.Join(s.dir, id)
@@ -121,6 +127,7 @@ func (s *Store) List() ([]*CouncilMeta, error) {
 		}
 		var meta CouncilMeta
 		if err := json.Unmarshal(data, &meta); err != nil {
+			logger.WarnCF("council", "corrupt meta.json", map[string]any{"dir": entry.Name(), "error": err.Error()})
 			continue
 		}
 		metas = append(metas, &meta)
