@@ -92,7 +92,7 @@ func TestEngine_RunBasicCouncil(t *testing.T) {
 		},
 	}
 
-	eng := NewEngine(store, reg, mock, emitter)
+	eng := NewEngine(store, reg, mock, emitter, "test-model")
 
 	result, err := eng.Run(context.Background(), CouncilConfig{
 		Title:  "Test Council",
@@ -164,7 +164,7 @@ func TestEngine_ResumeCouncil(t *testing.T) {
 		},
 	}
 
-	eng1 := NewEngine(store, reg, mock1, nil)
+	eng1 := NewEngine(store, reg, mock1, nil, "test-model")
 
 	result1, err := eng1.Run(context.Background(), CouncilConfig{
 		Title:  "Resume Test Council",
@@ -187,7 +187,7 @@ func TestEngine_ResumeCouncil(t *testing.T) {
 		},
 	}
 
-	eng2 := NewEngine(store, reg, mock2, nil)
+	eng2 := NewEngine(store, reg, mock2, nil, "test-model")
 
 	result2, err := eng2.Run(context.Background(), CouncilConfig{
 		ID:     firstID,

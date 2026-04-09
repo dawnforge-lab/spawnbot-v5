@@ -27,7 +27,7 @@ func TestIntegration_CouncilWithEvents(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(store, agentRegistry, provider, emitter)
+	engine := NewEngine(store, agentRegistry, provider, emitter, "test-model")
 
 	result, err := engine.Run(context.Background(), CouncilConfig{
 		Title:  "Event Test",

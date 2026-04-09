@@ -442,7 +442,7 @@ func registerSharedTools(
 			councilsDir := filepath.Join(agent.Workspace, "councils")
 			councilStore := council.NewStore(councilsDir)
 			emitter := &councilEventEmitter{bus: al.eventBus}
-			councilEngine := council.NewEngine(councilStore, agentDefs, provider, emitter)
+			councilEngine := council.NewEngine(councilStore, agentDefs, provider, emitter, agent.Model)
 			councilTool := tools.NewCouncilTool(&councilRunnerAdapter{engine: councilEngine})
 			councilTool.SetLister(&councilListerAdapter{store: councilStore})
 			agent.Tools.RegisterHidden(councilTool)

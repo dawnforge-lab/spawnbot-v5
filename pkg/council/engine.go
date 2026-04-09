@@ -19,15 +19,18 @@ type Engine struct {
 	agentRegistry *agents.Registry
 	provider      providers.LLMProvider
 	emitter       EventEmitter
+	defaultModel  string
 }
 
-// NewEngine creates a new council Engine.
-func NewEngine(store *Store, agentRegistry *agents.Registry, provider providers.LLMProvider, emitter EventEmitter) *Engine {
+// NewEngine creates a new council Engine. defaultModel is the fallback model
+// used when an agent definition doesn't specify one.
+func NewEngine(store *Store, agentRegistry *agents.Registry, provider providers.LLMProvider, emitter EventEmitter, defaultModel string) *Engine {
 	return &Engine{
 		store:         store,
 		agentRegistry: agentRegistry,
 		provider:      provider,
 		emitter:       emitter,
+		defaultModel:  defaultModel,
 	}
 }
 
@@ -233,6 +236,9 @@ func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *age
 
 	model := agentDef.Model
 	if model == "" {
+		model = e.defaultModel
+	}
+	if model == "" {
 		model = e.provider.GetDefaultModel()
 	}
 
@@ -356,7 +362,10 @@ func (e *Engine) moderatorDecision(ctx context.Context, meta *CouncilMeta, trans
 		Content: sb.String(),
 	})
 
-	model := e.provider.GetDefaultModel()
+	model := e.defaultModel
+	if model == "" {
+		model = e.provider.GetDefaultModel()
+	}
 	resp, err := e.provider.Chat(ctx, messages, nil, model, nil)
 	if err != nil {
 		return "", err
@@ -397,7 +406,10 @@ func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, trans
 		Content: sb.String(),
 	})
 
-	model := e.provider.GetDefaultModel()
+	model := e.defaultModel
+	if model == "" {
+		model = e.provider.GetDefaultModel()
+	}
 	resp, err := e.provider.Chat(ctx, messages, nil, model, nil)
 	if err != nil {
 		return "", err
