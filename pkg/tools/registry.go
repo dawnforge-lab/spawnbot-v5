@@ -207,10 +207,12 @@ func (r *ToolRegistry) Get(name string) (Tool, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Hidden tools that haven't been discovered are not callable.
-	if !entry.IsCore && !r.discovered[name] {
-		return nil, false
-	}
+	// Allow execution of any registered tool, even if not yet discovered.
+	// The discovery gate (GetAll) controls which tools the LLM sees in its
+	// tool list. But if the LLM already knows a tool name (e.g. from a prior
+	// session where search_tools activated it), blocking execution here causes
+	// silent failures after gateway restarts since the in-memory discovered
+	// set is not persisted.
 	return entry.Tool, true
 }
 

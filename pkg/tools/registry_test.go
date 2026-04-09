@@ -402,9 +402,11 @@ func TestToolRegistry_Clone_PreservesHiddenToolState(t *testing.T) {
 
 	clone := r.Clone()
 
-	// Undiscovered hidden tools should not be gettable (same behavior as parent)
-	if _, ok := clone.Get("mcp_tool"); ok {
-		t.Error("expected undiscovered hidden tool to be invisible in clone")
+	// Undiscovered hidden tools should not be visible in GetAll (LLM tool list)
+	for _, tool := range clone.GetAll() {
+		if tool.Name() == "mcp_tool" {
+			t.Error("expected undiscovered hidden tool to be invisible in GetAll")
+		}
 	}
 
 	// But the entry should exist (count includes hidden tools)
@@ -729,19 +731,21 @@ func TestRegistry_DiscoveredToolIsGettable(t *testing.T) {
 	reg := NewToolRegistry()
 	reg.RegisterHidden(&mockSearchableTool{name: "hidden_tool", desc: "a hidden tool"})
 
-	// Before discovery, Get should fail
-	if _, ok := reg.Get("hidden_tool"); ok {
-		t.Fatal("hidden tool should not be gettable before discovery")
-	}
-
-	// After discovery, Get should succeed
-	reg.PromoteTools([]string{"hidden_tool"})
+	// Get returns any registered tool, even before discovery (execution is
+	// not gated by discovery — only GetAll visibility is).
 	tool, ok := reg.Get("hidden_tool")
 	if !ok {
-		t.Fatal("discovered tool should be gettable")
+		t.Fatal("hidden tool should be gettable via Get")
 	}
 	if tool.Name() != "hidden_tool" {
 		t.Fatalf("expected tool name 'hidden_tool', got %q", tool.Name())
+	}
+
+	// After discovery, still gettable
+	reg.PromoteTools([]string{"hidden_tool"})
+	tool, ok = reg.Get("hidden_tool")
+	if !ok {
+		t.Fatal("discovered tool should be gettable")
 	}
 }
 
@@ -880,10 +884,10 @@ func TestRegistry_Clone_CopiesDiscovered(t *testing.T) {
 		t.Errorf("expected SearchHint %q in clone, got %q", "my hint", entry.SearchHint)
 	}
 
-	// Discovering in clone should not affect original
+	// Tools registered in original after clone should not appear in clone
 	reg.RegisterHidden(&mockSearchableTool{name: "another", desc: "another"})
 	clone.PromoteTools([]string{"another"}) // should not exist in clone
-	if _, ok := reg.Get("another"); ok {
-		t.Fatal("discovering in clone should not affect original (tool was not in clone)")
+	if _, ok := clone.Get("another"); ok {
+		t.Fatal("tool registered after clone should not appear in clone")
 	}
 }

@@ -44,9 +44,11 @@ func TestDeferredToolLoading_FullFlow(t *testing.T) {
 	if !strings.Contains(res.ForLLM, "web_search") || !strings.Contains(res.ForLLM, "web_fetch") {
 		t.Errorf("keyword search should find web tools, got: %s", res.ForLLM)
 	}
-	// Keyword search should NOT activate
-	if _, ok := reg.Get("web_search"); ok {
-		t.Error("keyword search should not activate tools")
+	// Keyword search should NOT make tools visible in GetAll
+	for _, tool := range reg.GetAll() {
+		if tool.Name() == "web_search" {
+			t.Error("keyword search should not make tools visible in GetAll")
+		}
 	}
 
 	// 4. Select to activate
@@ -92,7 +94,9 @@ func TestDeferredToolLoading_FullFlow(t *testing.T) {
 	if _, ok := clone.Get("web_search"); !ok {
 		t.Fatal("cloned registry should preserve discovered tools")
 	}
-	if _, ok := clone.Get("spawn"); ok {
-		t.Fatal("cloned registry should not have undiscovered tools gettable")
+	for _, tool := range clone.GetAll() {
+		if tool.Name() == "spawn" {
+			t.Fatal("cloned registry should not have undiscovered tools visible in GetAll")
+		}
 	}
 }

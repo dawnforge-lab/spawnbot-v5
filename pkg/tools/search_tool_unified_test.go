@@ -102,9 +102,11 @@ func TestSearchTools_KeywordMode_FindsByName(t *testing.T) {
 	if !strings.Contains(res.ForLLM, "web_fetch") {
 		t.Errorf("Expected web_fetch in results, got: %s", res.ForLLM)
 	}
-	// Should NOT auto-activate
-	if _, ok := reg.Get("web_search"); ok {
-		t.Error("Keyword mode should NOT auto-activate tools")
+	// Should NOT make visible in GetAll (LLM tool list)
+	for _, tool := range reg.GetAll() {
+		if tool.Name() == "web_search" {
+			t.Error("Keyword mode should NOT make tools visible in GetAll")
+		}
 	}
 	// Should have hint to use select:
 	if !strings.Contains(res.ForLLM, "select:") {
