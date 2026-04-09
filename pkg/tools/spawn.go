@@ -124,6 +124,7 @@ func (t *SpawnTool) execute(
 				MaxTokens:          t.maxTokens,
 				Temperature:        t.temperature,
 				Async:              true, // Async execution
+				Critical:           true, // Continue running after parent turn ends
 				AgentType:          agentType,
 			})
 			if err != nil {
