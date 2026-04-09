@@ -61,10 +61,10 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		},
 	})
 
-	// If there's a topic, append it as a user message
+	// If there's a topic, append it as the moderator's agenda
 	if cfg.Topic != "" {
 		entry := TranscriptEntry{
-			Role:      RoleUser,
+			Role:      RoleModerator,
 			Content:   cfg.Topic,
 			Round:     meta.Rounds + 1,
 			Timestamp: time.Now(),
@@ -300,9 +300,20 @@ func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *age
 func (e *Engine) buildAgentMessages(agentDef *agents.AgentDefinition, meta *CouncilMeta, transcript []TranscriptEntry) []protocoltypes.Message {
 	var messages []protocoltypes.Message
 
-	// System message with agent's prompt and council context
-	systemContent := fmt.Sprintf("%s\n\nYou are participating in a council discussion titled %q with agents: %s. Provide your perspective based on your expertise.",
-		agentDef.SystemPrompt, meta.Title, strings.Join(meta.Roster, ", "))
+	// System message with agent's expertise context and council framing.
+	// The prompt deliberately pushes agents OUT of rigid role-playing to encourage
+	// genuine collaborative thinking rather than positional debating.
+	systemContent := fmt.Sprintf(`You have expertise in: %s
+
+You are in a council discussion titled %q with other specialists: %s.
+
+IMPORTANT: You are NOT role-playing. Do not speak "as a %s" — speak as yourself with your own judgment. Your expertise informs your thinking but does not limit it. You should:
+- Agree with others when they are right, even if it's outside your specialty
+- Challenge your own assumptions, not just others'
+- Build on good ideas regardless of who proposed them
+- Focus on what's actually true and useful, not on defending a position
+- Be concise and substantive — skip preamble and hedging`,
+		agentDef.Name, meta.Title, strings.Join(meta.Roster, ", "), agentDef.Name)
 	messages = append(messages, protocoltypes.Message{
 		Role:    "system",
 		Content: systemContent,
@@ -350,7 +361,21 @@ func (e *Engine) moderatorDecision(ctx context.Context, meta *CouncilMeta, trans
 
 	messages = append(messages, protocoltypes.Message{
 		Role:    "system",
-		Content: "You are a council moderator. Review the discussion transcript and decide whether the council should continue discussing or conclude. If the agents have provided sufficient input and reached useful conclusions, respond with 'CONCLUDE' followed by your reasoning. Otherwise, provide a brief note on what should be discussed further.",
+		Content: `You are a council moderator. Review the discussion and decide: CONTINUE or CONCLUDE.
+
+CONCLUDE when:
+- The council has identified clear points of agreement
+- Actionable conclusions or decisions have emerged
+- Further rounds would just repeat what's been said
+
+CONTINUE when:
+- Key disagreements remain unresolved with no path forward
+- Important angles haven't been explored yet
+- The discussion is still producing new, useful insights
+
+If continuing, identify specific points of agreement so far and direct the next round toward resolving remaining gaps. Push for convergence — ask agents to commit to positions rather than hedging.
+
+Respond with either "CONCLUDE" or a brief directive for the next round.`,
 	})
 
 	// Include transcript summary
