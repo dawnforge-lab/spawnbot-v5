@@ -159,6 +159,10 @@ func (s *Store) AppendMessage(id string, entry TranscriptEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
+	}
+
 	transcriptPath := filepath.Join(s.dir, id, "transcript.jsonl")
 	f, err := os.OpenFile(transcriptPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {

@@ -133,7 +133,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
   let lastRound = -1
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
+    <div className="mx-auto h-full max-w-4xl overflow-y-auto p-6">
       {/* Header */}
       <div className="mb-8">
         <div className="mb-2 flex items-center gap-3">
@@ -209,9 +209,11 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
                   >
                     {style.label}
                   </span>
-                  <span className="text-muted-foreground text-xs">
-                    {new Date(entry.ts).toLocaleTimeString()}
-                  </span>
+                  {entry.ts && !entry.ts.startsWith("0001") && (
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(entry.ts).toLocaleTimeString()}
+                    </span>
+                  )}
                 </div>
                 <MarkdownRenderer content={entry.content} />
               </div>
