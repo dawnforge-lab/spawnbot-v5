@@ -157,6 +157,49 @@ export function handlePicoMessage(
     case "pong":
       break
 
+    case "council.start": {
+      const id = payload.council_id as string
+      const title = payload.title as string
+      console.log("[council] started:", id, title)
+      break
+    }
+
+    case "council.agent.start": {
+      const councilId = payload.council_id as string
+      const agentId = payload.agent_id as string
+      const agentType = payload.agent_type as string
+      const round = payload.round as number
+      console.log("[council] agent start:", councilId, agentId, agentType, "round:", round)
+      break
+    }
+
+    case "council.agent.delta": {
+      const agentId = payload.agent_id as string
+      const delta = payload.delta as string
+      console.log("[council] agent delta:", agentId, delta)
+      break
+    }
+
+    case "council.agent.end": {
+      const agentId = payload.agent_id as string
+      const content = payload.content as string
+      console.log("[council] agent end:", agentId, content)
+      break
+    }
+
+    case "council.round.end": {
+      const councilId = payload.council_id as string
+      const round = payload.round as number
+      console.log("[council] round end:", councilId, "round:", round)
+      break
+    }
+
+    case "council.end": {
+      const councilId = payload.council_id as string
+      console.log("[council] ended:", councilId)
+      break
+    }
+
     default:
       console.log("Unknown pico message type:", message.type)
   }

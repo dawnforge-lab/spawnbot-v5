@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/council"
 	"github.com/dawnforge-lab/spawnbot-v5/web/backend/launcherconfig"
 )
 
@@ -21,6 +22,7 @@ type Handler struct {
 	weixinFlows          map[string]*weixinFlow
 	wecomMu              sync.Mutex
 	wecomFlows           map[string]*wecomFlow
+	councilStore         *council.Store
 }
 
 // NewHandler creates an instance of the API handler.
@@ -56,6 +58,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Session history
 	h.registerSessionRoutes(mux)
+
+	// Council sessions
+	h.registerCouncilRoutes(mux)
 
 	// OAuth login and credential management
 	h.registerOAuthRoutes(mux)
