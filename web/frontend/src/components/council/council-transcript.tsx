@@ -152,7 +152,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {council.roster.map((agent) => {
+          {(council.roster ?? []).map((agent) => {
             const colors = agentColors[agent] ?? {
               bg: "#f5f5f5",
               text: "#616161",
@@ -175,7 +175,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
 
       {/* Transcript */}
       <div className="flex flex-col gap-4">
-        {council.transcript.map((entry, idx) => {
+        {(council.transcript ?? []).map((entry, idx) => {
           const style = getEntryStyle(entry)
           const showRoundSeparator = entry.round !== lastRound
           lastRound = entry.round

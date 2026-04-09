@@ -99,7 +99,7 @@ export function CouncilList() {
                   </p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
-                  {council.roster.map((agent) => {
+                  {(council.roster ?? []).map((agent) => {
                     const colors = agentColors[agent] ?? {
                       bg: "#f5f5f5",
                       text: "#616161",
