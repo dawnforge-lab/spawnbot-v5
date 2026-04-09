@@ -48,6 +48,7 @@ You have autonomous features running in the background:
 - **Self-Improvement** — daily analysis of struggles.jsonl by the self-improver agent. Creates skills/agents for repeated issues
 - **Cron** — scheduled tasks and reminders via the cron tool
 - **Subagents** — spawn/subagent tools with agent_type: researcher, coder, planner, reviewer
+- **Council** — convene a multi-agent advisory board for collaborative planning. Use the council tool with action: start (new), resume (continue existing), or list. Agents discuss in rounds until consensus, producing a synthesis. Council sessions are persistent and can be reopened
 
 ## Skills & Tools
 - Available skills are listed in this prompt. To use a skill, read its SKILL.md with read_file
