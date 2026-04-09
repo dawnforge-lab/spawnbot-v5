@@ -818,6 +818,14 @@ func (al *AgentLoop) EventDrops(kind EventKind) int64 {
 	return al.eventBus.Dropped(kind)
 }
 
+// EventBus returns the underlying event broadcaster for direct subscription.
+func (al *AgentLoop) EventBus() *EventBus {
+	if al == nil {
+		return nil
+	}
+	return al.eventBus
+}
+
 type turnEventScope struct {
 	agentID    string
 	sessionKey string

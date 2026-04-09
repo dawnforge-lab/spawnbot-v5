@@ -22,7 +22,7 @@ import (
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/line"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/maixcam"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/onebot"
-	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/pico"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels/pico"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/qq"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/slack"
 	_ "github.com/dawnforge-lab/spawnbot-v5/pkg/channels/telegram"
@@ -324,6 +324,13 @@ func setupAndStartServices(
 	agentLoop.SetChannelManager(runningServices.ChannelManager)
 	agentLoop.SetMediaStore(runningServices.MediaStore)
 
+	// Wire council event broadcasting to the Pico channel if enabled.
+	if picoCh, ok := runningServices.ChannelManager.GetChannel("pico"); ok {
+		if pc, ok := picoCh.(*pico.PicoChannel); ok {
+			pc.SetEventBus(agentLoop.EventBus())
+		}
+	}
+
 	if transcriber := voice.DetectTranscriber(cfg); transcriber != nil {
 		agentLoop.SetTranscriber(transcriber)
 		logger.InfoCF("voice", "Transcription enabled (agent-level)", map[string]any{"provider": transcriber.Name()})
@@ -536,6 +543,13 @@ func restartServices(
 		return fmt.Errorf("error recreating channel manager: %w", err)
 	}
 	al.SetChannelManager(runningServices.ChannelManager)
+
+	// Re-wire council event broadcasting to the Pico channel if enabled.
+	if picoCh, ok := runningServices.ChannelManager.GetChannel("pico"); ok {
+		if pc, ok := picoCh.(*pico.PicoChannel); ok {
+			pc.SetEventBus(al.EventBus())
+		}
+	}
 
 	enabledChannels := runningServices.ChannelManager.GetEnabledChannels()
 	if len(enabledChannels) > 0 {

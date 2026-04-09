@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/agent"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/bus"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/channels"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
@@ -312,6 +313,68 @@ func (c *PicoChannel) broadcastToSession(chatID string, msg PicoMessage) error {
 		return fmt.Errorf("no active connections for session %s: %w", sessionID, channels.ErrSendFailed)
 	}
 	return nil
+}
+
+// broadcastToAll sends a message to ALL active WebSocket connections across all sessions.
+func (c *PicoChannel) broadcastToAll(msg PicoMessage) {
+	c.connsMu.RLock()
+	defer c.connsMu.RUnlock()
+	for _, bySession := range c.sessionConnections {
+		for _, pc := range bySession {
+			pc.writeJSON(msg)
+		}
+	}
+}
+
+// SetEventBus wires council event broadcasting from the given EventBus.
+func (c *PicoChannel) SetEventBus(eventBus *agent.EventBus) {
+	c.subscribeCouncilEvents(eventBus)
+}
+
+// subscribeCouncilEvents subscribes to the EventBus and forwards council events
+// to all connected WebSocket clients.
+func (c *PicoChannel) subscribeCouncilEvents(eventBus *agent.EventBus) {
+	if eventBus == nil {
+		return
+	}
+	sub := eventBus.Subscribe(64)
+	go func() {
+		defer eventBus.Unsubscribe(sub.ID)
+		for evt := range sub.C {
+			var msgType string
+			var payload map[string]any
+			switch evt.Kind {
+			case agent.EventKindCouncilStart:
+				p := evt.Payload.(agent.CouncilStartPayload)
+				msgType = TypeCouncilStart
+				payload = map[string]any{"council_id": p.CouncilID, "title": p.Title, "description": p.Description, "roster": p.Roster}
+			case agent.EventKindCouncilAgentStart:
+				p := evt.Payload.(agent.CouncilAgentStartPayload)
+				msgType = TypeCouncilAgentStart
+				payload = map[string]any{"council_id": p.CouncilID, "agent_id": p.AgentID, "agent_type": p.AgentType, "round": p.Round}
+			case agent.EventKindCouncilAgentDelta:
+				p := evt.Payload.(agent.CouncilAgentDeltaPayload)
+				msgType = TypeCouncilAgentDelta
+				payload = map[string]any{"council_id": p.CouncilID, "agent_id": p.AgentID, "delta": p.Delta}
+			case agent.EventKindCouncilAgentEnd:
+				p := evt.Payload.(agent.CouncilAgentEndPayload)
+				msgType = TypeCouncilAgentEnd
+				payload = map[string]any{"council_id": p.CouncilID, "agent_id": p.AgentID, "content": p.Content, "round": p.Round}
+			case agent.EventKindCouncilRoundEnd:
+				p := evt.Payload.(agent.CouncilRoundEndPayload)
+				msgType = TypeCouncilRoundEnd
+				payload = map[string]any{"council_id": p.CouncilID, "round": p.Round, "decision": p.Decision}
+			case agent.EventKindCouncilEnd:
+				p := evt.Payload.(agent.CouncilEndPayload)
+				msgType = TypeCouncilEnd
+				payload = map[string]any{"council_id": p.CouncilID, "rounds": p.Rounds, "synthesis": p.Synthesis, "status": p.Status}
+			default:
+				continue
+			}
+			msg := newMessage(msgType, payload)
+			c.broadcastToAll(msg)
+		}
+	}()
 }
 
 // handleWebSocket upgrades the HTTP connection and manages the WebSocket lifecycle.

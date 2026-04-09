@@ -17,6 +17,14 @@ const (
 	TypeTypingStop    = "typing.stop"
 	TypeError         = "error"
 	TypePong          = "pong"
+
+	// Council events (server→client)
+	TypeCouncilStart      = "council.start"
+	TypeCouncilAgentStart = "council.agent.start"
+	TypeCouncilAgentDelta = "council.agent.delta"
+	TypeCouncilAgentEnd   = "council.agent.end"
+	TypeCouncilRoundEnd   = "council.round.end"
+	TypeCouncilEnd        = "council.end"
 )
 
 // PicoMessage is the wire format for all Pico Protocol messages.
