@@ -41,6 +41,16 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		return nil, fmt.Errorf("init session: %w", err)
 	}
 
+	// Default roster to all registered agents if not specified
+	if len(meta.Roster) == 0 {
+		for _, def := range e.agentRegistry.List() {
+			meta.Roster = append(meta.Roster, def.Name)
+		}
+		if err := e.store.SaveMeta(meta); err != nil {
+			return nil, fmt.Errorf("save default roster: %w", err)
+		}
+	}
+
 	e.emitEvent(Event{
 		Kind: EventCouncilStart,
 		Payload: CouncilStartPayload{
