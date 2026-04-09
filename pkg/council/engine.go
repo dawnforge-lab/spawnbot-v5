@@ -116,11 +116,7 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 
 		meta.Rounds = round
 
-		if decision == "conclude" {
-			break
-		}
-
-		// Append moderator note and continue
+		// Always append moderator note to transcript
 		modEntry := TranscriptEntry{
 			Role:      RoleModerator,
 			Content:   decision,
@@ -131,6 +127,10 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 			return nil, fmt.Errorf("append moderator note: %w", err)
 		}
 		transcript = append(transcript, modEntry)
+
+		if decision == "conclude" {
+			break
+		}
 	}
 
 	// Generate synthesis

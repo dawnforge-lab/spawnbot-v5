@@ -2,6 +2,7 @@ package council
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -23,7 +24,7 @@ func (m *mockProvider) Chat(ctx context.Context, messages []protocoltypes.Messag
 	defer m.mu.Unlock()
 
 	if m.callIndex >= len(m.responses) {
-		return &protocoltypes.LLMResponse{Content: "fallback response"}, nil
+		return nil, fmt.Errorf("mock exhausted: unexpected call #%d", m.callIndex)
 	}
 	resp := m.responses[m.callIndex]
 	m.callIndex++
