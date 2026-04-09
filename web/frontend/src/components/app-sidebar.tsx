@@ -9,6 +9,7 @@ import {
   IconSettings,
   IconSparkles,
   IconTools,
+  IconUsersGroup,
 } from "@tabler/icons-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
@@ -134,6 +135,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/agent/tools",
             icon: IconTools,
             translateTitle: true,
+          },
+          {
+            title: "Councils",
+            url: "/councils",
+            icon: IconUsersGroup,
+            translateTitle: false,
           },
         ],
       },
