@@ -300,20 +300,18 @@ func (e *Engine) callAgent(ctx context.Context, meta *CouncilMeta, agentDef *age
 func (e *Engine) buildAgentMessages(agentDef *agents.AgentDefinition, meta *CouncilMeta, transcript []TranscriptEntry) []protocoltypes.Message {
 	var messages []protocoltypes.Message
 
-	// System message with agent's expertise context and council framing.
-	// The prompt deliberately pushes agents OUT of rigid role-playing to encourage
-	// genuine collaborative thinking rather than positional debating.
-	systemContent := fmt.Sprintf(`You have expertise in: %s
+	// System message: tell the agent to speak ONLY for itself, not others.
+	systemContent := fmt.Sprintf(`You are %s, participating in a council discussion titled %q.
+Other participants: %s.
 
-You are in a council discussion titled %q with other specialists: %s.
-
-IMPORTANT: You are NOT role-playing. Do not speak "as a %s" — speak as yourself with your own judgment. Your expertise informs your thinking but does not limit it. You should:
-- Agree with others when they are right, even if it's outside your specialty
-- Challenge your own assumptions, not just others'
-- Build on good ideas regardless of who proposed them
-- Focus on what's actually true and useful, not on defending a position
-- Be concise and substantive — skip preamble and hedging`,
-		agentDef.Name, meta.Title, strings.Join(meta.Roster, ", "), agentDef.Name)
+CRITICAL RULES:
+- You speak ONLY for yourself. Do NOT write responses for other agents.
+- Do NOT format your response with [Agent Name] headers or simulate a multi-person discussion.
+- Just give YOUR perspective in YOUR voice. Other agents will speak in their own turns.
+- Be concise and substantive. 2-4 paragraphs max.
+- Build on what others have said in the transcript. Agree or disagree with specifics.
+- Focus on what's true and useful, not on defending a position.`,
+		agentDef.Name, meta.Title, strings.Join(meta.Roster, ", "))
 	messages = append(messages, protocoltypes.Message{
 		Role:    "system",
 		Content: systemContent,
