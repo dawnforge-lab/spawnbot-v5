@@ -150,7 +150,6 @@ export function AgentConfigPage() {
         agents: {
           defaults: {
             model_name: form.mainModel,
-            provider: form.mainModel,
             subturn: {
               model: form.subturnModel || undefined,
               max_depth: subturnMaxDepth,
