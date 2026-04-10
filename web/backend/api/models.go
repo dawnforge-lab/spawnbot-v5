@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/config"
@@ -68,8 +69,19 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 	}
 	wg.Wait()
 
+	// Models actively used by agent config are always considered configured.
+	subturnModel := strings.TrimSpace(cfg.Agents.Defaults.SubTurn.Model)
+	agentModels := map[string]bool{}
+	if defaultModel != "" {
+		agentModels[defaultModel] = true
+	}
+	if subturnModel != "" {
+		agentModels[subturnModel] = true
+	}
+
 	models := make([]modelResponse, 0, len(cfg.ModelList))
 	for i, m := range cfg.ModelList {
+		isConfigured := configured[i] || agentModels[m.ModelName]
 		models = append(models, modelResponse{
 			Index:          i,
 			ModelName:      m.ModelName,
@@ -85,10 +97,29 @@ func (h *Handler) handleListModels(w http.ResponseWriter, r *http.Request) {
 			RequestTimeout: m.RequestTimeout,
 			ThinkingLevel:  m.ThinkingLevel,
 			ExtraBody:      m.ExtraBody,
-			Configured:     configured[i],
+			Configured:     isConfigured,
 			IsDefault:      m.ModelName == defaultModel,
 			IsVirtual:      m.IsVirtual(),
 		})
+	}
+
+	// Ensure agent-configured models appear in the list even if they're
+	// not in model_list (user may type a model name directly in agent config).
+	existingNames := make(map[string]bool, len(models))
+	for _, m := range models {
+		existingNames[m.ModelName] = true
+	}
+	for _, agentModel := range []string{defaultModel, cfg.Agents.Defaults.SubTurn.Model} {
+		agentModel = strings.TrimSpace(agentModel)
+		if agentModel != "" && !existingNames[agentModel] {
+			models = append(models, modelResponse{
+				Index:      len(models),
+				ModelName:  agentModel,
+				Configured: true,
+				IsDefault:  agentModel == defaultModel,
+			})
+			existingNames[agentModel] = true
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
