@@ -1,6 +1,7 @@
 import type { ToolCall, ToolCallStatus } from "@/components/chat/tool-call-card"
 import { normalizeUnixTimestamp } from "@/features/chat/state"
 import { updateChatStore } from "@/store/chat"
+import { updateCouncilDetail, updateCouncilStream } from "@/store/council"
 
 export interface PicoMessage {
   type: string
@@ -160,43 +161,133 @@ export function handlePicoMessage(
     case "council.start": {
       const id = payload.council_id as string
       const title = payload.title as string
-      console.log("[council] started:", id, title)
+      const description = (payload.description as string) || ""
+      const roster = (payload.roster as string[]) || []
+      updateCouncilDetail((prev) => {
+        if (prev && prev.id === id) return prev
+        return {
+          id,
+          title,
+          description,
+          roster,
+          status: "active",
+          rounds: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          transcript: [],
+        }
+      })
+      updateCouncilStream({
+        activeCouncilId: id,
+        speakingAgentId: null,
+        speakingAgentType: null,
+        streamingContent: "",
+        currentRound: 0,
+      })
       break
     }
 
     case "council.agent.start": {
-      const councilId = payload.council_id as string
       const agentId = payload.agent_id as string
-      const agentType = payload.agent_type as string
+      const agentType = (payload.agent_type as string) || ""
       const round = payload.round as number
-      console.log("[council] agent start:", councilId, agentId, agentType, "round:", round)
+      updateCouncilStream({
+        speakingAgentId: agentId,
+        speakingAgentType: agentType,
+        streamingContent: "",
+        currentRound: round,
+      })
       break
     }
 
     case "council.agent.delta": {
-      const agentId = payload.agent_id as string
       const delta = payload.delta as string
-      console.log("[council] agent delta:", agentId, delta)
+      updateCouncilStream((prev) => ({
+        streamingContent: prev.streamingContent + delta,
+      }))
       break
     }
 
     case "council.agent.end": {
+      const councilId = payload.council_id as string
       const agentId = payload.agent_id as string
+      const agentType = (payload.agent_type as string) || ""
       const content = payload.content as string
-      console.log("[council] agent end:", agentId, content)
+      const round = payload.round as number
+      updateCouncilDetail((prev) => {
+        if (!prev || prev.id !== councilId) return prev
+        return {
+          ...prev,
+          transcript: [
+            ...prev.transcript,
+            {
+              role: "agent",
+              agent_id: agentId,
+              agent_type: agentType,
+              content,
+              round,
+              ts: new Date().toISOString(),
+            },
+          ],
+        }
+      })
+      updateCouncilStream({
+        speakingAgentId: null,
+        speakingAgentType: null,
+        streamingContent: "",
+      })
       break
     }
 
     case "council.round.end": {
       const councilId = payload.council_id as string
       const round = payload.round as number
-      console.log("[council] round end:", councilId, "round:", round)
+      const decision = (payload.decision as string) || ""
+      if (decision && decision.toLowerCase() !== "conclude") {
+        updateCouncilDetail((prev) => {
+          if (!prev || prev.id !== councilId) return prev
+          return {
+            ...prev,
+            rounds: round,
+            transcript: [
+              ...prev.transcript,
+              {
+                role: "moderator",
+                content: decision,
+                round,
+                ts: new Date().toISOString(),
+              },
+            ],
+          }
+        })
+      }
       break
     }
 
     case "council.end": {
       const councilId = payload.council_id as string
-      console.log("[council] ended:", councilId)
+      const synthesis = (payload.synthesis as string) || ""
+      const rounds = (payload.rounds as number) || 0
+      updateCouncilDetail((prev) => {
+        if (!prev || prev.id !== councilId) return prev
+        const transcript = [...prev.transcript]
+        if (synthesis) {
+          transcript.push({
+            role: "synthesis",
+            content: synthesis,
+            round: rounds,
+            ts: new Date().toISOString(),
+          })
+        }
+        return { ...prev, status: "closed", rounds, transcript }
+      })
+      updateCouncilStream({
+        activeCouncilId: null,
+        speakingAgentId: null,
+        speakingAgentType: null,
+        streamingContent: "",
+        currentRound: 0,
+      })
       break
     }
 

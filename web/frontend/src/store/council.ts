@@ -1,4 +1,4 @@
-import { atom } from "jotai"
+import { atom, getDefaultStore } from "jotai"
 
 export interface CouncilMeta {
   id: string
@@ -41,3 +41,20 @@ export const councilStreamAtom = atom<CouncilStreamState>({
   streamingContent: "",
   currentRound: 0,
 })
+
+const store = getDefaultStore()
+
+export function updateCouncilDetail(
+  updater: (prev: CouncilDetail | null) => CouncilDetail | null,
+) {
+  store.set(councilDetailAtom, updater)
+}
+
+export function updateCouncilStream(
+  update: Partial<CouncilStreamState> | ((prev: CouncilStreamState) => Partial<CouncilStreamState>),
+) {
+  store.set(councilStreamAtom, (prev) => {
+    const partial = typeof update === "function" ? update(prev) : update
+    return { ...prev, ...partial }
+  })
+}

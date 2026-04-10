@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react"
+import { useAtomValue } from "jotai"
 
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer"
-import type { CouncilDetail, TranscriptEntry } from "@/store/council"
+import {
+  councilDetailAtom,
+  councilStreamAtom,
+  type CouncilDetail,
+  type TranscriptEntry,
+} from "@/store/council"
 
 const agentColors: Record<string, { bg: string; text: string; border: string }> = {
   researcher: { bg: "#e3f2fd", text: "#1565c0", border: "#1565c0" },
@@ -77,6 +83,13 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Live updates from Pico WebSocket events
+  const liveCouncil = useAtomValue(councilDetailAtom)
+  const stream = useAtomValue(councilStreamAtom)
+
+  // Use live data when it matches this council, otherwise fall back to fetched data
+  const displayCouncil = liveCouncil?.id === councilId ? liveCouncil : council
+
   useEffect(() => {
     fetch(`/api/councils/${councilId}`)
       .then((res) => {
@@ -94,10 +107,10 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
   }, [councilId])
 
   useEffect(() => {
-    if (council) {
+    if (displayCouncil) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" })
     }
-  }, [council])
+  }, [displayCouncil, displayCouncil?.transcript.length, stream.streamingContent])
 
   if (loading) {
     return (
@@ -119,7 +132,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
     )
   }
 
-  if (!council) {
+  if (!displayCouncil) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-muted-foreground text-sm">Council not found</div>
@@ -127,7 +140,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
     )
   }
 
-  const status = statusStyles[council.status] ?? statusStyles.closed
+  const status = statusStyles[displayCouncil.status] ?? statusStyles.closed
 
   // Group transcript entries by round for separators
   let lastRound = -1
@@ -141,18 +154,18 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
             className={`h-2.5 w-2.5 rounded-full ${status.color}`}
             title={status.label}
           />
-          <h1 className="text-2xl font-semibold">{council.title}</h1>
+          <h1 className="text-2xl font-semibold">{displayCouncil.title}</h1>
           <span className="text-muted-foreground text-sm">
-            {council.rounds} round{council.rounds !== 1 ? "s" : ""}
+            {displayCouncil.rounds} round{displayCouncil.rounds !== 1 ? "s" : ""}
           </span>
         </div>
-        {council.description && (
+        {displayCouncil.description && (
           <p className="text-muted-foreground mb-3 text-sm">
-            {council.description}
+            {displayCouncil.description}
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          {(council.roster ?? []).map((agent) => {
+          {(displayCouncil.roster ?? []).map((agent) => {
             const colors = agentColors[agent] ?? {
               bg: "#f5f5f5",
               text: "#616161",
@@ -175,7 +188,7 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
 
       {/* Transcript */}
       <div className="flex flex-col gap-4">
-        {(council.transcript ?? []).map((entry, idx) => {
+        {(displayCouncil.transcript ?? []).map((entry, idx) => {
           const style = getEntryStyle(entry)
           const showRoundSeparator = entry.round !== lastRound
           lastRound = entry.round
@@ -221,6 +234,38 @@ export function CouncilTranscript({ councilId }: CouncilTranscriptProps) {
           )
         })}
       </div>
+
+      {/* Live streaming indicator */}
+      {stream.activeCouncilId === councilId && stream.speakingAgentId && (
+        <div className="mt-4">
+          <div
+            className="rounded-lg border-l-4 bg-muted/20 p-4 animate-pulse"
+            style={{
+              borderLeftColor:
+                (agentColors[stream.speakingAgentType ?? ""] ?? { border: "#9e9e9e" }).border,
+            }}
+          >
+            <div className="mb-2 flex items-center gap-2">
+              <span
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={{
+                  backgroundColor:
+                    (agentColors[stream.speakingAgentType ?? ""] ?? { bg: "#f5f5f5" }).bg,
+                  color:
+                    (agentColors[stream.speakingAgentType ?? ""] ?? { text: "#616161" }).text,
+                }}
+              >
+                {stream.speakingAgentId}
+              </span>
+              <span className="text-muted-foreground text-xs">typing...</span>
+            </div>
+            {stream.streamingContent && (
+              <MarkdownRenderer content={stream.streamingContent} />
+            )}
+          </div>
+        </div>
+      )}
+
       <div ref={bottomRef} />
     </div>
   )
