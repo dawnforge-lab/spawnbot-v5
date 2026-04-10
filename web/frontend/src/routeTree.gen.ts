@@ -16,6 +16,8 @@ import { Route as ConfigRouteImport } from './routes/config'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as ChannelsRouteRouteImport } from './routes/channels/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CouncilsIndexRouteImport } from './routes/councils/index'
+import { Route as CouncilsIdRouteImport } from './routes/councils/$id'
 import { Route as ConfigRawRouteImport } from './routes/config.raw'
 import { Route as ChannelsNameRouteImport } from './routes/channels/$name'
 import { Route as AgentToolsRouteImport } from './routes/agent/tools'
@@ -56,6 +58,16 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CouncilsIndexRoute = CouncilsIndexRouteImport.update({
+  id: '/councils/',
+  path: '/councils/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CouncilsIdRoute = CouncilsIdRouteImport.update({
+  id: '/councils/$id',
+  path: '/councils/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConfigRawRoute = ConfigRawRouteImport.update({
   id: '/raw',
   path: '/raw',
@@ -89,6 +101,8 @@ export interface FileRoutesByFullPath {
   '/agent/tools': typeof AgentToolsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/councils/$id': typeof CouncilsIdRoute
+  '/councils/': typeof CouncilsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +116,8 @@ export interface FileRoutesByTo {
   '/agent/tools': typeof AgentToolsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/councils/$id': typeof CouncilsIdRoute
+  '/councils': typeof CouncilsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +132,8 @@ export interface FileRoutesById {
   '/agent/tools': typeof AgentToolsRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
+  '/councils/$id': typeof CouncilsIdRoute
+  '/councils/': typeof CouncilsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +149,8 @@ export interface FileRouteTypes {
     | '/agent/tools'
     | '/channels/$name'
     | '/config/raw'
+    | '/councils/$id'
+    | '/councils/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +164,8 @@ export interface FileRouteTypes {
     | '/agent/tools'
     | '/channels/$name'
     | '/config/raw'
+    | '/councils/$id'
+    | '/councils'
   id:
     | '__root__'
     | '/'
@@ -157,6 +179,8 @@ export interface FileRouteTypes {
     | '/agent/tools'
     | '/channels/$name'
     | '/config/raw'
+    | '/councils/$id'
+    | '/councils/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -167,6 +191,8 @@ export interface RootRouteChildren {
   CredentialsRoute: typeof CredentialsRoute
   LogsRoute: typeof LogsRoute
   ModelsRoute: typeof ModelsRoute
+  CouncilsIdRoute: typeof CouncilsIdRoute
+  CouncilsIndexRoute: typeof CouncilsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -218,6 +244,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/councils/': {
+      id: '/councils/'
+      path: '/councils'
+      fullPath: '/councils/'
+      preLoaderRoute: typeof CouncilsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/councils/$id': {
+      id: '/councils/$id'
+      path: '/councils/$id'
+      fullPath: '/councils/$id'
+      preLoaderRoute: typeof CouncilsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/config/raw': {
@@ -294,6 +334,8 @@ const rootRouteChildren: RootRouteChildren = {
   CredentialsRoute: CredentialsRoute,
   LogsRoute: LogsRoute,
   ModelsRoute: ModelsRoute,
+  CouncilsIdRoute: CouncilsIdRoute,
+  CouncilsIndexRoute: CouncilsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

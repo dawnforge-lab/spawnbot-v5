@@ -413,7 +413,7 @@ export function OnboardingWizard({
           {/* Back button */}
           {step !== "provider" &&
             step !== "submitting" &&
-            step !== "done" && (
+            (step as string) !== "done" && (
               <Button
                 variant="outline"
                 onClick={() => {
