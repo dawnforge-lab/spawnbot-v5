@@ -162,6 +162,9 @@ func (h *Handler) handlePatchConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure models referenced in agent config exist in model_list.
+	ensureAgentModelsInList(&newCfg)
+
 	if errs := validateConfig(&newCfg); len(errs) > 0 {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -243,6 +246,46 @@ func (h *Handler) handleTestCommandPatterns(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ensureAgentModelsInList adds minimal model_list entries for models referenced
+// in agents.defaults that don't already exist in the list. This allows users to
+// type a model name in the Agent Config UI and have it resolve correctly.
+func ensureAgentModelsInList(cfg *config.Config) {
+	existing := make(map[string]bool, len(cfg.ModelList))
+	for _, m := range cfg.ModelList {
+		existing[m.ModelName] = true
+	}
+
+	for _, modelName := range []string{
+		cfg.Agents.Defaults.ModelName,
+		cfg.Agents.Defaults.SubTurn.Model,
+	} {
+		modelName = strings.TrimSpace(modelName)
+		if modelName == "" || existing[modelName] {
+			continue
+		}
+
+		mc := &config.ModelConfig{
+			ModelName: modelName,
+		}
+
+		// Infer provider protocol from model name patterns.
+		// Ollama Cloud models contain ":cloud" as a tag (e.g. "glm-5.1:cloud")
+		// or end with "-cloud" (e.g. "qwen3.5:397b-cloud").
+		if strings.Contains(modelName, ":cloud") || strings.HasSuffix(modelName, "-cloud") {
+			mc.Model = "ollama-cloud/" + modelName
+			mc.APIBase = "https://ollama.com/v1"
+		} else {
+			// Default to openai-compatible protocol
+			mc.Model = "openai/" + modelName
+		}
+
+		cfg.ModelList = append(cfg.ModelList, mc)
+		existing[modelName] = true
+		logger.InfoCF("config", "Auto-added model to model_list",
+			map[string]any{"model_name": modelName, "model": mc.Model})
+	}
 }
 
 // validateConfig checks the config for common errors before saving.

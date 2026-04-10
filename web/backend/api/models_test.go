@@ -122,8 +122,8 @@ func TestHandleListModels_ConfiguredStatusUsesRuntimeProbesForLocalModels(t *tes
 		got[model.ModelName] = model.Configured
 	}
 
-	if got["openai-oauth"] {
-		t.Fatalf("openai oauth model configured = true, want false without stored credential")
+	if !got["openai-oauth"] {
+		t.Fatalf("openai oauth model configured = false, want true because it is the agent default model")
 	}
 	if !got["vllm-local"] {
 		t.Fatalf("vllm local model configured = false, want true when local probe succeeds")
@@ -285,6 +285,7 @@ func TestHandleListModels_NormalizesWildcardLocalAPIBaseForProbe(t *testing.T) {
 		Model:     "vllm/custom-model",
 		APIBase:   "http://0.0.0.0:8000/v1",
 	}}
+	cfg.Agents.Defaults.ModelName = "vllm-local"
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
