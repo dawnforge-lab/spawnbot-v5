@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import { patchAppConfig } from "@/api/channels"
-import { type ModelInfo, getModels } from "@/api/models"
 import { Field } from "@/components/shared-form"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -17,13 +16,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 interface AgentConfigForm {
   mainModel: string
@@ -106,7 +98,6 @@ export function AgentConfigPage() {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<AgentConfigForm>(EMPTY_FORM)
   const [baseline, setBaseline] = useState<AgentConfigForm>(EMPTY_FORM)
-  const [models, setModels] = useState<ModelInfo[]>([])
   const [saving, setSaving] = useState(false)
 
   const { data, isLoading, error } = useQuery({
@@ -120,22 +111,12 @@ export function AgentConfigPage() {
     },
   })
 
-  const { data: modelsData } = useQuery({
-    queryKey: ["models"],
-    queryFn: getModels,
-  })
-
   useEffect(() => {
     if (!data) return
     const parsed = buildFormFromConfig(data)
     setForm(parsed)
     setBaseline(parsed)
   }, [data])
-
-  useEffect(() => {
-    if (!modelsData) return
-    setModels(modelsData.models)
-  }, [modelsData])
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(baseline)
 
@@ -229,21 +210,11 @@ export function AgentConfigPage() {
                       hint="The LLM model used for the main agent. This handles direct conversations and orchestrates subagents."
                       layout="setting-row"
                     >
-                      <Select
+                      <Input
                         value={form.mainModel}
-                        onValueChange={(v) => updateField("mainModel", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {models.map((m) => (
-                            <SelectItem key={m.model_name} value={m.model_name}>
-                              {m.model_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => updateField("mainModel", e.target.value)}
+                        placeholder="e.g. gemma4:31b"
+                      />
                     </Field>
                   </div>
                 </CardContent>
@@ -263,21 +234,11 @@ export function AgentConfigPage() {
                       hint="The LLM model used for subagents, spawn tasks, and council agents. Falls back to the main model if not set."
                       layout="setting-row"
                     >
-                      <Select
+                      <Input
                         value={form.subturnModel}
-                        onValueChange={(v) => updateField("subturnModel", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Same as main model" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {models.map((m) => (
-                            <SelectItem key={m.model_name} value={m.model_name}>
-                              {m.model_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => updateField("subturnModel", e.target.value)}
+                        placeholder="Leave empty to use main model"
+                      />
                     </Field>
 
                     <Field
