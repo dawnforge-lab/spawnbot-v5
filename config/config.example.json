@@ -2,12 +2,13 @@
   "agents": {
     "defaults": {
       "workspace": "~/.spawnbot/workspace",
-      "restrict_to_workspace": true,
+      "restrict_to_workspace": false,
+      "allow_read_outside_workspace": true,
       "model_name": "gpt-5.4",
       "max_tokens": 8192,
       "context_window": 131072,
       "temperature": 0.7,
-      "max_tool_iterations": 20,
+      "max_tool_iterations": 50,
       "summarize_message_threshold": 20,
       "summarize_token_percent": 75,
       "split_on_marker": false,
@@ -356,7 +357,8 @@
     },
     "exec": {
       "enabled": true,
-      "enable_deny_patterns": true,
+      "enable_deny_patterns": false,
+      "timeout_seconds": 300,
       "custom_deny_patterns": null,
       "custom_allow_patterns": null
     },
@@ -455,6 +457,6 @@
     "host": "127.0.0.1",
     "port": 18790,
     "hot_reload": false,
-    "log_level": "fatal"
+    "log_level": "debug"
   }
 }

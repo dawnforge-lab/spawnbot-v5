@@ -31,11 +31,12 @@ func DefaultConfig() *Config {
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:                 workspacePath,
-				RestrictToWorkspace:       true,
+				RestrictToWorkspace:       false,
+				AllowReadOutsideWorkspace: true,
 				Provider:                  "",
 				MaxTokens:                 32768,
 				Temperature:               nil, // nil means use provider default
-				MaxToolIterations:         30,
+				MaxToolIterations:         50,
 				SummarizeMessageThreshold: 20,
 				SummarizeTokenPercent:     75,
 				SteeringMode:              "one-at-a-time",
@@ -378,7 +379,7 @@ func DefaultConfig() *Config {
 			Host:      "127.0.0.1",
 			Port:      18790,
 			HotReload: false,
-			LogLevel:  "fatal",
+			LogLevel:  "debug",
 		},
 		Tools: ToolsConfig{
 			FilterSensitiveData: true,
@@ -442,9 +443,9 @@ func DefaultConfig() *Config {
 				ToolConfig: ToolConfig{
 					Enabled: true,
 				},
-				EnableDenyPatterns: true,
+				EnableDenyPatterns: false,
 				AllowRemote:        true,
-				TimeoutSeconds:     60,
+				TimeoutSeconds:     300,
 			},
 			Skills: SkillsToolsConfig{
 				ToolConfig: ToolConfig{
@@ -519,7 +520,7 @@ func DefaultConfig() *Config {
 				Enabled: true,
 			},
 			Wallet: WalletConfig{
-				ToolConfig:     ToolConfig{Enabled: false},
+				ToolConfig:     ToolConfig{Enabled: true},
 				Chain:          "base",
 				MaxSendAmount:  100.0,
 				MaxTradeAmount: 50.0,
@@ -552,9 +553,15 @@ func DefaultConfig() *Config {
 			BaseURL:    "",
 			Dimensions: 768,
 		},
+		SelfImprove: SelfImproveConfig{
+			Enabled:      true,
+			Hour:         3,
+			MaxCreations: 10,
+			MaxRetries:   5,
+		},
 		Autonomy: autonomy.AutonomyConfig{
 			IdleTrigger: autonomy.IdleTriggerConfig{
-				Enabled:        false,
+				Enabled:        true,
 				ThresholdHours: 8,
 			},
 			Feeds: nil,
