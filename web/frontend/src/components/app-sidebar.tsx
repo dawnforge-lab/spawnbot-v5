@@ -8,6 +8,7 @@ import {
   IconListDetails,
   IconMessageCircle,
   IconRobot,
+  IconServer,
   IconSettings,
   IconSparkles,
   IconTopologyStar3,
@@ -173,6 +174,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             url: "/config",
             icon: IconSettings,
             translateTitle: true,
+          },
+          {
+            title: "System",
+            url: "/system",
+            icon: IconServer,
+            translateTitle: false,
           },
           {
             title: "navigation.logs",

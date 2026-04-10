@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SystemRouteImport } from './routes/system'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as CredentialsRouteImport } from './routes/credentials'
@@ -26,6 +27,11 @@ import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
 import { Route as AgentDefinitionsRouteImport } from './routes/agent/definitions'
 import { Route as AgentConfigRouteImport } from './routes/agent/config'
 
+const SystemRoute = SystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ModelsRoute = ModelsRouteImport.update({
   id: '/models',
   path: '/models',
@@ -115,6 +121,7 @@ export interface FileRoutesByFullPath {
   '/credentials': typeof CredentialsRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/system': typeof SystemRoute
   '/agent/config': typeof AgentConfigRoute
   '/agent/definitions': typeof AgentDefinitionsRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/credentials': typeof CredentialsRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/system': typeof SystemRoute
   '/agent/config': typeof AgentConfigRoute
   '/agent/definitions': typeof AgentDefinitionsRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/credentials': typeof CredentialsRoute
   '/logs': typeof LogsRoute
   '/models': typeof ModelsRoute
+  '/system': typeof SystemRoute
   '/agent/config': typeof AgentConfigRoute
   '/agent/definitions': typeof AgentDefinitionsRoute
   '/agent/skills': typeof AgentSkillsRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/logs'
     | '/models'
+    | '/system'
     | '/agent/config'
     | '/agent/definitions'
     | '/agent/skills'
@@ -190,6 +200,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/logs'
     | '/models'
+    | '/system'
     | '/agent/config'
     | '/agent/definitions'
     | '/agent/skills'
@@ -208,6 +219,7 @@ export interface FileRouteTypes {
     | '/credentials'
     | '/logs'
     | '/models'
+    | '/system'
     | '/agent/config'
     | '/agent/definitions'
     | '/agent/skills'
@@ -227,12 +239,20 @@ export interface RootRouteChildren {
   CredentialsRoute: typeof CredentialsRoute
   LogsRoute: typeof LogsRoute
   ModelsRoute: typeof ModelsRoute
+  SystemRoute: typeof SystemRoute
   CouncilsIdRoute: typeof CouncilsIdRoute
   CouncilsIndexRoute: typeof CouncilsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/system': {
+      id: '/system'
+      path: '/system'
+      fullPath: '/system'
+      preLoaderRoute: typeof SystemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/models': {
       id: '/models'
       path: '/models'
@@ -397,6 +417,7 @@ const rootRouteChildren: RootRouteChildren = {
   CredentialsRoute: CredentialsRoute,
   LogsRoute: LogsRoute,
   ModelsRoute: ModelsRoute,
+  SystemRoute: SystemRoute,
   CouncilsIdRoute: CouncilsIdRoute,
   CouncilsIndexRoute: CouncilsIndexRoute,
 }
