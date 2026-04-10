@@ -134,7 +134,7 @@ export function AgentConfigPage() {
 
   useEffect(() => {
     if (!modelsData) return
-    setModels(modelsData.models)
+    setModels(modelsData.models.filter((m) => m.configured))
   }, [modelsData])
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(baseline)
