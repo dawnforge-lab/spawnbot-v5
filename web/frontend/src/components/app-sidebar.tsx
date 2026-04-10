@@ -10,6 +10,7 @@ import {
   IconRobot,
   IconSettings,
   IconSparkles,
+  IconTopologyStar3,
   IconTools,
   IconUsersGroup,
 } from "@tabler/icons-react"
@@ -130,6 +131,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             title: "Agent Config",
             url: "/agent/config",
             icon: IconRobot,
+            translateTitle: false,
+          },
+          {
+            title: "Agents",
+            url: "/agent/definitions",
+            icon: IconTopologyStar3,
             translateTitle: false,
           },
           {
