@@ -20,6 +20,7 @@ import { Route as CouncilsIndexRouteImport } from './routes/councils/index'
 import { Route as CouncilsIdRouteImport } from './routes/councils/$id'
 import { Route as ConfigRawRouteImport } from './routes/config.raw'
 import { Route as ChannelsNameRouteImport } from './routes/channels/$name'
+import { Route as AgentToolsConfigRouteImport } from './routes/agent/tools-config'
 import { Route as AgentToolsRouteImport } from './routes/agent/tools'
 import { Route as AgentSkillsRouteImport } from './routes/agent/skills'
 import { Route as AgentConfigRouteImport } from './routes/agent/config'
@@ -79,6 +80,11 @@ const ChannelsNameRoute = ChannelsNameRouteImport.update({
   path: '/$name',
   getParentRoute: () => ChannelsRouteRoute,
 } as any)
+const AgentToolsConfigRoute = AgentToolsConfigRouteImport.update({
+  id: '/tools-config',
+  path: '/tools-config',
+  getParentRoute: () => AgentRoute,
+} as any)
 const AgentToolsRoute = AgentToolsRouteImport.update({
   id: '/tools',
   path: '/tools',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/agent/config': typeof AgentConfigRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/tools-config': typeof AgentToolsConfigRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
   '/councils/$id': typeof CouncilsIdRoute
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/agent/config': typeof AgentConfigRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/tools-config': typeof AgentToolsConfigRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
   '/councils/$id': typeof CouncilsIdRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/agent/config': typeof AgentConfigRoute
   '/agent/skills': typeof AgentSkillsRoute
   '/agent/tools': typeof AgentToolsRoute
+  '/agent/tools-config': typeof AgentToolsConfigRoute
   '/channels/$name': typeof ChannelsNameRoute
   '/config/raw': typeof ConfigRawRoute
   '/councils/$id': typeof CouncilsIdRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/agent/config'
     | '/agent/skills'
     | '/agent/tools'
+    | '/agent/tools-config'
     | '/channels/$name'
     | '/config/raw'
     | '/councils/$id'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/agent/config'
     | '/agent/skills'
     | '/agent/tools'
+    | '/agent/tools-config'
     | '/channels/$name'
     | '/config/raw'
     | '/councils/$id'
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | '/agent/config'
     | '/agent/skills'
     | '/agent/tools'
+    | '/agent/tools-config'
     | '/channels/$name'
     | '/config/raw'
     | '/councils/$id'
@@ -286,6 +298,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChannelsNameRouteImport
       parentRoute: typeof ChannelsRouteRoute
     }
+    '/agent/tools-config': {
+      id: '/agent/tools-config'
+      path: '/tools-config'
+      fullPath: '/agent/tools-config'
+      preLoaderRoute: typeof AgentToolsConfigRouteImport
+      parentRoute: typeof AgentRoute
+    }
     '/agent/tools': {
       id: '/agent/tools'
       path: '/tools'
@@ -326,12 +345,14 @@ interface AgentRouteChildren {
   AgentConfigRoute: typeof AgentConfigRoute
   AgentSkillsRoute: typeof AgentSkillsRoute
   AgentToolsRoute: typeof AgentToolsRoute
+  AgentToolsConfigRoute: typeof AgentToolsConfigRoute
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
   AgentConfigRoute: AgentConfigRoute,
   AgentSkillsRoute: AgentSkillsRoute,
   AgentToolsRoute: AgentToolsRoute,
+  AgentToolsConfigRoute: AgentToolsConfigRoute,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
