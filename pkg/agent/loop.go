@@ -378,7 +378,9 @@ func registerSharedTools(
 				systemPrompt += "Task: " + task
 
 				// 4. Resolve Model
-				modelToUse := agent.Model
+				// Use the configured subturn model (from config.agents.defaults.subturn.model),
+				// falling back to the parent agent's model.
+				modelToUse := subagentModel
 				if targetAgentID != "" {
 					if targetAgent, ok := al.GetRegistry().GetAgent(targetAgentID); ok {
 						modelToUse = targetAgent.Model
