@@ -6,6 +6,7 @@ import {
   IconKey,
   IconListDetails,
   IconMessageCircle,
+  IconRobot,
   IconSettings,
   IconSparkles,
   IconTools,
@@ -124,6 +125,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         ...baseNavGroups[2],
         items: [
+          {
+            title: "Agent Config",
+            url: "/agent/config",
+            icon: IconRobot,
+            translateTitle: false,
+          },
           {
             title: "navigation.skills",
             url: "/agent/skills",

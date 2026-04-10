@@ -350,6 +350,14 @@ func spawnSubTurn(
 	ephemeralStore := newEphemeralSession(nil)
 	agent := *baseAgent // shallow copy
 	agent.Sessions = ephemeralStore
+	// Apply subturn model override so the child uses the configured model
+	// instead of inheriting the parent's model.
+	// IMPORTANT: We must also re-resolve Candidates because selectCandidates()
+	// returns candidates[0].Model which would still hold the parent's model.
+	if cfg.Model != "" {
+		agent.Model = cfg.Model
+		agent.Candidates = resolveModelCandidates(al.cfg, al.cfg.Agents.Defaults.Provider, cfg.Model, nil)
+	}
 	// Clone the tool registry so child turn's tool registrations
 	// don't pollute the parent's registry.
 	if baseAgent.Tools != nil {
@@ -375,6 +383,8 @@ func spawnSubTurn(
 		// Apply model override from agent definition
 		if agentDef.Model != "" {
 			cfg.Model = agentDef.Model
+			agent.Model = agentDef.Model
+			agent.Candidates = resolveModelCandidates(al.cfg, al.cfg.Agents.Defaults.Provider, agentDef.Model, nil)
 		}
 
 		// Apply timeout override from agent definition

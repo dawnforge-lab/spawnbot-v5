@@ -321,15 +321,17 @@ func registerSharedTools(
 			nil, // config updater wired separately if needed
 		))
 
+		// Resolve the subturn model once, used by both spawn tools and council.
+		subagentModel := agent.Model
+		if cfg.Agents.Defaults.SubTurn.Model != "" {
+			subagentModel = cfg.Agents.Defaults.SubTurn.Model
+		}
+
 		// Spawn and spawn_status tools share a SubagentManager.
 		// Construct it when either tool is enabled (both require subagent).
 		spawnEnabled := cfg.Tools.IsToolEnabled("spawn")
 		spawnStatusEnabled := cfg.Tools.IsToolEnabled("spawn_status")
 		if (spawnEnabled || spawnStatusEnabled) && cfg.Tools.IsToolEnabled("subagent") {
-			subagentModel := agent.Model
-			if cfg.Agents.Defaults.SubTurn.Model != "" {
-				subagentModel = cfg.Agents.Defaults.SubTurn.Model
-			}
 			subagentManager := tools.NewSubagentManager(provider, subagentModel, agent.Workspace)
 			subagentManager.SetLLMOptions(agent.MaxTokens, agent.Temperature)
 
@@ -444,7 +446,7 @@ func registerSharedTools(
 			councilsDir := filepath.Join(agent.Workspace, "councils")
 			councilStore := council.NewStore(councilsDir)
 			emitter := &councilEventEmitter{bus: al.eventBus}
-			councilEngine := council.NewEngine(councilStore, agentDefs, provider, emitter, agent.Model)
+			councilEngine := council.NewEngine(councilStore, agentDefs, provider, emitter, subagentModel)
 			councilTool := tools.NewCouncilTool(&councilRunnerAdapter{engine: councilEngine})
 			councilTool.SetLister(&councilListerAdapter{store: councilStore})
 			agent.Tools.RegisterHidden(councilTool)
