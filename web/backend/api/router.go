@@ -87,6 +87,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// WeCom QR login flow
 	h.registerWecomRoutes(mux)
 
+	// Workspace agent definitions (builtin + workspace)
+	h.registerWorkspaceAgentRoutes(mux)
+
 	// Onboarding wizard
 	h.registerOnboardingRoutes(mux)
 }

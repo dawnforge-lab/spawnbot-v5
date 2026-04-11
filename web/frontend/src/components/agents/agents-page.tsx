@@ -134,6 +134,13 @@ function splitComma(s: string): string[] {
   return s.split(",").map((v) => v.trim()).filter((v) => v.length > 0)
 }
 
+interface WorkspaceAgent {
+  name: string
+  description: string
+  model: string
+  source: string
+}
+
 // ── Component ───────────────────────────────────────────────
 
 export function AgentsPage() {
@@ -150,6 +157,15 @@ export function AgentsPage() {
       const res = await fetch("/api/config")
       if (!res.ok) throw new Error("Failed to load config")
       return res.json()
+    },
+  })
+
+  const { data: workspaceData } = useQuery({
+    queryKey: ["workspace-agents"],
+    queryFn: async () => {
+      const res = await fetch("/api/workspace-agents")
+      if (!res.ok) return { agents: [] }
+      return res.json() as Promise<{ agents: WorkspaceAgent[] }>
     },
   })
 
@@ -365,6 +381,34 @@ export function AgentsPage() {
                 <IconPlus className="size-4" />
                 Add Agent
               </Button>
+
+              {/* Workspace Agents (read-only) */}
+              {workspaceData && workspaceData.agents.length > 0 && (
+                <Card size="sm">
+                  <CardHeader className="border-border border-b">
+                    <CardTitle>Workspace Agents</CardTitle>
+                    <CardDescription>
+                      Agent definitions loaded from workspace/agents/ and builtins. These are used by the council and subagent tools.
+                      Managed via AGENT.md files or the create_agent tool — not editable here.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="divide-border/70 divide-y">
+                      {workspaceData.agents.map((wa) => (
+                        <div key={wa.name} className="flex items-center justify-between py-3">
+                          <div>
+                            <div className="text-sm font-medium">{wa.name}</div>
+                            <div className="text-muted-foreground text-xs">{wa.description}</div>
+                          </div>
+                          <span className="text-muted-foreground rounded bg-zinc-800 px-2 py-0.5 text-xs">
+                            {wa.source}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Bindings */}
               <Card size="sm">

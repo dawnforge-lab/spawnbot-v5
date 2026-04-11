@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/agents"
+	"github.com/dawnforge-lab/spawnbot-v5/pkg/logger"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers"
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
@@ -85,16 +86,32 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 			},
 		})
 
-		// Each agent speaks
+		// Each agent speaks — skip agents that fail after retry
 		for _, agentName := range meta.Roster {
 			agentDef := e.agentRegistry.Get(agentName)
 			if agentDef == nil {
-				return nil, fmt.Errorf("agent %q not found in registry", agentName)
+				logger.WarnCF("council", "Agent not found in registry, skipping",
+					map[string]any{"agent": agentName, "council_id": meta.ID})
+				continue
 			}
 
-			response, err := e.callAgent(ctx, meta, agentDef, transcript, round)
+			response, err := e.callAgentWithRetry(ctx, meta, agentDef, transcript, round)
 			if err != nil {
-				return nil, fmt.Errorf("call agent %s: %w", agentName, err)
+				logger.ErrorCF("council", "Agent failed after retries, skipping",
+					map[string]any{"agent": agentName, "error": err.Error(), "council_id": meta.ID})
+				entry := TranscriptEntry{
+					Role:      RoleAgent,
+					AgentID:   agentName,
+					AgentType: agentName,
+					Content:   fmt.Sprintf("[Agent %s was unable to respond this round]", agentName),
+					Round:     round,
+					Timestamp: time.Now(),
+				}
+				if storeErr := e.store.AppendMessage(meta.ID, entry); storeErr != nil {
+					return nil, fmt.Errorf("append agent skip message: %w", storeErr)
+				}
+				transcript = append(transcript, entry)
+				continue
 			}
 
 			entry := TranscriptEntry{
@@ -111,8 +128,10 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 			transcript = append(transcript, entry)
 		}
 
-		// Moderator decision
-		decision, err := e.moderatorDecision(ctx, meta, transcript, round)
+		// Moderator decision — retry on failure
+		decision, err := e.callWithRetry("moderator", func() (string, error) {
+			return e.moderatorDecision(ctx, meta, transcript, round)
+		})
 		if err != nil {
 			return nil, fmt.Errorf("moderator decision: %w", err)
 		}
@@ -145,8 +164,10 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		}
 	}
 
-	// Generate synthesis
-	synthesis, err := e.generateSynthesis(ctx, meta, transcript)
+	// Generate synthesis — retry on failure
+	synthesis, err := e.callWithRetry("synthesis", func() (string, error) {
+		return e.generateSynthesis(ctx, meta, transcript)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("generate synthesis: %w", err)
 	}
@@ -455,6 +476,47 @@ func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, trans
 	}
 
 	return resp.Content, nil
+}
+
+const maxRetries = 2
+
+// callAgentWithRetry calls an agent with retry on transient failures.
+func (e *Engine) callAgentWithRetry(ctx context.Context, meta *CouncilMeta, agentDef *agents.AgentDefinition, transcript []TranscriptEntry, round int) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.InfoCF("council", "Retrying agent call",
+				map[string]any{"agent": agentDef.Name, "attempt": attempt + 1, "council_id": meta.ID})
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+		response, err := e.callAgent(ctx, meta, agentDef, transcript, round)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+	}
+	return "", lastErr
+}
+
+// callWithRetry retries a string-returning function on failure.
+func (e *Engine) callWithRetry(label string, fn func() (string, error)) (string, error) {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.InfoCF("council", "Retrying "+label,
+				map[string]any{"attempt": attempt + 1})
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+		result, err := fn()
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	return "", lastErr
 }
 
 // emitEvent safely emits an event, checking if emitter is nil.
