@@ -31,10 +31,10 @@ const EMPTY_FORM: AgentConfigForm = {
   mainModel: "",
   subturnModel: "",
   subturnMaxDepth: "3",
-  subturnMaxConcurrent: "5",
-  subturnDefaultTimeoutMinutes: "5",
+  subturnMaxConcurrent: "4",
+  subturnDefaultTimeoutMinutes: "10",
   subturnDefaultTokenBudget: "0",
-  subturnConcurrencyTimeoutSec: "30",
+  subturnConcurrencyTimeoutSec: "300",
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -46,6 +46,15 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : ""
+}
+
+// asPositiveNumStr returns the fallback when the value is 0 or missing,
+// since 0 means "use hardcoded default" in the backend.
+function asPositiveNumStr(value: unknown, fallback: string): string {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return String(value)
+  }
+  return fallback
 }
 
 function asNumberString(value: unknown, fallback: string): string {
@@ -67,11 +76,11 @@ function buildFormFromConfig(config: unknown): AgentConfigForm {
   return {
     mainModel: asString(defaults.model_name) || asString(defaults.provider) || EMPTY_FORM.mainModel,
     subturnModel: asString(subturn.model) || EMPTY_FORM.subturnModel,
-    subturnMaxDepth: asNumberString(subturn.max_depth, EMPTY_FORM.subturnMaxDepth),
-    subturnMaxConcurrent: asNumberString(subturn.max_concurrent, EMPTY_FORM.subturnMaxConcurrent),
-    subturnDefaultTimeoutMinutes: asNumberString(subturn.default_timeout_minutes, EMPTY_FORM.subturnDefaultTimeoutMinutes),
+    subturnMaxDepth: asPositiveNumStr(subturn.max_depth, EMPTY_FORM.subturnMaxDepth),
+    subturnMaxConcurrent: asPositiveNumStr(subturn.max_concurrent, EMPTY_FORM.subturnMaxConcurrent),
+    subturnDefaultTimeoutMinutes: asPositiveNumStr(subturn.default_timeout_minutes, EMPTY_FORM.subturnDefaultTimeoutMinutes),
     subturnDefaultTokenBudget: asNumberString(subturn.default_token_budget, EMPTY_FORM.subturnDefaultTokenBudget),
-    subturnConcurrencyTimeoutSec: asNumberString(subturn.concurrency_timeout_sec, EMPTY_FORM.subturnConcurrencyTimeoutSec),
+    subturnConcurrencyTimeoutSec: asPositiveNumStr(subturn.concurrency_timeout_sec, EMPTY_FORM.subturnConcurrencyTimeoutSec),
   }
 }
 
