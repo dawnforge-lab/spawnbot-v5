@@ -44,6 +44,33 @@ var (
 	gatewayRestartPollInterval    = 100 * time.Millisecond
 )
 
+// systemdServiceName is the user-level systemd unit for the gateway.
+const systemdServiceName = "spawnbot-gateway"
+
+// isSystemdServiceEnabled checks if the spawnbot-gateway systemd user service
+// exists and is enabled. When true, the launcher delegates lifecycle commands
+// to systemctl instead of managing the process directly.
+func isSystemdServiceEnabled() bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+	out, err := exec.Command("systemctl", "--user", "is-enabled", systemdServiceName).Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "enabled"
+}
+
+// systemctlGateway runs a systemctl --user command (start, stop, restart) for
+// the gateway service and waits for it to complete.
+func systemctlGateway(action string) error {
+	cmd := exec.Command("systemctl", "--user", action, systemdServiceName)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl --user %s %s failed: %s: %w", action, systemdServiceName, strings.TrimSpace(string(out)), err)
+	}
+	return nil
+}
+
 var gatewayHealthGet = func(url string, timeout time.Duration) (*http.Response, error) {
 	client := http.Client{Timeout: timeout}
 	return client.Get(url)
@@ -476,10 +503,52 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 	return pid, nil
 }
 
+// waitForGatewayHealthPID polls the health endpoint to get the new gateway PID.
+func (h *Handler) waitForGatewayHealthPID() int {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		return 0
+	}
+	for i := 0; i < 30; i++ {
+		time.Sleep(500 * time.Millisecond)
+		resp, code, err := h.getGatewayHealth(cfg, 1*time.Second)
+		if err == nil && code == http.StatusOK && resp.Pid > 0 {
+			return resp.Pid
+		}
+	}
+	return 0
+}
+
+// resolveBootModel loads the config and returns the default model name.
+func (h *Handler) resolveBootModel() string {
+	cfg, err := config.LoadConfig(h.configPath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Agents.Defaults.GetModelName())
+}
+
 // handleGatewayStart starts the spawnbot gateway subprocess.
 //
 //	POST /api/gateway/start
 func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
+	// Delegate to systemd when the user service is enabled.
+	if isSystemdServiceEnabled() {
+		logger.InfoCF("gateway", "Starting gateway via systemctl --user", nil)
+		if err := systemctlGateway("start"); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		pid := h.waitForGatewayHealthPID()
+		gateway.mu.Lock()
+		setGatewayRuntimeStatusLocked("running")
+		gateway.bootDefaultModel = h.resolveBootModel()
+		gateway.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok", "pid": pid})
+		return
+	}
+
 	// Prevent duplicate starts by checking health endpoint
 	cfg, cfgErr := config.LoadConfig(h.configPath)
 	if cfgErr == nil && cfg != nil {
@@ -571,6 +640,23 @@ func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
 //
 //	POST /api/gateway/stop
 func (h *Handler) handleGatewayStop(w http.ResponseWriter, r *http.Request) {
+	// Delegate to systemd when the user service is enabled.
+	if isSystemdServiceEnabled() {
+		logger.InfoCF("gateway", "Stopping gateway via systemctl --user", nil)
+		if err := systemctlGateway("stop"); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		gateway.mu.Lock()
+		gateway.cmd = nil
+		gateway.bootDefaultModel = ""
+		setGatewayRuntimeStatusLocked("stopped")
+		gateway.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"status": "ok"})
+		return
+	}
+
 	gateway.mu.Lock()
 	defer gateway.mu.Unlock()
 
@@ -599,6 +685,33 @@ func (h *Handler) handleGatewayStop(w http.ResponseWriter, r *http.Request) {
 // that stops the current gateway (if running) and starts a new one.
 // Returns the PID of the new gateway process or an error.
 func (h *Handler) RestartGateway() (int, error) {
+	// Delegate to systemd when the user service is enabled.
+	if isSystemdServiceEnabled() {
+		logger.InfoCF("gateway", "Restarting gateway via systemctl --user", nil)
+		gateway.mu.Lock()
+		setGatewayRuntimeStatusLocked("restarting")
+		gateway.cmd = nil
+		gateway.bootDefaultModel = ""
+		gateway.mu.Unlock()
+
+		if err := systemctlGateway("restart"); err != nil {
+			gateway.mu.Lock()
+			setGatewayRuntimeStatusLocked("error")
+			gateway.mu.Unlock()
+			return 0, err
+		}
+
+		// Probe for the new PID via health endpoint
+		pid := h.waitForGatewayHealthPID()
+		if pid > 0 {
+			gateway.mu.Lock()
+			setGatewayRuntimeStatusLocked("running")
+			gateway.bootDefaultModel = h.resolveBootModel()
+			gateway.mu.Unlock()
+		}
+		return pid, nil
+	}
+
 	ready, reason, err := h.gatewayStartReady()
 	if err != nil {
 		return 0, fmt.Errorf("failed to validate gateway start conditions: %w", err)
