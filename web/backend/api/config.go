@@ -257,6 +257,16 @@ func ensureAgentModelsInList(cfg *config.Config) {
 		existing[m.ModelName] = true
 	}
 
+	// Build a map of api_base → API key from existing models so new entries
+	// sharing the same base URL can inherit credentials.
+	baseKeys := make(map[string]string)
+	for _, m := range cfg.ModelList {
+		base := strings.TrimSpace(m.APIBase)
+		if base != "" && m.APIKey() != "" {
+			baseKeys[base] = m.APIKey()
+		}
+	}
+
 	for _, modelName := range []string{
 		cfg.Agents.Defaults.ModelName,
 		cfg.Agents.Defaults.SubTurn.Model,
@@ -281,10 +291,25 @@ func ensureAgentModelsInList(cfg *config.Config) {
 			mc.Model = "openai/" + modelName
 		}
 
+		// Inherit API key from an existing model with the same api_base.
+		if key, ok := baseKeys[mc.APIBase]; ok && key != "" {
+			mc.SetAPIKey(key)
+		}
+
 		cfg.ModelList = append(cfg.ModelList, mc)
 		existing[modelName] = true
 		logger.InfoCF("config", "Auto-added model to model_list",
 			map[string]any{"model_name": modelName, "model": mc.Model})
+	}
+
+	// Propagate API keys to existing entries that share an api_base but lack a key.
+	for _, m := range cfg.ModelList {
+		base := strings.TrimSpace(m.APIBase)
+		if base != "" && m.APIKey() == "" {
+			if key, ok := baseKeys[base]; ok && key != "" {
+				m.SetAPIKey(key)
+			}
+		}
 	}
 }
 
