@@ -324,6 +324,11 @@ cd spawnbot-v5
 
 make build                # Build to ./build/
 make install              # Build + install to ~/.spawnbot/bin/
+
+# Add to PATH (add to ~/.bashrc for persistence)
+export PATH="$HOME/.spawnbot/bin:$PATH"
+
+spawnbot onboard          # Set up your agent
 CGO_ENABLED=1 make build  # With semantic memory (requires SQLite headers)
 make build-all            # Cross-compile all platforms
 make docker-build         # Minimal Alpine container

@@ -116,7 +116,12 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
 fi
 
 echo ""
-echo "Next: run 'spawnbot onboard' to set up your agent."
 if [[ -n "${SHELL_RC:-}" ]]; then
-    echo "      (restart your shell or run: source $SHELL_RC)"
+    echo "Next:"
+    echo "  1. source $SHELL_RC"
+    echo "  2. spawnbot onboard"
+else
+    echo "Next:"
+    echo "  1. export PATH=\"\$HOME/.spawnbot/bin:\$PATH\""
+    echo "  2. spawnbot onboard"
 fi

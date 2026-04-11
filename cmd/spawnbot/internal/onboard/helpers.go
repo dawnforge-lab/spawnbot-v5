@@ -482,6 +482,14 @@ func onboard(encrypt bool) {
 	fmt.Println()
 	fmt.Println("  CLI (interactive):")
 	fmt.Println("    spawnbot agent")
+
+	// Remind about PATH if not set
+	binDir := filepath.Join(os.Getenv("HOME"), ".spawnbot", "bin")
+	if !strings.Contains(os.Getenv("PATH"), binDir) {
+		fmt.Println()
+		fmt.Println("  \033[33mNote:\033[0m spawnbot is not in your PATH. Add it with:")
+		fmt.Printf("    echo 'export PATH=\"$HOME/.spawnbot/bin:$PATH\"' >> ~/.bashrc && source ~/.bashrc\n")
+	}
 }
 
 // findBinary returns the absolute path to a binary in ~/.spawnbot/bin/ or PATH.
