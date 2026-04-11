@@ -214,13 +214,14 @@ func (e *Engine) initSession(cfg CouncilConfig) (*CouncilMeta, []TranscriptEntry
 	// New council
 	now := time.Now()
 	meta := &CouncilMeta{
-		Title:       cfg.Title,
-		Description: cfg.Description,
-		Roster:      cfg.Roster,
-		Status:      StatusActive,
-		Rounds:      0,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		Title:        cfg.Title,
+		Description:  cfg.Description,
+		AgentContext: cfg.AgentContext,
+		Roster:       cfg.Roster,
+		Status:       StatusActive,
+		Rounds:       0,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	if _, err := e.store.Create(meta); err != nil {
@@ -301,8 +302,13 @@ func (e *Engine) buildAgentMessages(agentDef *agents.AgentDefinition, meta *Coun
 	var messages []protocoltypes.Message
 
 	// System message: tell the agent to speak ONLY for itself, not others.
+	agentContextBlock := ""
+	if meta.AgentContext != "" {
+		agentContextBlock = fmt.Sprintf("\n\nYou were convened by the main agent, who introduces themselves as:\n%s\nKeep this context in mind when contributing to the discussion.", meta.AgentContext)
+	}
+
 	systemContent := fmt.Sprintf(`You are %s, participating in a council discussion titled %q.
-Other participants: %s.
+Other participants: %s.%s
 
 CRITICAL RULES:
 - You speak ONLY for yourself. Do NOT write responses for other agents.
@@ -311,7 +317,7 @@ CRITICAL RULES:
 - Be concise and substantive. 2-4 paragraphs max.
 - Build on what others have said in the transcript. Agree or disagree with specifics.
 - Focus on what's true and useful, not on defending a position.`,
-		agentDef.Name, meta.Title, strings.Join(meta.Roster, ", "))
+		agentDef.Name, meta.Title, strings.Join(meta.Roster, ", "), agentContextBlock)
 	messages = append(messages, protocoltypes.Message{
 		Role:    "system",
 		Content: systemContent,

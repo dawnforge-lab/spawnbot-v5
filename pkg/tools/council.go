@@ -19,11 +19,12 @@ type CouncilLister interface {
 
 // CouncilRunConfig mirrors council.CouncilConfig without importing the package.
 type CouncilRunConfig struct {
-	ID          string   `json:"id,omitempty"`
-	Title       string   `json:"title"`
-	Description string   `json:"description,omitempty"`
-	Topic       string   `json:"topic,omitempty"`
-	Roster      []string `json:"roster"`
+	ID           string   `json:"id,omitempty"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description,omitempty"`
+	Topic        string   `json:"topic,omitempty"`
+	Roster       []string `json:"roster"`
+	AgentContext string   `json:"agent_context,omitempty"` // Brief self-introduction from the invoking agent
 }
 
 // CouncilRunResult mirrors council.CouncilResult without importing the package.
@@ -95,6 +96,10 @@ func (t *CouncilTool) Parameters() map[string]any {
 				"type":        "array",
 				"items":       map[string]any{"type": "string"},
 				"description": "List of agent names to participate in the council.",
+			},
+			"agent_context": map[string]any{
+				"type":        "string",
+				"description": "A brief self-introduction (1-2 sentences) so council agents understand who is asking. Include your name, role, and relevant context for the discussion.",
 			},
 			"council_id": map[string]any{
 				"type":        "string",
@@ -176,11 +181,14 @@ func (t *CouncilTool) start(ctx context.Context, args map[string]any) *ToolResul
 		}
 	}
 
+	agentContext, _ := args["agent_context"].(string)
+
 	cfg := CouncilRunConfig{
-		Title:       title,
-		Description: description,
-		Topic:       topic,
-		Roster:      roster,
+		Title:        title,
+		Description:  description,
+		Topic:        topic,
+		Roster:       roster,
+		AgentContext: agentContext,
 	}
 
 	result, err := t.engine.Run(ctx, cfg)

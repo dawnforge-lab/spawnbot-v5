@@ -15,11 +15,12 @@ type councilRunnerAdapter struct {
 
 func (a *councilRunnerAdapter) Run(ctx context.Context, cfg tools.CouncilRunConfig) (*tools.CouncilRunResult, error) {
 	result, err := a.engine.Run(ctx, council.CouncilConfig{
-		ID:          cfg.ID,
-		Title:       cfg.Title,
-		Description: cfg.Description,
-		Topic:       cfg.Topic,
-		Roster:      cfg.Roster,
+		ID:           cfg.ID,
+		Title:        cfg.Title,
+		Description:  cfg.Description,
+		Topic:        cfg.Topic,
+		Roster:       cfg.Roster,
+		AgentContext: cfg.AgentContext,
 	})
 	if err != nil {
 		return nil, err
