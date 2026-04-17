@@ -5,11 +5,36 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/providers/protocoltypes"
 )
+
+// tinyPNG is a minimal valid 1×1 PNG used to exercise image-tag extraction.
+var tinyPNG = []byte{
+	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+	0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+	0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+	0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+	0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+	0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+	0x42, 0x60, 0x82,
+}
+
+func writeTempPNG(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "photo.png")
+	if err := os.WriteFile(path, tinyPNG, 0o644); err != nil {
+		t.Fatalf("write temp png: %v", err)
+	}
+	return path
+}
 
 // --- NewHTTPClient tests ---
 
@@ -159,6 +184,115 @@ func TestSerializeMessages_StripsSystemParts(t *testing.T) {
 	data, _ := json.Marshal(result)
 	if strings.Contains(string(data), "system_parts") {
 		t.Error("system_parts should not appear in serialized output")
+	}
+}
+
+// --- Image tag extraction tests ---
+
+func TestExtractImageTags_NoTag(t *testing.T) {
+	cleaned, media := ExtractImageTags("plain text with no media")
+	if cleaned != "plain text with no media" {
+		t.Errorf("content modified unexpectedly: %q", cleaned)
+	}
+	if len(media) != 0 {
+		t.Errorf("expected no media, got %d entries", len(media))
+	}
+}
+
+func TestExtractImageTags_ReadsImageFromPath(t *testing.T) {
+	path := writeTempPNG(t)
+	cleaned, media := ExtractImageTags("here is my image [image:" + path + "] please describe")
+
+	if len(media) != 1 {
+		t.Fatalf("expected 1 media entry, got %d", len(media))
+	}
+	if !strings.HasPrefix(media[0], "data:image/png;base64,") {
+		t.Errorf("expected data URL prefix, got %q", media[0][:40])
+	}
+	if strings.Contains(cleaned, "[image:") {
+		t.Errorf("tag should be stripped from content, got %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "please describe") {
+		t.Errorf("surrounding text lost: %q", cleaned)
+	}
+}
+
+func TestExtractImageTags_MissingFileInlinesError(t *testing.T) {
+	cleaned, media := ExtractImageTags("[image:/no/such/file.jpg]")
+	if len(media) != 0 {
+		t.Errorf("expected no media for missing file, got %d", len(media))
+	}
+	if !strings.Contains(cleaned, "image unavailable") {
+		t.Errorf("expected transparent error in content, got %q", cleaned)
+	}
+}
+
+func TestExtractImageTags_AudioTagPreserved(t *testing.T) {
+	cleaned, media := ExtractImageTags("transcript: [audio:/some/clip.ogg]")
+	if len(media) != 0 {
+		t.Errorf("audio tag should not produce image media, got %d entries", len(media))
+	}
+	if !strings.Contains(cleaned, "[audio:/some/clip.ogg]") {
+		t.Errorf("audio tag must be preserved verbatim, got %q", cleaned)
+	}
+}
+
+func TestSerializeMessages_ExtractsImageTagFromContent(t *testing.T) {
+	path := writeTempPNG(t)
+	messages := []Message{
+		{Role: "user", Content: "what's in [image:" + path + "]?"},
+	}
+	result := SerializeMessages(messages)
+
+	data, _ := json.Marshal(result)
+	var msgs []map[string]any
+	json.Unmarshal(data, &msgs)
+
+	content, ok := msgs[0]["content"].([]any)
+	if !ok {
+		t.Fatalf("expected array content after extraction, got %T", msgs[0]["content"])
+	}
+	if len(content) != 2 {
+		t.Fatalf("expected text + image parts, got %d", len(content))
+	}
+	imgPart, _ := content[1].(map[string]any)
+	if imgPart["type"] != "image_url" {
+		t.Errorf("expected image_url part, got %v", imgPart["type"])
+	}
+	imgURL, _ := imgPart["image_url"].(map[string]any)
+	url, _ := imgURL["url"].(string)
+	if !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("expected data URL, got %q", url[:min(40, len(url))])
+	}
+}
+
+func TestSerializeMessages_ToolResultImagePath(t *testing.T) {
+	// Simulates the agent calling read_file on an image: the tool result
+	// contains an [image:/path] tag that must be rewritten to an image_url
+	// part so vision-capable models can see the bytes.
+	path := writeTempPNG(t)
+	messages := []Message{
+		{
+			Role:       "tool",
+			Content:    "[image:" + path + "]\nImage file: photo.png",
+			ToolCallID: "call_42",
+		},
+	}
+	result := SerializeMessages(messages)
+
+	data, _ := json.Marshal(result)
+	var msgs []map[string]any
+	json.Unmarshal(data, &msgs)
+
+	if msgs[0]["tool_call_id"] != "call_42" {
+		t.Errorf("tool_call_id lost, got %v", msgs[0]["tool_call_id"])
+	}
+	content, ok := msgs[0]["content"].([]any)
+	if !ok {
+		t.Fatalf("expected multipart content for tool result with image, got %T", msgs[0]["content"])
+	}
+	if len(content) != 2 {
+		t.Fatalf("expected text + image parts, got %d", len(content))
 	}
 }
 

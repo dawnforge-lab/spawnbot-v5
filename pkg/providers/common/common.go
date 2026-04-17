@@ -79,15 +79,24 @@ type openaiMessage struct {
 
 // SerializeMessages converts internal Message structs to the OpenAI wire format.
 //   - Strips SystemParts (unknown to third-party endpoints)
+//   - Extracts [image:/path] tags from Content, reads the referenced files, and
+//     merges them into Media as base64 data URLs so vision-capable endpoints
+//     (OpenAI, Ollama Cloud, etc.) receive real image parts
 //   - Converts messages with Media to multipart content format (text + image_url parts)
 //   - Preserves ToolCallID, ToolCalls, and ReasoningContent for all messages
 func SerializeMessages(messages []Message) []any {
 	out := make([]any, 0, len(messages))
 	for _, m := range messages {
-		if len(m.Media) == 0 {
+		content, extracted := ExtractImageTags(m.Content)
+		media := m.Media
+		if len(extracted) > 0 {
+			media = append(append(make([]string, 0, len(m.Media)+len(extracted)), m.Media...), extracted...)
+		}
+
+		if len(media) == 0 {
 			out = append(out, openaiMessage{
 				Role:             m.Role,
-				Content:          m.Content,
+				Content:          content,
 				ReasoningContent: m.ReasoningContent,
 				ToolCalls:        m.ToolCalls,
 				ToolCallID:       m.ToolCallID,
@@ -96,14 +105,14 @@ func SerializeMessages(messages []Message) []any {
 		}
 
 		// Multipart content format for messages with media
-		parts := make([]map[string]any, 0, 1+len(m.Media))
-		if m.Content != "" {
+		parts := make([]map[string]any, 0, 1+len(media))
+		if content != "" {
 			parts = append(parts, map[string]any{
 				"type": "text",
-				"text": m.Content,
+				"text": content,
 			})
 		}
-		for _, mediaURL := range m.Media {
+		for _, mediaURL := range media {
 			if strings.HasPrefix(mediaURL, "data:image/") {
 				parts = append(parts, map[string]any{
 					"type": "image_url",
