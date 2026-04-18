@@ -68,6 +68,11 @@ type AgentLoop struct {
 	activeTurnStates sync.Map     // key: sessionKey (string), value: *turnState
 	subTurnCounter   atomic.Int64 // Counter for generating unique SubTurn IDs
 
+	// autoContinueCounts tracks consecutive self-triggered continuations per
+	// session. Keyed by sessionKey; values are *atomic.Int32. Reset when a
+	// real inbound message arrives for the session.
+	autoContinueCounts sync.Map
+
 	// Turn tracking (from Incoming)
 	turnSeq        atomic.Uint64
 	activeRequests sync.WaitGroup
@@ -177,6 +182,11 @@ func registerSharedTools(
 
 		// search_tools is core — always visible so the agent can discover hidden tools
 		agent.Tools.Register(tools.NewSearchTools(agent.Tools))
+
+		// end_turn is core — the model uses it to declare what should happen
+		// after the current turn (done / continue_now / wait / schedule /
+		// await_event). See pkg/agent/continuation.go.
+		agent.Tools.Register(newEndTurnTool())
 
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
@@ -1450,6 +1460,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	scopeKey := resolveScopeKey(route, msg.SessionKey)
 	sessionKey := scopeKey
 
+	// A real inbound (non-self) message arriving on this session resets the
+	// consecutive auto-continuation counter so subsequent end_turn
+	// continuations are not cut off by a stale cap.
+	al.resetAutoContinueCount(sessionKey)
+
 	logger.InfoCF("agent", "Routed message",
 		map[string]any{
 			"agent_id":      agent.ID,
@@ -1658,6 +1673,12 @@ func (al *AgentLoop) runAgentLoop(
 				})
 		}
 	}
+
+	// Dispatch any continuation the model declared via end_turn. For
+	// continue_now this enqueues a self-steering message that the existing
+	// post-message drain loop (in Run) will pick up. For wait/schedule a
+	// goroutine handles the delayed re-entry.
+	al.dispatchContinuation(ctx, agent, opts, result.continuation)
 
 	if opts.SendResponse && result.finalContent != "" {
 		al.bus.PublishOutbound(ctx, bus.OutboundMessage{
@@ -2885,6 +2906,7 @@ turnLoop:
 				finalContent: "",
 				status:       turnStatus,
 				followUps:    append([]bus.InboundMessage(nil), ts.followUps...),
+				continuation: ts.getContinuation(),
 			}, nil
 		}
 
@@ -2951,6 +2973,7 @@ turnLoop:
 		finalContent: finalContent,
 		status:       turnStatus,
 		followUps:    append([]bus.InboundMessage(nil), ts.followUps...),
+		continuation: ts.getContinuation(),
 	}, nil
 }
 

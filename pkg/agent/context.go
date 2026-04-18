@@ -151,6 +151,20 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 	// Memory is NOT injected into the system prompt. The agent reads memory
 	// on demand via memory_search/read_file tools, guided by instructions in SOUL.md.
 
+	// Continuation / autonomy guidance. Tells the model about the end_turn
+	// tool so it explicitly declares what should happen after replying
+	// instead of silently dropping its own promises.
+	parts = append(parts, `# TURN CONTINUATION
+
+At the end of every turn, call the end_turn tool to declare what should happen next. Choose one:
+- done: the turn is complete; wait for the user or an external trigger.
+- continue_now: immediately take another step without waiting for the user. Use this when you said you would do something else right after replying, or when more work is clearly needed.
+- wait: pause for after_ms milliseconds, then run another turn with the intent you declare.
+- schedule: run another turn at a specific RFC3339 timestamp (argument at).
+- await_event: pause until a named external event fires (placeholder for now).
+
+Always supply a concrete intent for anything other than done, phrased as an instruction to yourself for the next turn. If you promise the user you'll do something after replying, declare that promise as a continuation instead of relying on memory. Consecutive self-continuations are capped for safety.`)
+
 	// Multi-Message Sending (if enabled)
 	if cb.splitOnMarker {
 		parts = append(parts, `# MULTI-MESSAGE OUTPUT
