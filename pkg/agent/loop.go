@@ -79,6 +79,10 @@ type AgentLoop struct {
 	events         sync.Map
 	eventWaiterSeq atomic.Uint64
 
+	// eventsStore is set when SetEventsStorePath is called during startup.
+	// Nil means persistence is disabled; save/load become no-ops.
+	eventsStore *eventsPersistence
+
 	// Turn tracking (from Incoming)
 	turnSeq        atomic.Uint64
 	activeRequests sync.WaitGroup
@@ -163,6 +167,14 @@ func NewAgentLoop(
 	}
 	al.hooks = NewHookManager(eventBus)
 	configureHookManagerFromConfig(al.hooks, cfg)
+
+	// Enable event-waiter persistence under the default workspace when
+	// configured. Waiters survive restarts so await_event declarations are
+	// not lost across process lifecycles.
+	if workspace := cfg.Agents.Defaults.Workspace; workspace != "" {
+		al.SetEventsStorePath(filepath.Join(workspace, "autonomy", "event_waiters.json"))
+		al.loadEventWaitersFromDisk()
+	}
 
 	// Register shared tools to all agents (now that al is created)
 	registerSharedTools(al, cfg, msgBus, registry, provider)

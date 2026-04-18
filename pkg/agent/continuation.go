@@ -331,6 +331,8 @@ func (al *AgentLoop) registerEventWaiter(
 			"intent_len":  len(intent),
 		})
 
+	al.saveEventWaitersSnapshot()
+
 	if !w.deadline.IsZero() {
 		go al.watchEventWaiterDeadline(w)
 	}
@@ -373,6 +375,7 @@ func (al *AgentLoop) timeoutEventWaiter(w *eventWaiter) {
 			"waiter_id":   w.id,
 			"session_key": w.sessionKey,
 		})
+	al.saveEventWaitersSnapshot()
 	al.resumeEventWaiter(w, "timed_out", "")
 }
 
@@ -402,6 +405,8 @@ func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
 			"event":   name,
 			"waiters": len(waiters),
 		})
+
+	al.saveEventWaitersSnapshot()
 
 	for _, w := range waiters {
 		al.resumeEventWaiter(w, "fired", payload)
