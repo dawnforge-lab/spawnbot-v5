@@ -210,6 +210,10 @@ func registerSharedTools(
 		// await_event continuation.
 		agent.Tools.Register(newFireEventTool())
 
+		// list_events is core — lets the model audit its own pending
+		// await_event subscriptions.
+		agent.Tools.Register(newListEventsTool())
+
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
 				BraveAPIKeys:    config.MergeAPIKeys(cfg.Tools.Web.Brave.APIKey(), cfg.Tools.Web.Brave.APIKeys()),

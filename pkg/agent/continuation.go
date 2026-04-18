@@ -468,6 +468,53 @@ func (al *AgentLoop) PendingEventWaiters() map[string]int {
 	return out
 }
 
+// EventWaiterInfo is a public snapshot of a single pending event waiter,
+// returned by SnapshotEventWaiters for observability (list_events tool,
+// admin UI, tests).
+type EventWaiterInfo struct {
+	ID         uint64
+	Name       string
+	SessionKey string
+	AgentID    string
+	Channel    string
+	ChatID     string
+	Intent     string
+	Reason     string
+	CreatedAt  time.Time
+	Deadline   time.Time
+}
+
+// SnapshotEventWaiters returns a flat, independent slice of all pending
+// waiters across every event name. Safe to call concurrently with
+// register/fire/timeout; the snapshot reflects the state at call time.
+func (al *AgentLoop) SnapshotEventWaiters() []EventWaiterInfo {
+	var out []EventWaiterInfo
+	al.events.Range(func(_, value any) bool {
+		bucket, _ := value.(*eventBucket)
+		if bucket == nil {
+			return true
+		}
+		bucket.mu.Lock()
+		for _, w := range bucket.waiters {
+			out = append(out, EventWaiterInfo{
+				ID:         w.id,
+				Name:       w.name,
+				SessionKey: w.sessionKey,
+				AgentID:    w.agentID,
+				Channel:    w.channel,
+				ChatID:     w.chatID,
+				Intent:     w.intent,
+				Reason:     w.reason,
+				CreatedAt:  w.createdAt,
+				Deadline:   w.deadline,
+			})
+		}
+		bucket.mu.Unlock()
+		return true
+	})
+	return out
+}
+
 // mentionEventPrefix marks event waiters that match on a substring of inbound
 // message content. A waiter named "mention:urgent" fires whenever any inbound
 // message's content contains "urgent" (case-insensitive).
