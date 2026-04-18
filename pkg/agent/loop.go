@@ -513,6 +513,10 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				al.inboundHook(msg)
 			}
 
+			// Resolve any mention:<keyword> event waiters whose keyword
+			// appears in this message's content.
+			al.fireMentionEventsForMessage(ctx, msg.Content)
+
 			// Start a goroutine that drains the bus while processMessage is
 			// running. Only messages that resolve to the active turn scope are
 			// redirected into steering; other inbound messages are requeued.

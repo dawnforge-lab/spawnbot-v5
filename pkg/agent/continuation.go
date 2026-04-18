@@ -462,3 +462,38 @@ func (al *AgentLoop) PendingEventWaiters() map[string]int {
 	})
 	return out
 }
+
+// mentionEventPrefix marks event waiters that match on a substring of inbound
+// message content. A waiter named "mention:urgent" fires whenever any inbound
+// message's content contains "urgent" (case-insensitive).
+const mentionEventPrefix = "mention:"
+
+// fireMentionEventsForMessage scans the event registry for waiters with the
+// mention: prefix and fires those whose keyword appears in the inbound
+// message content. Called from the Run loop for every inbound message.
+func (al *AgentLoop) fireMentionEventsForMessage(ctx context.Context, content string) {
+	if content == "" {
+		return
+	}
+	lower := strings.ToLower(content)
+
+	var toFire []string
+	al.events.Range(func(key, _ any) bool {
+		name, _ := key.(string)
+		if !strings.HasPrefix(name, mentionEventPrefix) {
+			return true
+		}
+		keyword := strings.TrimSpace(strings.TrimPrefix(name, mentionEventPrefix))
+		if keyword == "" {
+			return true
+		}
+		if strings.Contains(lower, keyword) {
+			toFire = append(toFire, name)
+		}
+		return true
+	})
+
+	for _, name := range toFire {
+		al.FireEvent(ctx, name, content)
+	}
+}
