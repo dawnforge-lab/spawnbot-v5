@@ -35,7 +35,7 @@ func (t *endTurnTool) Parameters() map[string]any {
 		"properties": map[string]any{
 			"continuation": map[string]any{
 				"type":        "string",
-				"enum":        []string{"done", "continue_now", "wait", "schedule", "await_event"},
+				"enum":        []string{"done", "continue_now", "wait", "schedule", "await_event", "await_any", "await_all"},
 				"description": "What the supervisor should do after this turn ends.",
 			},
 			"intent": map[string]any{
@@ -54,6 +54,11 @@ func (t *endTurnTool) Parameters() map[string]any {
 			"event": map[string]any{
 				"type":        "string",
 				"description": "For continuation=await_event: name of the event to wait for. Fires when another turn calls fire_event with the same name, or via a runtime-fired event (idle:<channel>, feed:<url>, mention:<keyword>).",
+			},
+			"events": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "For continuation=await_any or await_all: list of event names. await_any resumes on the first fire; await_all resumes when every named event has fired. Deadlines (after_ms / at) apply to the group as a whole.",
 			},
 			"sticky": map[string]any{
 				"type":        "boolean",

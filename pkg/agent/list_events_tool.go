@@ -54,6 +54,7 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 	sessionKey := strings.TrimSpace(stringArg(args, "session_key"))
 
 	waiters := al.SnapshotEventWaiters()
+	groups := al.SnapshotEventGroups()
 	if prefix != "" || sessionKey != "" {
 		filtered := waiters[:0]
 		for _, w := range waiters {
@@ -66,9 +67,30 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 			filtered = append(filtered, w)
 		}
 		waiters = filtered
+
+		fg := groups[:0]
+		for _, g := range groups {
+			if sessionKey != "" && g.SessionKey != sessionKey {
+				continue
+			}
+			if prefix != "" {
+				matches := false
+				for _, name := range g.Pending {
+					if strings.HasPrefix(name, prefix) {
+						matches = true
+						break
+					}
+				}
+				if !matches {
+					continue
+				}
+			}
+			fg = append(fg, g)
+		}
+		groups = fg
 	}
 
-	if len(waiters) == 0 {
+	if len(waiters) == 0 && len(groups) == 0 {
 		return tools.SilentResult("No pending event waiters.")
 	}
 
@@ -79,11 +101,28 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 		}
 		return waiters[i].CreatedAt.Before(waiters[j].CreatedAt)
 	})
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].ID < groups[j].ID
+	})
 
 	now := time.Now()
 	var b strings.Builder
-	fmt.Fprintf(&b, "Pending event waiters (%d):\n", len(waiters))
+	// Separate standalone waiters from group children for a cleaner read.
+	standalone := 0
+	grouped := 0
 	for _, w := range waiters {
+		if w.GroupID != 0 {
+			grouped++
+		} else {
+			standalone++
+		}
+	}
+	fmt.Fprintf(&b, "Pending event waiters (%d standalone, %d in groups) + %d groups:\n",
+		standalone, grouped, len(groups))
+	for _, w := range waiters {
+		if w.GroupID != 0 {
+			continue // Rendered under its group below.
+		}
 		age := now.Sub(w.CreatedAt).Round(time.Second)
 		deadlineDesc := "none"
 		if !w.Deadline.IsZero() {
@@ -105,6 +144,41 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 		}
 		if w.Reason != "" {
 			fmt.Fprintf(&b, "    reason: %s\n", truncateForListing(w.Reason, 120))
+		}
+	}
+
+	for _, g := range groups {
+		age := now.Sub(g.CreatedAt).Round(time.Second)
+		deadlineDesc := "none"
+		if !g.Deadline.IsZero() {
+			remaining := time.Until(g.Deadline).Round(time.Second)
+			if remaining > 0 {
+				deadlineDesc = fmt.Sprintf("in %s", remaining)
+			} else {
+				deadlineDesc = fmt.Sprintf("expired %s ago", (-remaining))
+			}
+		}
+		pendingNames := make([]string, 0, len(g.Pending))
+		for _, n := range g.Pending {
+			pendingNames = append(pendingNames, n)
+		}
+		sort.Strings(pendingNames)
+		firedNames := make([]string, 0, len(g.Fired))
+		for n := range g.Fired {
+			firedNames = append(firedNames, n)
+		}
+		sort.Strings(firedNames)
+		fmt.Fprintf(&b, "- group id=%d kind=await_%s age=%s deadline=%s session=%s agent=%s\n",
+			g.ID, g.Kind, age, deadlineDesc, g.SessionKey, g.AgentID)
+		fmt.Fprintf(&b, "    pending: %s\n", strings.Join(pendingNames, ", "))
+		if len(firedNames) > 0 {
+			fmt.Fprintf(&b, "    fired:   %s\n", strings.Join(firedNames, ", "))
+		}
+		if g.Intent != "" {
+			fmt.Fprintf(&b, "    intent: %s\n", truncateForListing(g.Intent, 200))
+		}
+		if g.Reason != "" {
+			fmt.Fprintf(&b, "    reason: %s\n", truncateForListing(g.Reason, 120))
 		}
 	}
 	return tools.SilentResult(b.String())

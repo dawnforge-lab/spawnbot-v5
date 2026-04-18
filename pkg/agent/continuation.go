@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -22,6 +23,8 @@ const (
 	ContinuationWait        ContinuationKind = "wait"
 	ContinuationSchedule    ContinuationKind = "schedule"
 	ContinuationAwaitEvent  ContinuationKind = "await_event"
+	ContinuationAwaitAny    ContinuationKind = "await_any"
+	ContinuationAwaitAll    ContinuationKind = "await_all"
 )
 
 // Continuation describes a post-turn action declared by the model.
@@ -30,12 +33,14 @@ type Continuation struct {
 	AfterMS int64
 	At      time.Time
 	Event   string
+	Events  []string
 	Intent  string
 	Reason  string
 	// Sticky only applies when Kind == ContinuationAwaitEvent. When true,
 	// the waiter is re-registered automatically after each fire so the
 	// subscription survives until the model explicitly cancels it or the
-	// waiter times out. Does not apply to timed-out resumptions.
+	// waiter times out. Does not apply to timed-out resumptions, or to
+	// group waiters (await_any / await_all).
 	Sticky bool
 }
 
@@ -99,6 +104,10 @@ func (al *AgentLoop) dispatchContinuation(
 		go al.scheduleSelfContinuation(agent, sessionKey, opts.Channel, opts.ChatID, intent, cont.Reason, delay)
 	case ContinuationAwaitEvent:
 		al.registerEventWaiter(cont, opts, agent.ID, intent)
+	case ContinuationAwaitAny:
+		al.registerEventGroup(cont, opts, agent.ID, intent, groupKindAny)
+	case ContinuationAwaitAll:
+		al.registerEventGroup(cont, opts, agent.ID, intent, groupKindAll)
 	default:
 		logger.WarnCF("agent", "Unknown continuation kind",
 			map[string]any{
@@ -207,7 +216,8 @@ func parseContinuationArgs(args map[string]any) (*Continuation, error) {
 	kind := ContinuationKind(kindRaw)
 	switch kind {
 	case ContinuationDone, ContinuationContinueNow, ContinuationWait,
-		ContinuationSchedule, ContinuationAwaitEvent:
+		ContinuationSchedule, ContinuationAwaitEvent,
+		ContinuationAwaitAny, ContinuationAwaitAll:
 	default:
 		return nil, fmt.Errorf("unknown continuation %q", kindRaw)
 	}
@@ -221,6 +231,13 @@ func parseContinuationArgs(args map[string]any) (*Continuation, error) {
 	}
 	if v, ok := args["event"].(string); ok {
 		cont.Event = strings.TrimSpace(v)
+	}
+	if raw, ok := args["events"]; ok {
+		events, err := parseStringSliceArg(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid events: %w", err)
+		}
+		cont.Events = events
 	}
 	if v, ok := argInt(args["after_ms"]); ok {
 		cont.AfterMS = v
@@ -237,6 +254,38 @@ func parseContinuationArgs(args map[string]any) (*Continuation, error) {
 	}
 
 	return cont, nil
+}
+
+// parseStringSliceArg accepts either []any (JSON array) or []string and
+// returns a trimmed, deduplicated list of non-empty strings.
+func parseStringSliceArg(v any) ([]string, error) {
+	var raw []string
+	switch s := v.(type) {
+	case []string:
+		raw = s
+	case []any:
+		raw = make([]string, 0, len(s))
+		for _, item := range s {
+			sv, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("expected string, got %T", item)
+			}
+			raw = append(raw, sv)
+		}
+	default:
+		return nil, fmt.Errorf("expected array of strings, got %T", v)
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(raw))
+	for _, s := range raw {
+		trimmed := strings.TrimSpace(s)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		out = append(out, trimmed)
+	}
+	return out, nil
 }
 
 func argInt(v any) (int64, bool) {
@@ -287,7 +336,42 @@ type eventWaiter struct {
 	// Re-registration uses a fresh id, same name/session/agent/intent/
 	// reason, and a new deadline computed as now + afterMS if afterMS > 0.
 	sticky bool
+	// groupID links the waiter to an eventGroup (await_any / await_all).
+	// 0 means the waiter is standalone and resumes on fire directly.
+	groupID uint64
 }
+
+// eventGroup represents a compound waiter that resolves based on its
+// children:
+//   - groupKindAny: resumes on the first child fire; remaining children are
+//     cancelled.
+//   - groupKindAll: resumes only after every child has fired; the collected
+//     payloads are delivered on resumption.
+//
+// Group deadlines cancel all still-pending children and resume the group as
+// timed_out. Groups are single-shot; they do not support sticky.
+type eventGroup struct {
+	mu         sync.Mutex
+	id         uint64
+	kind       string // groupKindAny / groupKindAll
+	childIDs   map[uint64]string // child waiter id -> event name (for sibling cancel)
+	fired      map[string]string // event name -> payload (await_all collection)
+	resolved   bool              // true once the group has resumed
+	sessionKey string
+	agentID    string
+	channel    string
+	chatID     string
+	intent     string
+	reason     string
+	deadline   time.Time
+	createdAt  time.Time
+	afterMS    int64
+}
+
+const (
+	groupKindAny = "any"
+	groupKindAll = "all"
+)
 
 type eventBucket struct {
 	mu      sync.Mutex
@@ -426,9 +510,10 @@ func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
 		})
 
 	// Re-register sticky waiters before persisting so the snapshot reflects
-	// their continued subscription.
+	// their continued subscription. Sticky is not meaningful for group
+	// children; only standalone waiters may be sticky.
 	for _, w := range waiters {
-		if w.sticky {
+		if w.sticky && w.groupID == 0 {
 			al.reRegisterStickyWaiter(w)
 		}
 	}
@@ -436,6 +521,10 @@ func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
 	al.saveEventWaitersSnapshot()
 
 	for _, w := range waiters {
+		if w.groupID != 0 {
+			al.notifyGroupChildFired(w, payload)
+			continue
+		}
 		al.resumeEventWaiter(w, "fired", payload)
 	}
 	return len(waiters)
@@ -551,6 +640,9 @@ type EventWaiterInfo struct {
 	Deadline   time.Time
 	Sticky     bool
 	AfterMS    int64
+	// GroupID is non-zero when the waiter is a child of an await_any or
+	// await_all group. Such waiters resolve via the group, not directly.
+	GroupID uint64
 }
 
 // SnapshotEventWaiters returns a flat, independent slice of all pending
@@ -578,9 +670,71 @@ func (al *AgentLoop) SnapshotEventWaiters() []EventWaiterInfo {
 				Deadline:   w.deadline,
 				Sticky:     w.sticky,
 				AfterMS:    w.afterMS,
+				GroupID:    w.groupID,
 			})
 		}
 		bucket.mu.Unlock()
+		return true
+	})
+	return out
+}
+
+// EventGroupInfo is a public snapshot of a pending compound waiter.
+type EventGroupInfo struct {
+	ID         uint64
+	Kind       string
+	SessionKey string
+	AgentID    string
+	Channel    string
+	ChatID     string
+	Intent     string
+	Reason     string
+	CreatedAt  time.Time
+	Deadline   time.Time
+	AfterMS    int64
+	// Pending maps child waiter id to event name for children still awaiting
+	// a fire.
+	Pending map[uint64]string
+	// Fired maps already-fired event names to their payloads (await_all).
+	Fired map[string]string
+}
+
+// SnapshotEventGroups returns all pending eventGroups for observability.
+func (al *AgentLoop) SnapshotEventGroups() []EventGroupInfo {
+	var out []EventGroupInfo
+	al.eventGroups.Range(func(_, value any) bool {
+		g, _ := value.(*eventGroup)
+		if g == nil {
+			return true
+		}
+		g.mu.Lock()
+		if g.resolved {
+			g.mu.Unlock()
+			return true
+		}
+		info := EventGroupInfo{
+			ID:         g.id,
+			Kind:       g.kind,
+			SessionKey: g.sessionKey,
+			AgentID:    g.agentID,
+			Channel:    g.channel,
+			ChatID:     g.chatID,
+			Intent:     g.intent,
+			Reason:     g.reason,
+			CreatedAt:  g.createdAt,
+			Deadline:   g.deadline,
+			AfterMS:    g.afterMS,
+			Pending:    make(map[uint64]string, len(g.childIDs)),
+			Fired:      make(map[string]string, len(g.fired)),
+		}
+		for id, name := range g.childIDs {
+			info.Pending[id] = name
+		}
+		for k, v := range g.fired {
+			info.Fired[k] = v
+		}
+		g.mu.Unlock()
+		out = append(out, info)
 		return true
 	})
 	return out
@@ -619,4 +773,248 @@ func (al *AgentLoop) fireMentionEventsForMessage(ctx context.Context, content st
 	for _, name := range toFire {
 		al.FireEvent(ctx, name, content)
 	}
+}
+
+// ======================== Group waiters (await_any / await_all) ========
+
+// registerEventGroup creates an eventGroup and installs one child waiter per
+// named event. Children do not carry individual deadlines; the group owns the
+// deadline. kind must be groupKindAny or groupKindAll.
+func (al *AgentLoop) registerEventGroup(
+	cont *Continuation,
+	opts processOptions,
+	agentID, intent, kind string,
+) {
+	names := make([]string, 0, len(cont.Events))
+	seen := map[string]bool{}
+	for _, raw := range cont.Events {
+		n := normalizeEventName(raw)
+		if n == "" || seen[n] {
+			continue
+		}
+		seen[n] = true
+		names = append(names, n)
+	}
+	if len(names) == 0 {
+		logger.WarnCF("agent", "await_any/all continuation missing events; skipping",
+			map[string]any{
+				"kind":        kind,
+				"session_key": opts.SessionKey,
+			})
+		return
+	}
+
+	groupID := al.eventGroupSeq.Add(1)
+	g := &eventGroup{
+		id:         groupID,
+		kind:       kind,
+		childIDs:   make(map[uint64]string, len(names)),
+		fired:      make(map[string]string),
+		sessionKey: opts.SessionKey,
+		agentID:    agentID,
+		channel:    opts.Channel,
+		chatID:     opts.ChatID,
+		intent:     intent,
+		reason:     cont.Reason,
+		createdAt:  time.Now(),
+		afterMS:    cont.AfterMS,
+	}
+	if d := continuationDelay(cont); d > 0 {
+		g.deadline = time.Now().Add(d)
+	}
+
+	for _, name := range names {
+		childID := al.eventWaiterSeq.Add(1)
+		w := &eventWaiter{
+			id:         childID,
+			name:       name,
+			sessionKey: opts.SessionKey,
+			agentID:    agentID,
+			channel:    opts.Channel,
+			chatID:     opts.ChatID,
+			intent:     intent,
+			reason:     cont.Reason,
+			createdAt:  time.Now(),
+			groupID:    groupID,
+		}
+		g.childIDs[childID] = name
+
+		bucket := al.eventsBucket(name)
+		bucket.mu.Lock()
+		bucket.waiters = append(bucket.waiters, w)
+		bucket.mu.Unlock()
+	}
+
+	al.eventGroups.Store(groupID, g)
+
+	logger.InfoCF("agent", "Event group registered",
+		map[string]any{
+			"group_id":    groupID,
+			"kind":        kind,
+			"names":       names,
+			"session_key": opts.SessionKey,
+			"deadline":    g.deadline,
+		})
+
+	al.saveEventWaitersSnapshot()
+
+	if !g.deadline.IsZero() {
+		go al.watchEventGroupDeadline(g)
+	}
+}
+
+func (al *AgentLoop) watchEventGroupDeadline(g *eventGroup) {
+	delay := time.Until(g.deadline)
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		<-timer.C
+	}
+	al.timeoutEventGroup(g)
+}
+
+// notifyGroupChildFired is called from FireEvent when a drained waiter
+// belongs to a group. It records the fire (for await_all collection) and
+// resumes the group when the kind's condition is satisfied.
+func (al *AgentLoop) notifyGroupChildFired(child *eventWaiter, payload string) {
+	v, ok := al.eventGroups.Load(child.groupID)
+	if !ok {
+		return
+	}
+	g, ok := v.(*eventGroup)
+	if !ok {
+		return
+	}
+
+	g.mu.Lock()
+	if g.resolved {
+		g.mu.Unlock()
+		return
+	}
+	g.fired[child.name] = payload
+	delete(g.childIDs, child.id)
+	kind := g.kind
+	remaining := len(g.childIDs)
+
+	var shouldResume bool
+	switch kind {
+	case groupKindAny:
+		shouldResume = true
+	case groupKindAll:
+		shouldResume = remaining == 0
+	}
+	if shouldResume {
+		g.resolved = true
+	}
+	// Capture snapshot for post-unlock use.
+	fired := make(map[string]string, len(g.fired))
+	for k, v := range g.fired {
+		fired[k] = v
+	}
+	siblings := make(map[uint64]string, len(g.childIDs))
+	for id, name := range g.childIDs {
+		siblings[id] = name
+	}
+	g.mu.Unlock()
+
+	if !shouldResume {
+		al.saveEventWaitersSnapshot()
+		return
+	}
+
+	// Cancel any still-pending siblings. For await_any they are leftover
+	// children; for await_all there are none (remaining was 0).
+	for id, name := range siblings {
+		al.removeWaiter(name, id)
+	}
+	al.eventGroups.Delete(g.id)
+	al.saveEventWaitersSnapshot()
+	al.resumeEventGroup(g, "fired", child.name, payload, fired)
+}
+
+func (al *AgentLoop) timeoutEventGroup(g *eventGroup) {
+	g.mu.Lock()
+	if g.resolved {
+		g.mu.Unlock()
+		return
+	}
+	g.resolved = true
+	siblings := make(map[uint64]string, len(g.childIDs))
+	for id, name := range g.childIDs {
+		siblings[id] = name
+	}
+	fired := make(map[string]string, len(g.fired))
+	for k, v := range g.fired {
+		fired[k] = v
+	}
+	g.childIDs = map[uint64]string{}
+	g.mu.Unlock()
+
+	for id, name := range siblings {
+		al.removeWaiter(name, id)
+	}
+	al.eventGroups.Delete(g.id)
+	logger.InfoCF("agent", "Event group timed out",
+		map[string]any{
+			"group_id":    g.id,
+			"kind":        g.kind,
+			"session_key": g.sessionKey,
+			"fired_count": len(fired),
+		})
+	al.saveEventWaitersSnapshot()
+	al.resumeEventGroup(g, "timed_out", "", "", fired)
+}
+
+func (al *AgentLoop) resumeEventGroup(
+	g *eventGroup,
+	status, triggerName, triggerPayload string,
+	fired map[string]string,
+) {
+	intent := strings.TrimSpace(g.intent)
+	if intent == "" {
+		intent = "(no explicit intent; resume from group waiter)"
+	}
+	var details strings.Builder
+	fmt.Fprintf(&details, "group=%s kind=%s status=%s", fmt.Sprintf("%d", g.id), g.kind, status)
+	if triggerName != "" {
+		fmt.Fprintf(&details, " trigger=%s", triggerName)
+	}
+	if triggerPayload != "" {
+		fmt.Fprintf(&details, "\ntrigger payload: %s", triggerPayload)
+	}
+	if len(fired) > 0 {
+		details.WriteString("\nfired:")
+		// Deterministic ordering.
+		names := make([]string, 0, len(fired))
+		for n := range fired {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			if p := fired[n]; p != "" {
+				fmt.Fprintf(&details, "\n  - %s: %s", n, p)
+			} else {
+				fmt.Fprintf(&details, "\n  - %s", n)
+			}
+		}
+	}
+	if reason := strings.TrimSpace(g.reason); reason != "" {
+		fmt.Fprintf(&details, "\nwaiter reason: %s", reason)
+	}
+
+	full := fmt.Sprintf("%s\n[await_%s %s]", intent, g.kind, details.String())
+	al.enqueueSelfContinuation(g.sessionKey, g.agentID, full, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	go func() {
+		defer cancel()
+		if _, err := al.Continue(ctx, g.sessionKey, g.channel, g.chatID); err != nil {
+			logger.WarnCF("agent", "Event group Continue failed",
+				map[string]any{
+					"group_id":    g.id,
+					"session_key": g.sessionKey,
+					"error":       err.Error(),
+				})
+		}
+	}()
 }

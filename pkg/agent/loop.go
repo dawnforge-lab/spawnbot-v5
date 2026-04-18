@@ -79,6 +79,11 @@ type AgentLoop struct {
 	events         sync.Map
 	eventWaiterSeq atomic.Uint64
 
+	// eventGroups maps group id (uint64) to *eventGroup for await_any /
+	// await_all compound waiters.
+	eventGroups   sync.Map
+	eventGroupSeq atomic.Uint64
+
 	// eventsStore is set when SetEventsStorePath is called during startup.
 	// Nil means persistence is disabled; save/load become no-ops.
 	eventsStore *eventsPersistence

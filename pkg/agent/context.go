@@ -165,6 +165,8 @@ At the end of every turn, call the end_turn tool to declare what should happen n
   - idle:<channel>  fires when the idle monitor triggers for that channel.
   - feed:<url>      fires when the feed poller detects new items for that feed.
   - mention:<word>  fires whenever an inbound message's content contains <word> (case-insensitive).
+- await_any: pause until the FIRST of several named events fires. Supply the names in events. Siblings are cancelled when one fires. Group deadline applies to the whole group via after_ms / at.
+- await_all: pause until EVERY named event has fired. Fired payloads are collected and delivered together on resumption. Group deadline applies to the whole group.
 
 Always supply a concrete intent for anything other than done, phrased as an instruction to yourself for the next turn. If you promise the user you'll do something after replying, declare that promise as a continuation instead of relying on memory. Consecutive self-continuations are capped for safety.`)
 

@@ -26,11 +26,30 @@ type persistedWaiter struct {
 	CreatedUnixMs  int64  `json:"created_unix_ms"`
 	AfterMs        int64  `json:"after_ms,omitempty"`
 	Sticky         bool   `json:"sticky,omitempty"`
+	GroupID        uint64 `json:"group_id,omitempty"`
+}
+
+type persistedGroup struct {
+	ID             uint64            `json:"id"`
+	Kind           string            `json:"kind"`
+	SessionKey     string            `json:"session_key"`
+	AgentID        string            `json:"agent_id"`
+	Channel        string            `json:"channel"`
+	ChatID         string            `json:"chat_id"`
+	Intent         string            `json:"intent"`
+	Reason         string            `json:"reason"`
+	DeadlineUnixMs int64             `json:"deadline_unix_ms,omitempty"`
+	CreatedUnixMs  int64             `json:"created_unix_ms"`
+	AfterMs        int64             `json:"after_ms,omitempty"`
+	ChildIDs       map[string]uint64 `json:"child_ids,omitempty"` // name -> waiter id
+	Fired          map[string]string `json:"fired,omitempty"`
 }
 
 type persistedEventState struct {
-	Seq     uint64            `json:"seq"`
-	Waiters []persistedWaiter `json:"waiters"`
+	Seq      uint64            `json:"seq"`
+	GroupSeq uint64            `json:"group_seq,omitempty"`
+	Waiters  []persistedWaiter `json:"waiters"`
+	Groups   []persistedGroup  `json:"groups,omitempty"`
 }
 
 // eventsPersistence bundles the persistence state for AgentLoop. Held via
@@ -86,6 +105,12 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 			al.eventWaiterSeq.Store(state.Seq)
 		}
 	}
+	if state.GroupSeq > 0 {
+		current := al.eventGroupSeq.Load()
+		if state.GroupSeq > current {
+			al.eventGroupSeq.Store(state.GroupSeq)
+		}
+	}
 
 	restored := 0
 	expired := 0
@@ -105,6 +130,7 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 			createdAt:  time.UnixMilli(p.CreatedUnixMs),
 			afterMS:    p.AfterMs,
 			sticky:     p.Sticky,
+			groupID:    p.GroupID,
 		}
 		if p.DeadlineUnixMs > 0 {
 			w.deadline = time.UnixMilli(p.DeadlineUnixMs)
@@ -129,11 +155,53 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 		restored++
 	}
 
+	groupsRestored := 0
+	groupsExpired := 0
+	for _, pg := range state.Groups {
+		g := &eventGroup{
+			id:         pg.ID,
+			kind:       pg.Kind,
+			childIDs:   map[uint64]string{},
+			fired:      map[string]string{},
+			sessionKey: pg.SessionKey,
+			agentID:    pg.AgentID,
+			channel:    pg.Channel,
+			chatID:     pg.ChatID,
+			intent:     pg.Intent,
+			reason:     pg.Reason,
+			createdAt:  time.UnixMilli(pg.CreatedUnixMs),
+			afterMS:    pg.AfterMs,
+		}
+		if pg.DeadlineUnixMs > 0 {
+			g.deadline = time.UnixMilli(pg.DeadlineUnixMs)
+		}
+		for name, id := range pg.ChildIDs {
+			g.childIDs[id] = name
+		}
+		for k, v := range pg.Fired {
+			g.fired[k] = v
+		}
+		al.eventGroups.Store(g.id, g)
+
+		if !g.deadline.IsZero() && !g.deadline.After(now) {
+			groupsExpired++
+			go func(grp *eventGroup) {
+				time.Sleep(startupGrace)
+				al.timeoutEventGroup(grp)
+			}(g)
+		} else if !g.deadline.IsZero() {
+			go al.watchEventGroupDeadline(g)
+		}
+		groupsRestored++
+	}
+
 	logger.InfoCF("agent", "Restored event waiters from disk",
 		map[string]any{
-			"path":     al.eventsStore.path,
-			"restored": restored,
-			"expired":  expired,
+			"path":            al.eventsStore.path,
+			"restored":        restored,
+			"expired":         expired,
+			"groups_restored": groupsRestored,
+			"groups_expired":  groupsExpired,
 		})
 }
 
@@ -148,7 +216,8 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 	}
 
 	state := persistedEventState{
-		Seq: al.eventWaiterSeq.Load(),
+		Seq:      al.eventWaiterSeq.Load(),
+		GroupSeq: al.eventGroupSeq.Load(),
 	}
 	al.events.Range(func(_, value any) bool {
 		bucket, _ := value.(*eventBucket)
@@ -169,6 +238,7 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 				CreatedUnixMs: w.createdAt.UnixMilli(),
 				AfterMs:       w.afterMS,
 				Sticky:        w.sticky,
+				GroupID:       w.groupID,
 			}
 			if !w.deadline.IsZero() {
 				p.DeadlineUnixMs = w.deadline.UnixMilli()
@@ -176,6 +246,44 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 			state.Waiters = append(state.Waiters, p)
 		}
 		bucket.mu.Unlock()
+		return true
+	})
+
+	al.eventGroups.Range(func(_, value any) bool {
+		g, _ := value.(*eventGroup)
+		if g == nil {
+			return true
+		}
+		g.mu.Lock()
+		if g.resolved {
+			g.mu.Unlock()
+			return true
+		}
+		pg := persistedGroup{
+			ID:            g.id,
+			Kind:          g.kind,
+			SessionKey:    g.sessionKey,
+			AgentID:       g.agentID,
+			Channel:       g.channel,
+			ChatID:        g.chatID,
+			Intent:        g.intent,
+			Reason:        g.reason,
+			CreatedUnixMs: g.createdAt.UnixMilli(),
+			AfterMs:       g.afterMS,
+			ChildIDs:      make(map[string]uint64, len(g.childIDs)),
+			Fired:         make(map[string]string, len(g.fired)),
+		}
+		for id, name := range g.childIDs {
+			pg.ChildIDs[name] = id
+		}
+		for k, v := range g.fired {
+			pg.Fired[k] = v
+		}
+		if !g.deadline.IsZero() {
+			pg.DeadlineUnixMs = g.deadline.UnixMilli()
+		}
+		g.mu.Unlock()
+		state.Groups = append(state.Groups, pg)
 		return true
 	})
 
