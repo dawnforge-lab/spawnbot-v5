@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -92,12 +93,7 @@ func (al *AgentLoop) dispatchContinuation(
 		}
 		go al.scheduleSelfContinuation(agent, sessionKey, opts.Channel, opts.ChatID, intent, cont.Reason, delay)
 	case ContinuationAwaitEvent:
-		logger.WarnCF("agent", "await_event continuation declared but not yet wired",
-			map[string]any{
-				"session_key": sessionKey,
-				"event":       cont.Event,
-				"intent":      intent,
-			})
+		al.registerEventWaiter(cont, opts, agent.ID, intent)
 	default:
 		logger.WarnCF("agent", "Unknown continuation kind",
 			map[string]any{
@@ -249,4 +245,220 @@ func argInt(v any) (int64, bool) {
 		return int64(n), true
 	}
 	return 0, false
+}
+
+// ======================== Event waiter registry ========================
+//
+// When the model declares a continuation of kind await_event, we record a
+// waiter and resume the turn with the declared intent once the named event
+// fires. Events are fired via FireEvent (exported) or the fire_event tool.
+// Registry is in-memory and per-AgentLoop; waiters do not survive restart.
+//
+// Fan-out: all waiters on a given name resolve when the event fires.
+// Optional timeout: if the waiter carries deadline > 0, a timer fires a
+// synthetic resumption with a "timed_out" marker so the turn never sits
+// forever on a name that never arrives.
+
+type eventWaiter struct {
+	id         uint64
+	name       string
+	sessionKey string
+	agentID    string
+	channel    string
+	chatID     string
+	intent     string
+	reason     string
+	deadline   time.Time
+	createdAt  time.Time
+}
+
+type eventBucket struct {
+	mu      sync.Mutex
+	waiters []*eventWaiter
+}
+
+func (al *AgentLoop) eventsBucket(name string) *eventBucket {
+	v, _ := al.events.LoadOrStore(name, &eventBucket{})
+	return v.(*eventBucket)
+}
+
+func normalizeEventName(name string) string {
+	return strings.TrimSpace(strings.ToLower(name))
+}
+
+func (al *AgentLoop) registerEventWaiter(
+	cont *Continuation,
+	opts processOptions,
+	agentID, intent string,
+) {
+	name := normalizeEventName(cont.Event)
+	if name == "" {
+		logger.WarnCF("agent", "await_event continuation missing event name; skipping",
+			map[string]any{
+				"session_key": opts.SessionKey,
+				"intent":      intent,
+			})
+		return
+	}
+
+	id := al.eventWaiterSeq.Add(1)
+	w := &eventWaiter{
+		id:         id,
+		name:       name,
+		sessionKey: opts.SessionKey,
+		agentID:    agentID,
+		channel:    opts.Channel,
+		chatID:     opts.ChatID,
+		intent:     intent,
+		reason:     cont.Reason,
+		createdAt:  time.Now(),
+	}
+	if d := continuationDelay(cont); d > 0 {
+		w.deadline = time.Now().Add(d)
+	}
+
+	bucket := al.eventsBucket(name)
+	bucket.mu.Lock()
+	bucket.waiters = append(bucket.waiters, w)
+	bucket.mu.Unlock()
+
+	logger.InfoCF("agent", "Event waiter registered",
+		map[string]any{
+			"event":       name,
+			"waiter_id":   id,
+			"session_key": w.sessionKey,
+			"deadline":    w.deadline,
+			"intent_len":  len(intent),
+		})
+
+	if !w.deadline.IsZero() {
+		go al.watchEventWaiterDeadline(w)
+	}
+}
+
+func (al *AgentLoop) watchEventWaiterDeadline(w *eventWaiter) {
+	delay := time.Until(w.deadline)
+	if delay <= 0 {
+		al.timeoutEventWaiter(w)
+		return
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	<-timer.C
+	al.timeoutEventWaiter(w)
+}
+
+// removeWaiter pops the waiter by id from its bucket. Returns true if it was
+// still present (i.e. not already resolved by a FireEvent).
+func (al *AgentLoop) removeWaiter(name string, id uint64) bool {
+	bucket := al.eventsBucket(name)
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
+	for i, w := range bucket.waiters {
+		if w.id == id {
+			bucket.waiters = append(bucket.waiters[:i], bucket.waiters[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (al *AgentLoop) timeoutEventWaiter(w *eventWaiter) {
+	if !al.removeWaiter(w.name, w.id) {
+		return
+	}
+	logger.InfoCF("agent", "Event waiter timed out",
+		map[string]any{
+			"event":       w.name,
+			"waiter_id":   w.id,
+			"session_key": w.sessionKey,
+		})
+	al.resumeEventWaiter(w, "timed_out", "")
+}
+
+// FireEvent resolves all waiters registered for the given event name and
+// resumes each with the declared intent plus the supplied payload. Payload
+// is injected verbatim into the self-steer content, so keep it short.
+// Returns the number of waiters resolved.
+func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
+	name = normalizeEventName(name)
+	if name == "" {
+		return 0
+	}
+	bucket := al.eventsBucket(name)
+	bucket.mu.Lock()
+	waiters := bucket.waiters
+	bucket.waiters = nil
+	bucket.mu.Unlock()
+
+	if len(waiters) == 0 {
+		logger.DebugCF("agent", "FireEvent: no waiters",
+			map[string]any{"event": name})
+		return 0
+	}
+
+	logger.InfoCF("agent", "FireEvent resolving waiters",
+		map[string]any{
+			"event":   name,
+			"waiters": len(waiters),
+		})
+
+	for _, w := range waiters {
+		al.resumeEventWaiter(w, "fired", payload)
+	}
+	return len(waiters)
+}
+
+func (al *AgentLoop) resumeEventWaiter(w *eventWaiter, status, payload string) {
+	intent := w.intent
+	if strings.TrimSpace(intent) == "" {
+		intent = "(no explicit intent; resume from await_event)"
+	}
+	details := fmt.Sprintf("event=%s status=%s", w.name, status)
+	if payload != "" {
+		details += "\npayload: " + payload
+	}
+	reason := strings.TrimSpace(w.reason)
+	if reason != "" {
+		details += "\nwaiter reason: " + reason
+	}
+
+	full := fmt.Sprintf("%s\n[await_event %s]", intent, details)
+	al.enqueueSelfContinuation(w.sessionKey, w.agentID, full, "")
+
+	// Deliver by invoking Continue on a detached context so the resumption
+	// runs even after the originating request context has been canceled.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	go func() {
+		defer cancel()
+		if _, err := al.Continue(ctx, w.sessionKey, w.channel, w.chatID); err != nil {
+			logger.WarnCF("agent", "Event waiter Continue failed",
+				map[string]any{
+					"event":       w.name,
+					"session_key": w.sessionKey,
+					"error":       err.Error(),
+				})
+		}
+	}()
+}
+
+// PendingEventWaiters returns a snapshot of active waiters for observability.
+// The returned copies are independent of the registry.
+func (al *AgentLoop) PendingEventWaiters() map[string]int {
+	out := map[string]int{}
+	al.events.Range(func(key, value any) bool {
+		name, _ := key.(string)
+		bucket, _ := value.(*eventBucket)
+		if bucket == nil {
+			return true
+		}
+		bucket.mu.Lock()
+		n := len(bucket.waiters)
+		bucket.mu.Unlock()
+		if n > 0 {
+			out[name] = n
+		}
+		return true
+	})
+	return out
 }

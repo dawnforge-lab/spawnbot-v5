@@ -73,6 +73,12 @@ type AgentLoop struct {
 	// real inbound message arrives for the session.
 	autoContinueCounts sync.Map
 
+	// events maps normalized event name (string) to *eventBucket. Populated
+	// by await_event continuations (see continuation.go); drained by
+	// FireEvent or deadline timers.
+	events         sync.Map
+	eventWaiterSeq atomic.Uint64
+
 	// Turn tracking (from Incoming)
 	turnSeq        atomic.Uint64
 	activeRequests sync.WaitGroup
@@ -187,6 +193,10 @@ func registerSharedTools(
 		// after the current turn (done / continue_now / wait / schedule /
 		// await_event). See pkg/agent/continuation.go.
 		agent.Tools.Register(newEndTurnTool())
+
+		// fire_event is core — resolves waiters registered via the
+		// await_event continuation.
+		agent.Tools.Register(newFireEventTool())
 
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
