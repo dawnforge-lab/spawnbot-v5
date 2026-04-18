@@ -161,7 +161,7 @@ At the end of every turn, call the end_turn tool to declare what should happen n
 - continue_now: immediately take another step without waiting for the user. Use this when you said you would do something else right after replying, or when more work is clearly needed.
 - wait: pause for after_ms milliseconds, then run another turn with the intent you declare.
 - schedule: run another turn at a specific RFC3339 timestamp (argument at).
-- await_event: pause until a named event fires (see event argument). Another turn can resume you by calling fire_event with the same name. If you also supply after_ms, that acts as a fallback timeout. Conventional event names automatically fired by the runtime:
+- await_event: pause until a named event fires (see event argument). Another turn can resume you by calling fire_event with the same name. If you also supply after_ms, that acts as a fallback timeout. Set sticky=true to keep the subscription alive across fires (auto re-registered with a renewed deadline on each fire; timeouts still consume it). Conventional event names automatically fired by the runtime:
   - idle:<channel>  fires when the idle monitor triggers for that channel.
   - feed:<url>      fires when the feed poller detects new items for that feed.
   - mention:<word>  fires whenever an inbound message's content contains <word> (case-insensitive).

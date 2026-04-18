@@ -94,8 +94,12 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 				deadlineDesc = fmt.Sprintf("expired %s ago", (-remaining))
 			}
 		}
-		fmt.Fprintf(&b, "- id=%d name=%s age=%s deadline=%s session=%s agent=%s\n",
-			w.ID, w.Name, age, deadlineDesc, w.SessionKey, w.AgentID)
+		stickyDesc := ""
+		if w.Sticky {
+			stickyDesc = " sticky"
+		}
+		fmt.Fprintf(&b, "- id=%d name=%s age=%s deadline=%s session=%s agent=%s%s\n",
+			w.ID, w.Name, age, deadlineDesc, w.SessionKey, w.AgentID, stickyDesc)
 		if w.Intent != "" {
 			fmt.Fprintf(&b, "    intent: %s\n", truncateForListing(w.Intent, 200))
 		}

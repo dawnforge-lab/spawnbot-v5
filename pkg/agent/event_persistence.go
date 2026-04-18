@@ -24,6 +24,8 @@ type persistedWaiter struct {
 	Reason         string `json:"reason"`
 	DeadlineUnixMs int64  `json:"deadline_unix_ms,omitempty"`
 	CreatedUnixMs  int64  `json:"created_unix_ms"`
+	AfterMs        int64  `json:"after_ms,omitempty"`
+	Sticky         bool   `json:"sticky,omitempty"`
 }
 
 type persistedEventState struct {
@@ -101,6 +103,8 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 			intent:     p.Intent,
 			reason:     p.Reason,
 			createdAt:  time.UnixMilli(p.CreatedUnixMs),
+			afterMS:    p.AfterMs,
+			sticky:     p.Sticky,
 		}
 		if p.DeadlineUnixMs > 0 {
 			w.deadline = time.UnixMilli(p.DeadlineUnixMs)
@@ -163,6 +167,8 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 				Intent:        w.intent,
 				Reason:        w.reason,
 				CreatedUnixMs: w.createdAt.UnixMilli(),
+				AfterMs:       w.afterMS,
+				Sticky:        w.sticky,
 			}
 			if !w.deadline.IsZero() {
 				p.DeadlineUnixMs = w.deadline.UnixMilli()

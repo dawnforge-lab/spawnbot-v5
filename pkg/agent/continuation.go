@@ -32,6 +32,11 @@ type Continuation struct {
 	Event   string
 	Intent  string
 	Reason  string
+	// Sticky only applies when Kind == ContinuationAwaitEvent. When true,
+	// the waiter is re-registered automatically after each fire so the
+	// subscription survives until the model explicitly cancels it or the
+	// waiter times out. Does not apply to timed-out resumptions.
+	Sticky bool
 }
 
 // maxAutoContinueDepth caps consecutive self-triggered continuations per
@@ -227,6 +232,9 @@ func parseContinuationArgs(args map[string]any) (*Continuation, error) {
 		}
 		cont.At = t
 	}
+	if v, ok := args["sticky"].(bool); ok {
+		cont.Sticky = v
+	}
 
 	return cont, nil
 }
@@ -270,6 +278,15 @@ type eventWaiter struct {
 	reason     string
 	deadline   time.Time
 	createdAt  time.Time
+	// afterMS is the original deadline-relative delay in ms (0 = no
+	// deadline, or deadline was expressed as an absolute `at` timestamp
+	// and cannot be renewed). Used when sticky=true to re-arm the
+	// deadline on each re-registration.
+	afterMS int64
+	// sticky re-registers the waiter automatically after each fire.
+	// Re-registration uses a fresh id, same name/session/agent/intent/
+	// reason, and a new deadline computed as now + afterMS if afterMS > 0.
+	sticky bool
 }
 
 type eventBucket struct {
@@ -312,6 +329,8 @@ func (al *AgentLoop) registerEventWaiter(
 		intent:     intent,
 		reason:     cont.Reason,
 		createdAt:  time.Now(),
+		afterMS:    cont.AfterMS,
+		sticky:     cont.Sticky,
 	}
 	if d := continuationDelay(cont); d > 0 {
 		w.deadline = time.Now().Add(d)
@@ -406,12 +425,60 @@ func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
 			"waiters": len(waiters),
 		})
 
+	// Re-register sticky waiters before persisting so the snapshot reflects
+	// their continued subscription.
+	for _, w := range waiters {
+		if w.sticky {
+			al.reRegisterStickyWaiter(w)
+		}
+	}
+
 	al.saveEventWaitersSnapshot()
 
 	for _, w := range waiters {
 		al.resumeEventWaiter(w, "fired", payload)
 	}
 	return len(waiters)
+}
+
+// reRegisterStickyWaiter installs a fresh copy of a sticky waiter after it
+// has fired, with a new id and (if afterMS > 0) a renewed deadline. The
+// original waiter is discarded by the caller after this returns.
+func (al *AgentLoop) reRegisterStickyWaiter(prev *eventWaiter) {
+	newID := al.eventWaiterSeq.Add(1)
+	w := &eventWaiter{
+		id:         newID,
+		name:       prev.name,
+		sessionKey: prev.sessionKey,
+		agentID:    prev.agentID,
+		channel:    prev.channel,
+		chatID:     prev.chatID,
+		intent:     prev.intent,
+		reason:     prev.reason,
+		createdAt:  time.Now(),
+		afterMS:    prev.afterMS,
+		sticky:     true,
+	}
+	if prev.afterMS > 0 {
+		w.deadline = time.Now().Add(time.Duration(prev.afterMS) * time.Millisecond)
+	}
+
+	bucket := al.eventsBucket(w.name)
+	bucket.mu.Lock()
+	bucket.waiters = append(bucket.waiters, w)
+	bucket.mu.Unlock()
+
+	logger.InfoCF("agent", "Sticky waiter re-registered after fire",
+		map[string]any{
+			"event":       w.name,
+			"prev_id":     prev.id,
+			"new_id":      w.id,
+			"session_key": w.sessionKey,
+		})
+
+	if !w.deadline.IsZero() {
+		go al.watchEventWaiterDeadline(w)
+	}
 }
 
 func (al *AgentLoop) resumeEventWaiter(w *eventWaiter, status, payload string) {
@@ -482,6 +549,8 @@ type EventWaiterInfo struct {
 	Reason     string
 	CreatedAt  time.Time
 	Deadline   time.Time
+	Sticky     bool
+	AfterMS    int64
 }
 
 // SnapshotEventWaiters returns a flat, independent slice of all pending
@@ -507,6 +576,8 @@ func (al *AgentLoop) SnapshotEventWaiters() []EventWaiterInfo {
 				Reason:     w.reason,
 				CreatedAt:  w.createdAt,
 				Deadline:   w.deadline,
+				Sticky:     w.sticky,
+				AfterMS:    w.afterMS,
 			})
 		}
 		bucket.mu.Unlock()

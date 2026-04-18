@@ -53,7 +53,11 @@ func (t *endTurnTool) Parameters() map[string]any {
 			},
 			"event": map[string]any{
 				"type":        "string",
-				"description": "For continuation=await_event: name of the external event to wait for (placeholder; not yet wired).",
+				"description": "For continuation=await_event: name of the event to wait for. Fires when another turn calls fire_event with the same name, or via a runtime-fired event (idle:<channel>, feed:<url>, mention:<keyword>).",
+			},
+			"sticky": map[string]any{
+				"type":        "boolean",
+				"description": "For continuation=await_event: if true, the waiter is re-registered automatically after each fire so the subscription survives until it times out. Deadlines, if any, are renewed on each re-registration.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
