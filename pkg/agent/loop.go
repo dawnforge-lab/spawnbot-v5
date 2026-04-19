@@ -52,6 +52,7 @@ type AgentLoop struct {
 
 	// Runtime state
 	running        atomic.Bool
+	done           chan struct{} // closed by Stop() to signal shutdown to background goroutines
 	summarizing    sync.Map
 	fallback       *providers.FallbackChain
 	channelManager *channels.Manager
@@ -169,6 +170,7 @@ func NewAgentLoop(
 		fallback:    fallbackChain,
 		cmdRegistry: commands.NewRegistry(commands.BuiltinDefinitions()),
 		steering:    newSteeringQueue(parseSteeringMode(cfg.Agents.Defaults.SteeringMode)),
+		done:        make(chan struct{}),
 	}
 	al.hooks = NewHookManager(eventBus)
 	configureHookManagerFromConfig(al.hooks, cfg)
@@ -747,6 +749,14 @@ func (al *AgentLoop) drainBusToSteering(ctx context.Context, activeScope, active
 
 func (al *AgentLoop) Stop() {
 	al.running.Store(false)
+	// Signal background goroutines (scheduled continuations, event waiter
+	// resumptions) to exit rather than outliving the agent loop.
+	select {
+	case <-al.done:
+		// already closed
+	default:
+		close(al.done)
+	}
 }
 
 func (al *AgentLoop) publishResponseIfNeeded(ctx context.Context, channel, chatID, response string) {

@@ -162,7 +162,11 @@ func (al *AgentLoop) scheduleSelfContinuation(
 ) {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
-	<-timer.C
+	select {
+	case <-timer.C:
+	case <-al.done:
+		return
+	}
 
 	// The depth counter was pre-charged by dispatchContinuation. On enqueue
 	// failure the slot is burned until the next real inbound message resets
@@ -650,6 +654,11 @@ func (al *AgentLoop) resumeEventWaiter(w *eventWaiter, status, payload string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	go func() {
 		defer cancel()
+		select {
+		case <-al.done:
+			return
+		default:
+		}
 		if _, err := al.Continue(ctx, w.sessionKey, w.channel, w.chatID); err != nil {
 			logger.WarnCF("agent", "Event waiter Continue failed",
 				map[string]any{
@@ -1074,6 +1083,11 @@ func (al *AgentLoop) resumeEventGroup(
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	go func() {
 		defer cancel()
+		select {
+		case <-al.done:
+			return
+		default:
+		}
 		if _, err := al.Continue(ctx, g.sessionKey, g.channel, g.chatID); err != nil {
 			logger.WarnCF("agent", "Event group Continue failed",
 				map[string]any{
