@@ -361,6 +361,10 @@ type eventWaiter struct {
 	// Re-registration uses a fresh id, same name/session/agent/intent/
 	// reason, and a new deadline computed as now + afterMS if afterMS > 0.
 	sticky bool
+	// stopCh is closed to cancel watchEventWaiterDeadline early (e.g. when a
+	// sticky waiter re-registers). Selecting on a nil channel blocks forever,
+	// so always initialize with make(chan struct{}).
+	stopCh chan struct{}
 	// groupID links the waiter to an eventGroup (await_any / await_all).
 	// 0 means the waiter is standalone and resumes on fire directly.
 	groupID uint64
@@ -442,6 +446,7 @@ func (al *AgentLoop) registerEventWaiter(
 		scope:      strings.TrimSpace(cont.Scope),
 		afterMS:    cont.AfterMS,
 		sticky:     cont.Sticky,
+		stopCh:     make(chan struct{}),
 	}
 	if d := continuationDelay(cont); d > 0 {
 		w.deadline = time.Now().Add(d)
@@ -476,8 +481,12 @@ func (al *AgentLoop) watchEventWaiterDeadline(w *eventWaiter) {
 	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
-	<-timer.C
-	al.timeoutEventWaiter(w)
+	select {
+	case <-timer.C:
+		al.timeoutEventWaiter(w)
+	case <-w.stopCh:
+		// Waiter was cancelled (e.g. sticky re-registration fired).
+	}
 }
 
 // removeWaiter pops the waiter by id from its bucket. Returns true if it was
@@ -593,6 +602,7 @@ func (al *AgentLoop) reRegisterStickyWaiter(prev *eventWaiter) {
 		scope:      prev.scope,
 		afterMS:    prev.afterMS,
 		sticky:     true,
+		stopCh:     make(chan struct{}),
 	}
 	if prev.afterMS > 0 {
 		w.deadline = time.Now().Add(time.Duration(prev.afterMS) * time.Millisecond)
@@ -610,6 +620,8 @@ func (al *AgentLoop) reRegisterStickyWaiter(prev *eventWaiter) {
 			"new_id":      w.id,
 			"session_key": w.sessionKey,
 		})
+
+	close(prev.stopCh) // cancel the previous waiter's deadline goroutine
 
 	if !w.deadline.IsZero() {
 		go al.watchEventWaiterDeadline(w)
@@ -889,6 +901,7 @@ func (al *AgentLoop) registerEventGroup(
 			createdAt:  time.Now(),
 			scope:      scope,
 			groupID:    groupID,
+			stopCh:     make(chan struct{}),
 		}
 		g.childIDs[childID] = name
 
