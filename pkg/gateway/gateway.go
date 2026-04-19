@@ -757,6 +757,11 @@ func setupAutonomy(
 			// heartbeat.
 			fireCtx, fireCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			agentLoop.FireEvent(fireCtx, "idle:"+channel, channel)
+			// Also fire with each registered agent's scope so models that
+			// follow the system prompt guidance (scope="self") receive it.
+			for _, agentID := range agentLoop.GetRegistry().ListAgentIDs() {
+				agentLoop.FireEventScoped(fireCtx, "idle:"+channel, agentID, channel)
+			}
 			fireCancel()
 
 			// The channel key is "platform:chatID" — split to route via system message.
@@ -838,6 +843,11 @@ func setupAutonomy(
 			// declares await_event.
 			fireCtx, fireCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			agentLoop.FireEvent(fireCtx, "feed:"+feedCfg.URL, summary)
+			// Also fire with each registered agent's scope so models that
+			// follow the system prompt guidance (scope="self") receive it.
+			for _, agentID := range agentLoop.GetRegistry().ListAgentIDs() {
+				agentLoop.FireEventScoped(fireCtx, "feed:"+feedCfg.URL, agentID, summary)
+			}
 			fireCancel()
 		}
 
