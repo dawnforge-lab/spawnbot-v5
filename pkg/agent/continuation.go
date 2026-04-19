@@ -85,8 +85,8 @@ func (al *AgentLoop) dispatchContinuation(
 		cont.Kind == ContinuationSchedule
 	if isSelfTrigger {
 		next := al.incAutoContinueCount(sessionKey)
-		cap := al.cfg.Agents.Defaults.GetMaxAutoContinueDepth()
-		if next > int32(cap) {
+		cap := al.cfg.Agents.Defaults.MaxAutoContinueDepth
+		if int(next) > cap {
 			al.decAutoContinueCount(sessionKey)
 			logger.WarnCF("agent", "Skipping declared continuation; depth cap reached",
 				map[string]any{

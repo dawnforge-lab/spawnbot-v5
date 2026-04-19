@@ -371,13 +371,6 @@ func (d *AgentDefaults) GetModelName() string {
 	return d.ModelName
 }
 
-func (d *AgentDefaults) GetMaxAutoContinueDepth() int {
-	if d.MaxAutoContinueDepth > 0 {
-		return d.MaxAutoContinueDepth
-	}
-	return 5
-}
-
 type ChannelsConfig struct {
 	WhatsApp   WhatsAppConfig   `json:"whatsapp"`
 	Telegram   TelegramConfig   `json:"telegram"`
