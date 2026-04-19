@@ -51,11 +51,6 @@ type Continuation struct {
 	Sticky bool
 }
 
-// maxAutoContinueDepth caps consecutive self-triggered continuations per
-// session so a runaway chain cannot spin forever. Reset on each real inbound
-// message.
-const maxAutoContinueDepth = 5
-
 // SelfContinueMarker prefixes self-injected steering messages so they are
 // distinguishable in transcripts and logs.
 const SelfContinueMarker = "[self-continue] "
@@ -90,14 +85,15 @@ func (al *AgentLoop) dispatchContinuation(
 		cont.Kind == ContinuationSchedule
 	if isSelfTrigger {
 		next := al.incAutoContinueCount(sessionKey)
-		if next > maxAutoContinueDepth {
+		cap := al.cfg.Agents.Defaults.GetMaxAutoContinueDepth()
+		if next > int32(cap) {
 			al.decAutoContinueCount(sessionKey)
 			logger.WarnCF("agent", "Skipping declared continuation; depth cap reached",
 				map[string]any{
 					"session_key":     sessionKey,
 					"kind":            string(cont.Kind),
 					"depth_attempted": next,
-					"cap":             maxAutoContinueDepth,
+					"cap":             cap,
 					"intent":      cont.Intent,
 				})
 			return

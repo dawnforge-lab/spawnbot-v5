@@ -330,6 +330,7 @@ type AgentDefaults struct {
 	ContextWindow             int                `json:"context_window,omitempty"        env:"SPAWNBOT_AGENTS_DEFAULTS_CONTEXT_WINDOW"`
 	Temperature               *float64           `json:"temperature,omitempty"           env:"SPAWNBOT_AGENTS_DEFAULTS_TEMPERATURE"`
 	MaxToolIterations         int                `json:"max_tool_iterations"             env:"SPAWNBOT_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	MaxAutoContinueDepth      int                `json:"max_auto_continue_depth,omitempty" env:"SPAWNBOT_AGENTS_DEFAULTS_MAX_AUTO_CONTINUE_DEPTH"`
 	SummarizeMessageThreshold int                `json:"summarize_message_threshold"     env:"SPAWNBOT_AGENTS_DEFAULTS_SUMMARIZE_MESSAGE_THRESHOLD"`
 	SummarizeTokenPercent     int                `json:"summarize_token_percent"         env:"SPAWNBOT_AGENTS_DEFAULTS_SUMMARIZE_TOKEN_PERCENT"`
 	MaxMediaSize              int                `json:"max_media_size,omitempty"        env:"SPAWNBOT_AGENTS_DEFAULTS_MAX_MEDIA_SIZE"`
@@ -368,6 +369,13 @@ func (d *AgentDefaults) IsToolFeedbackEnabled() bool {
 // It prefers the new "model_name" field but falls back to "model" for backward compatibility.
 func (d *AgentDefaults) GetModelName() string {
 	return d.ModelName
+}
+
+func (d *AgentDefaults) GetMaxAutoContinueDepth() int {
+	if d.MaxAutoContinueDepth > 0 {
+		return d.MaxAutoContinueDepth
+	}
+	return 5
 }
 
 type ChannelsConfig struct {
