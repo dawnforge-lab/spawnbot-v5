@@ -1495,10 +1495,13 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	scopeKey := resolveScopeKey(route, msg.SessionKey)
 	sessionKey := scopeKey
 
-	// A real inbound (non-self) message arriving on this session resets the
-	// consecutive auto-continuation counter so subsequent end_turn
-	// continuations are not cut off by a stale cap.
-	al.resetAutoContinueCount(sessionKey)
+	// A real inbound (non-self) message resets the consecutive
+	// auto-continuation counter. Self-continuation steering messages
+	// (prefixed with SelfContinueMarker) must not reset it — they are
+	// the very messages the cap is meant to bound.
+	if !strings.HasPrefix(msg.Content, SelfContinueMarker) {
+		al.resetAutoContinueCount(sessionKey)
+	}
 
 	logger.InfoCF("agent", "Routed message",
 		map[string]any{

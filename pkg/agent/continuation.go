@@ -81,17 +81,27 @@ func (al *AgentLoop) dispatchContinuation(
 		return
 	}
 
-	depth := al.autoContinueCount(sessionKey)
-	if depth >= maxAutoContinueDepth {
-		logger.WarnCF("agent", "Skipping declared continuation; depth cap reached",
-			map[string]any{
-				"session_key": sessionKey,
-				"kind":        string(cont.Kind),
-				"depth":       depth,
-				"cap":         maxAutoContinueDepth,
-				"intent":      cont.Intent,
-			})
-		return
+	// For self-triggering kinds, increment first then check so that the
+	// read-check-increment sequence is atomic (no TOCTOU window). External
+	// event kinds (await_event/any/all) are triggered by outside signals
+	// and do not count against the depth cap.
+	isSelfTrigger := cont.Kind == ContinuationContinueNow ||
+		cont.Kind == ContinuationWait ||
+		cont.Kind == ContinuationSchedule
+	if isSelfTrigger {
+		next := al.incAutoContinueCount(sessionKey)
+		if next > maxAutoContinueDepth {
+			al.decAutoContinueCount(sessionKey)
+			logger.WarnCF("agent", "Skipping declared continuation; depth cap reached",
+				map[string]any{
+					"session_key": sessionKey,
+					"kind":        string(cont.Kind),
+					"depth":       next,
+					"cap":         maxAutoContinueDepth,
+					"intent":      cont.Intent,
+				})
+			return
+		}
 	}
 
 	intent := strings.TrimSpace(cont.Intent)
@@ -138,11 +148,9 @@ func (al *AgentLoop) enqueueSelfContinuation(sessionKey, agentID, intent, reason
 			})
 		return
 	}
-	next := al.incAutoContinueCount(sessionKey)
 	logger.InfoCF("agent", "Self continuation enqueued",
 		map[string]any{
 			"session_key": sessionKey,
-			"depth":       next,
 			"intent_len":  len(intent),
 		})
 }
@@ -209,6 +217,16 @@ func (al *AgentLoop) incAutoContinueCount(sessionKey string) int32 {
 
 func (al *AgentLoop) resetAutoContinueCount(sessionKey string) {
 	al.autoContinueCounts.Delete(sessionKey)
+}
+
+func (al *AgentLoop) decAutoContinueCount(sessionKey string) {
+	v, ok := al.autoContinueCounts.Load(sessionKey)
+	if !ok {
+		return
+	}
+	if counter, ok := v.(*atomic.Int32); ok {
+		counter.Add(-1)
+	}
 }
 
 // parseContinuationArgs validates and extracts a Continuation from the
