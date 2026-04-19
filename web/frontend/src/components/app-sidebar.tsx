@@ -17,8 +17,10 @@ import {
 } from "@tabler/icons-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 
+import { PendingPanel } from "@/components/continuations/pending-panel"
 import {
   Collapsible,
   CollapsibleContent,
@@ -35,6 +37,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { usePendingContinuations } from "@/hooks/use-pending-continuations"
 import { useSidebarChannels } from "@/hooks/use-sidebar-channels"
 
 interface NavItem {
@@ -83,6 +86,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     language: (i18n.resolvedLanguage ?? i18n.language ?? "").toLowerCase(),
     t,
   })
+  const [showPendingPanel, setShowPendingPanel] = useState(false)
+  const pendingConts = usePendingContinuations("main", 5000)
+  const hasPending = pendingConts.length > 0
 
   const navGroups: NavGroup[] = React.useMemo(() => {
     return [
@@ -193,6 +199,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [channelItems])
 
   return (
+    <>
     <Sidebar
       {...props}
       className="bg-background border-r-border/20 border-r pt-3"
@@ -220,7 +227,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         (item.url !== "/" &&
                           currentPath.startsWith(`${item.url}/`))
                       return (
-                        <SidebarMenuItem key={item.title}>
+                        <SidebarMenuItem key={item.title} className="relative">
                           <SidebarMenuButton
                             asChild
                             isActive={isActive}
@@ -241,6 +248,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               </span>
                             </Link>
                           </SidebarMenuButton>
+                          {item.url === "/" && hasPending && (
+                            <button
+                              onClick={() => setShowPendingPanel((v) => !v)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2"
+                              aria-label="View pending continuations"
+                            >
+                              <span className="bg-violet-500 size-2 rounded-full block animate-pulse" />
+                            </button>
+                          )}
                         </SidebarMenuItem>
                       )
                     })}
@@ -272,5 +288,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
+    {showPendingPanel && (
+      <PendingPanel
+        agentName="main"
+        items={pendingConts}
+        onClose={() => setShowPendingPanel(false)}
+      />
+    )}
+    </>
   )
 }
