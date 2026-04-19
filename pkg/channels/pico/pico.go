@@ -326,14 +326,14 @@ func (c *PicoChannel) broadcastToAll(msg PicoMessage) {
 	}
 }
 
-// SetEventBus wires council event broadcasting from the given EventBus.
+// SetEventBus wires agent event broadcasting from the given EventBus.
 func (c *PicoChannel) SetEventBus(eventBus *agent.EventBus) {
-	c.subscribeCouncilEvents(eventBus)
+	c.subscribeAgentEvents(eventBus)
 }
 
-// subscribeCouncilEvents subscribes to the EventBus and forwards council events
+// subscribeAgentEvents subscribes to the EventBus and forwards relevant events
 // to all connected WebSocket clients.
-func (c *PicoChannel) subscribeCouncilEvents(eventBus *agent.EventBus) {
+func (c *PicoChannel) subscribeAgentEvents(eventBus *agent.EventBus) {
 	if eventBus == nil {
 		return
 	}
@@ -344,6 +344,14 @@ func (c *PicoChannel) subscribeCouncilEvents(eventBus *agent.EventBus) {
 			var msgType string
 			var payload map[string]any
 			switch evt.Kind {
+			case agent.EventKindToolExecStart:
+				p := evt.Payload.(agent.ToolExecStartPayload)
+				msgType = TypeToolExecStart
+				payload = map[string]any{"tool_id": p.ToolCallID, "tool": p.Tool, "input": p.Arguments}
+			case agent.EventKindToolExecEnd:
+				p := evt.Payload.(agent.ToolExecEndPayload)
+				msgType = TypeToolExecEnd
+				payload = map[string]any{"tool_id": p.ToolCallID, "tool": p.Tool, "is_error": p.IsError, "error": p.ErrorMessage}
 			case agent.EventKindCouncilStart:
 				p := evt.Payload.(agent.CouncilStartPayload)
 				msgType = TypeCouncilStart

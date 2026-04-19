@@ -2564,8 +2564,9 @@ turnLoop:
 				EventKindToolExecStart,
 				ts.eventMeta("runTurn", "turn.tool.start"),
 				ToolExecStartPayload{
-					Tool:      toolName,
-					Arguments: cloneEventArguments(toolArgs),
+					ToolCallID: tc.ID,
+					Tool:       toolName,
+					Arguments:  cloneEventArguments(toolArgs),
 				},
 			)
 
@@ -2774,6 +2775,7 @@ turnLoop:
 				EventKindToolExecEnd,
 				ts.eventMeta("runTurn", "turn.tool.end"),
 				ToolExecEndPayload{
+					ToolCallID:   toolCallID,
 					Tool:         toolName,
 					Duration:     toolDuration,
 					ForLLMLen:    len(contentForLLM),

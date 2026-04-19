@@ -18,8 +18,12 @@ const (
 	TypeError         = "error"
 	TypePong          = "pong"
 
+	// Tool execution events (server→client)
+	TypeToolExecStart = "tool.exec.start"
+	TypeToolExecEnd   = "tool.exec.end"
+
 	// Council events (server→client)
-	TypeCouncilStart      = "council.start"
+	TypeCouncilStart = "council.start"
 	TypeCouncilAgentStart = "council.agent.start"
 	TypeCouncilAgentDelta = "council.agent.delta"
 	TypeCouncilAgentEnd   = "council.agent.end"
