@@ -51,6 +51,18 @@ type Continuation struct {
 	Sticky bool
 }
 
+// PendingContinuation describes an in-flight background continuation.
+type PendingContinuation struct {
+	ID         string
+	AgentID    string
+	SessionKey string
+	Kind       ContinuationKind
+	Intent     string
+	CreatedAt  time.Time
+	FiresAt    *time.Time
+	EventName  string
+}
+
 // SelfContinueMarker prefixes self-injected steering messages so they are
 // distinguishable in transcripts and logs.
 const SelfContinueMarker = "[self-continue] "
@@ -156,7 +168,17 @@ func (al *AgentLoop) scheduleSelfContinuation(
 	sessionKey, channel, chatID, intent, reason string,
 	delay time.Duration,
 ) {
+	firesAt := time.Now().Add(delay)
+	pcID := al.registerPending(PendingContinuation{
+		AgentID:    agent.ID,
+		SessionKey: sessionKey,
+		Kind:       ContinuationSchedule,
+		Intent:     intent,
+		CreatedAt:  time.Now(),
+		FiresAt:    &firesAt,
+	})
 	timer := time.NewTimer(delay)
+	defer al.unregisterPending(pcID)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
@@ -221,6 +243,29 @@ func (al *AgentLoop) decAutoContinueCount(sessionKey string) {
 	if counter, ok := v.(*atomic.Int32); ok {
 		counter.Add(-1)
 	}
+}
+
+func (al *AgentLoop) registerPending(pc PendingContinuation) string {
+	id := fmt.Sprintf("%x", time.Now().UnixNano())
+	pc.ID = id
+	al.pendingConts.Store(id, &pc)
+	return id
+}
+
+func (al *AgentLoop) unregisterPending(id string) {
+	al.pendingConts.Delete(id)
+}
+
+func (al *AgentLoop) GetPendingContinuations(agentID string) []PendingContinuation {
+	var result []PendingContinuation
+	al.pendingConts.Range(func(_, v any) bool {
+		pc := v.(*PendingContinuation)
+		if agentID == "" || pc.AgentID == agentID {
+			result = append(result, *pc)
+		}
+		return true
+	})
+	return result
 }
 
 // parseContinuationArgs validates and extracts a Continuation from the

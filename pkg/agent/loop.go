@@ -73,6 +73,7 @@ type AgentLoop struct {
 	// session. Keyed by sessionKey; values are *atomic.Int32. Reset when a
 	// real inbound message arrives for the session.
 	autoContinueCounts sync.Map
+	pendingConts       sync.Map
 
 	// events maps normalized event name (string) to *eventBucket. Populated
 	// by await_event continuations (see continuation.go); drained by
@@ -751,6 +752,17 @@ func (al *AgentLoop) Stop() {
 	default:
 		close(al.done)
 	}
+	al.pendingConts.Range(func(_, v any) bool {
+		pc := v.(*PendingContinuation)
+		logger.WarnCF("agent", "Dropping pending continuation on shutdown",
+			map[string]any{
+				"kind":        string(pc.Kind),
+				"intent":      pc.Intent,
+				"agent_id":    pc.AgentID,
+				"session_key": pc.SessionKey,
+			})
+		return true
+	})
 }
 
 func (al *AgentLoop) publishResponseIfNeeded(ctx context.Context, channel, chatID, response string) {
