@@ -229,6 +229,20 @@ export function AgentConfigPage() {
                         placeholder="e.g. gemma4:31b"
                       />
                     </Field>
+
+                    <Field
+                      label="Max Auto-Continue Depth"
+                      hint="Maximum consecutive self-triggered continuation turns before stopping (default: 5)."
+                      layout="setting-row"
+                    >
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={form.maxAutoContinueDepth}
+                        onChange={(e) => updateField("maxAutoContinueDepth", e.target.value)}
+                      />
+                    </Field>
                   </div>
                 </CardContent>
               </Card>
@@ -320,20 +334,6 @@ export function AgentConfigPage() {
                         max={600}
                         value={form.subturnConcurrencyTimeoutSec}
                         onChange={(e) => updateField("subturnConcurrencyTimeoutSec", e.target.value)}
-                      />
-                    </Field>
-
-                    <Field
-                      label="Max Auto-Continue Depth"
-                      hint="Maximum consecutive self-triggered continuation turns before stopping (default: 5)."
-                      layout="setting-row"
-                    >
-                      <Input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={form.maxAutoContinueDepth}
-                        onChange={(e) => updateField("maxAutoContinueDepth", e.target.value)}
                       />
                     </Field>
                   </div>
