@@ -25,6 +25,7 @@ interface AgentConfigForm {
   subturnDefaultTimeoutMinutes: string
   subturnDefaultTokenBudget: string
   subturnConcurrencyTimeoutSec: string
+  maxAutoContinueDepth: string
 }
 
 const EMPTY_FORM: AgentConfigForm = {
@@ -35,6 +36,7 @@ const EMPTY_FORM: AgentConfigForm = {
   subturnDefaultTimeoutMinutes: "10",
   subturnDefaultTokenBudget: "0",
   subturnConcurrencyTimeoutSec: "300",
+  maxAutoContinueDepth: "5",
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -81,6 +83,7 @@ function buildFormFromConfig(config: unknown): AgentConfigForm {
     subturnDefaultTimeoutMinutes: asPositiveNumStr(subturn.default_timeout_minutes, EMPTY_FORM.subturnDefaultTimeoutMinutes),
     subturnDefaultTokenBudget: asNumberString(subturn.default_token_budget, EMPTY_FORM.subturnDefaultTokenBudget),
     subturnConcurrencyTimeoutSec: asPositiveNumStr(subturn.concurrency_timeout_sec, EMPTY_FORM.subturnConcurrencyTimeoutSec),
+    maxAutoContinueDepth: String(defaults.max_auto_continue_depth ?? 5),
   }
 }
 
@@ -154,11 +157,13 @@ export function AgentConfigPage() {
       const subturnDefaultTimeoutMinutes = parseIntField(form.subturnDefaultTimeoutMinutes, "Default timeout", { min: 1, max: 60 })
       const subturnDefaultTokenBudget = parseIntField(form.subturnDefaultTokenBudget, "Token budget", { min: 0 })
       const subturnConcurrencyTimeoutSec = parseIntField(form.subturnConcurrencyTimeoutSec, "Concurrency timeout", { min: 1, max: 600 })
+      const maxAutoContinueDepth = parseIntField(form.maxAutoContinueDepth, "Max auto-continue depth", { min: 1, max: 50 })
 
       await patchAppConfig({
         agents: {
           defaults: {
             model_name: form.mainModel,
+            max_auto_continue_depth: maxAutoContinueDepth,
             subturn: {
               model: form.subturnModel || undefined,
               max_depth: subturnMaxDepth,
@@ -315,6 +320,20 @@ export function AgentConfigPage() {
                         max={600}
                         value={form.subturnConcurrencyTimeoutSec}
                         onChange={(e) => updateField("subturnConcurrencyTimeoutSec", e.target.value)}
+                      />
+                    </Field>
+
+                    <Field
+                      label="Max Auto-Continue Depth"
+                      hint="Maximum consecutive self-triggered continuation turns before stopping (default: 5)."
+                      layout="setting-row"
+                    >
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={form.maxAutoContinueDepth}
+                        onChange={(e) => updateField("maxAutoContinueDepth", e.target.value)}
                       />
                     </Field>
                   </div>
