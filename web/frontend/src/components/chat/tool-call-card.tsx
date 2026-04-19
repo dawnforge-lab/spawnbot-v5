@@ -3,6 +3,7 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconLoader2,
+  IconRefresh,
   IconTool,
   IconX,
 } from "@tabler/icons-react"
@@ -62,6 +63,59 @@ function StatusLabel({ status }: { status: ToolCallStatus }) {
 export function ToolCallCard({ toolCall }: ToolCallCardProps) {
   const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
+
+  if (toolCall.tool === "end_turn") {
+    const continuation = toolCall.input?.continuation as string | undefined
+    const intent = toolCall.input?.intent as string | undefined
+    const reason = toolCall.input?.reason as string | undefined
+    const label = intent
+      ? `↻ Agent continued — ${continuation ?? "continue_now"}: "${intent}"`
+      : `↻ Agent continued autonomously`
+    const hasDetails = !!intent || !!reason
+
+    return (
+      <Collapsible
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        className="border-border/40 rounded-lg border border-dashed"
+      >
+        <CollapsibleTrigger
+          className="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left select-none"
+          disabled={!hasDetails}
+        >
+          <IconRefresh className="text-muted-foreground size-3.5 shrink-0" />
+          <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs italic">
+            {label}
+          </span>
+          {hasDetails && (
+            <span className="text-muted-foreground ml-1 shrink-0">
+              {isOpen ? (
+                <IconChevronDown className="size-3.5" />
+              ) : (
+                <IconChevronRight className="size-3.5" />
+              )}
+            </span>
+          )}
+        </CollapsibleTrigger>
+        {hasDetails && (
+          <CollapsibleContent>
+            <div className="border-border/40 border-t px-3 pb-2 pt-1">
+              {intent && (
+                <p className="text-muted-foreground text-xs">
+                  <span className="font-medium">intent:</span> {intent}
+                </p>
+              )}
+              {reason && (
+                <p className="text-muted-foreground text-xs">
+                  <span className="font-medium">reason:</span> {reason}
+                </p>
+              )}
+            </div>
+          </CollapsibleContent>
+        )}
+      </Collapsible>
+    )
+  }
 
   const hasDetails =
     (toolCall.input && Object.keys(toolCall.input).length > 0) ||
