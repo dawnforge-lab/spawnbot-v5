@@ -326,8 +326,8 @@ func (al *AgentLoop) agentForSession(sessionKey string) *AgentInstance {
 //
 // If no steering messages are pending, it returns an empty string.
 func (al *AgentLoop) Continue(ctx context.Context, sessionKey, channel, chatID string) (string, error) {
-	if active := al.GetActiveTurn(); active != nil {
-		return "", fmt.Errorf("turn %s is still active", active.TurnID)
+	if active := al.GetActiveTurnBySession(sessionKey); active != nil {
+		return "", fmt.Errorf("turn %s is still active for session %q", active.TurnID, sessionKey)
 	}
 	if err := al.ensureHooksInitialized(ctx); err != nil {
 		return "", err
