@@ -31,5 +31,5 @@ func TempDir() string {
 	if ws != "" {
 		return filepath.Join(ws, TempDirName)
 	}
-	return filepath.Join(os.TempDir(), "spawnbot_media")
+	return filepath.Join(os.TempDir(), TempDirName)
 }

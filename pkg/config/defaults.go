@@ -562,7 +562,7 @@ func DefaultConfig() *Config {
 		},
 		Autonomy: autonomy.AutonomyConfig{
 			IdleTrigger: autonomy.IdleTriggerConfig{
-				Enabled:        true,
+				Enabled:        false,
 				ThresholdHours: 8,
 			},
 			Feeds: nil,
