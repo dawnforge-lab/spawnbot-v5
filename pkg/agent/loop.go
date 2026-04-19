@@ -52,6 +52,7 @@ type AgentLoop struct {
 
 	// Runtime state
 	running        atomic.Bool
+	done           chan struct{} // closed by Stop() to signal shutdown to background goroutines
 	summarizing    sync.Map
 	fallback       *providers.FallbackChain
 	channelManager *channels.Manager
@@ -67,6 +68,26 @@ type AgentLoop struct {
 	// Concurrent turn management (from HEAD)
 	activeTurnStates sync.Map     // key: sessionKey (string), value: *turnState
 	subTurnCounter   atomic.Int64 // Counter for generating unique SubTurn IDs
+
+	// autoContinueCounts tracks consecutive self-triggered continuations per
+	// session. Keyed by sessionKey; values are *atomic.Int32. Reset when a
+	// real inbound message arrives for the session.
+	autoContinueCounts sync.Map
+
+	// events maps normalized event name (string) to *eventBucket. Populated
+	// by await_event continuations (see continuation.go); drained by
+	// FireEvent or deadline timers.
+	events         sync.Map
+	eventWaiterSeq atomic.Uint64
+
+	// eventGroups maps group id (uint64) to *eventGroup for await_any /
+	// await_all compound waiters.
+	eventGroups   sync.Map
+	eventGroupSeq atomic.Uint64
+
+	// eventsStore is set when SetEventsStorePath is called during startup.
+	// Nil means persistence is disabled; save/load become no-ops.
+	eventsStore *eventsPersistence
 
 	// Turn tracking (from Incoming)
 	turnSeq        atomic.Uint64
@@ -149,9 +170,18 @@ func NewAgentLoop(
 		fallback:    fallbackChain,
 		cmdRegistry: commands.NewRegistry(commands.BuiltinDefinitions()),
 		steering:    newSteeringQueue(parseSteeringMode(cfg.Agents.Defaults.SteeringMode)),
+		done:        make(chan struct{}),
 	}
 	al.hooks = NewHookManager(eventBus)
 	configureHookManagerFromConfig(al.hooks, cfg)
+
+	// Enable event-waiter persistence under the default workspace when
+	// configured. Waiters survive restarts so await_event declarations are
+	// not lost across process lifecycles.
+	if workspace := cfg.Agents.Defaults.Workspace; workspace != "" {
+		al.SetEventsStorePath(filepath.Join(workspace, "autonomy", "event_waiters.json"))
+		al.loadEventWaitersFromDisk()
+	}
 
 	// Register shared tools to all agents (now that al is created)
 	registerSharedTools(al, cfg, msgBus, registry, provider)
@@ -177,6 +207,13 @@ func registerSharedTools(
 
 		// search_tools is core — always visible so the agent can discover hidden tools
 		agent.Tools.Register(tools.NewSearchTools(agent.Tools))
+
+		// end_turn / fire_event / list_events are infrastructure tools.
+		// Hidden by default so they don't clutter the visible tool list;
+		// the system prompt instructs the model on their use.
+		agent.Tools.RegisterHidden(newEndTurnTool())
+		agent.Tools.RegisterHidden(newFireEventTool())
+		agent.Tools.RegisterHidden(newListEventsTool())
 
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
@@ -493,6 +530,10 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				al.inboundHook(msg)
 			}
 
+			// Resolve any mention:<keyword> event waiters whose keyword
+			// appears in this message's content.
+			al.fireMentionEventsForMessage(ctx, msg.Content)
+
 			// Start a goroutine that drains the bus while processMessage is
 			// running. Only messages that resolve to the active turn scope are
 			// redirected into steering; other inbound messages are requeued.
@@ -702,6 +743,14 @@ func (al *AgentLoop) drainBusToSteering(ctx context.Context, activeScope, active
 
 func (al *AgentLoop) Stop() {
 	al.running.Store(false)
+	// Signal background goroutines (scheduled continuations, event waiter
+	// resumptions) to exit rather than outliving the agent loop.
+	select {
+	case <-al.done:
+		// already closed
+	default:
+		close(al.done)
+	}
 }
 
 func (al *AgentLoop) publishResponseIfNeeded(ctx context.Context, channel, chatID, response string) {
@@ -1450,6 +1499,14 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	scopeKey := resolveScopeKey(route, msg.SessionKey)
 	sessionKey := scopeKey
 
+	// A real inbound (non-self) message resets the consecutive
+	// auto-continuation counter. Self-continuation steering messages
+	// (prefixed with SelfContinueMarker) must not reset it — they are
+	// the very messages the cap is meant to bound.
+	if !strings.HasPrefix(msg.Content, SelfContinueMarker) {
+		al.resetAutoContinueCount(sessionKey)
+	}
+
 	logger.InfoCF("agent", "Routed message",
 		map[string]any{
 			"agent_id":      agent.ID,
@@ -1666,6 +1723,11 @@ func (al *AgentLoop) runAgentLoop(
 			Content: result.finalContent,
 		})
 	}
+
+	// Dispatch continuation AFTER publishing the current reply so that
+	// continue_now cannot begin the next turn before the user receives
+	// the current response.
+	al.dispatchContinuation(ctx, agent, opts, result.continuation)
 
 	if result.finalContent != "" {
 		responsePreview := utils.Truncate(result.finalContent, 120)
@@ -2885,6 +2947,7 @@ turnLoop:
 				finalContent: "",
 				status:       turnStatus,
 				followUps:    append([]bus.InboundMessage(nil), ts.followUps...),
+				continuation: ts.getContinuation(),
 			}, nil
 		}
 
@@ -2951,6 +3014,7 @@ turnLoop:
 		finalContent: finalContent,
 		status:       turnStatus,
 		followUps:    append([]bus.InboundMessage(nil), ts.followUps...),
+		continuation: ts.getContinuation(),
 	}, nil
 }
 

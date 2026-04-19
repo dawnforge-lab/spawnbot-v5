@@ -43,6 +43,7 @@ type turnResult struct {
 	finalContent string
 	status       TurnEndStatus
 	followUps    []bus.InboundMessage
+	continuation *Continuation
 }
 
 type turnState struct {
@@ -102,6 +103,10 @@ type turnState struct {
 	tokenBudget      *atomic.Int64        // Shared token budget counter
 	lastFinishReason string               // Last LLM finish_reason
 	lastUsage        *providers.UsageInfo // Last LLM usage info
+
+	// Continuation declared by the model via the end_turn tool. Read by the
+	// supervisor in runAgentLoop after runTurn returns. Last write wins.
+	continuation *Continuation
 
 	// Back-reference to the owning AgentLoop (set for SubTurns only, used for hard abort cascade)
 	al *AgentLoop
@@ -483,6 +488,21 @@ func (ts *turnState) SetLastUsage(usage *providers.UsageInfo) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.lastUsage = usage
+}
+
+// setContinuation records the Continuation declared by the model via the
+// end_turn tool. Safe to call multiple times; last write wins.
+func (ts *turnState) setContinuation(c *Continuation) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.continuation = c
+}
+
+// getContinuation returns the declared Continuation (may be nil).
+func (ts *turnState) getContinuation() *Continuation {
+	ts.mu.RLock()
+	defer ts.mu.RUnlock()
+	return ts.continuation
 }
 
 // Context helper functions for SubTurn

@@ -751,6 +751,19 @@ func setupAutonomy(
 				"threshold": threshold.String(),
 			})
 
+			// Resolve any await_event waiters scoped to this channel. Event
+			// name is "idle:<channel>". Fires before the system message so
+			// the resumption payload can arrive ahead of the generic idle
+			// heartbeat.
+			fireCtx, fireCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			agentLoop.FireEvent(fireCtx, "idle:"+channel, channel)
+			// Also fire with each registered agent's scope so models that
+			// follow the system prompt guidance (scope="self") receive it.
+			for _, agentID := range agentLoop.GetRegistry().ListAgentIDs() {
+				agentLoop.FireEventScoped(fireCtx, "idle:"+channel, agentID, channel)
+			}
+			fireCancel()
+
 			// The channel key is "platform:chatID" — split to route via system message.
 			pubCtx, pubCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer pubCancel()
@@ -824,6 +837,18 @@ func setupAutonomy(
 				ChatID:   chatID,
 				Content:  summary,
 			})
+
+			// Resolve any await_event waiters scoped to this feed. Event
+			// name is "feed:<url>" — the same key the model uses when it
+			// declares await_event.
+			fireCtx, fireCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			agentLoop.FireEvent(fireCtx, "feed:"+feedCfg.URL, summary)
+			// Also fire with each registered agent's scope so models that
+			// follow the system prompt guidance (scope="self") receive it.
+			for _, agentID := range agentLoop.GetRegistry().ListAgentIDs() {
+				agentLoop.FireEventScoped(fireCtx, "feed:"+feedCfg.URL, agentID, summary)
+			}
+			fireCancel()
 		}
 
 		svc.FeedPoller = autonomy.NewFeedPoller(autoCfg.Feeds, feedCb)
