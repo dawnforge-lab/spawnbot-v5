@@ -208,18 +208,12 @@ func registerSharedTools(
 		// search_tools is core — always visible so the agent can discover hidden tools
 		agent.Tools.Register(tools.NewSearchTools(agent.Tools))
 
-		// end_turn is core — the model uses it to declare what should happen
-		// after the current turn (done / continue_now / wait / schedule /
-		// await_event). See pkg/agent/continuation.go.
-		agent.Tools.Register(newEndTurnTool())
-
-		// fire_event is core — resolves waiters registered via the
-		// await_event continuation.
-		agent.Tools.Register(newFireEventTool())
-
-		// list_events is core — lets the model audit its own pending
-		// await_event subscriptions.
-		agent.Tools.Register(newListEventsTool())
+		// end_turn / fire_event / list_events are infrastructure tools.
+		// Hidden by default so they don't clutter the visible tool list;
+		// the system prompt instructs the model on their use.
+		agent.Tools.RegisterHidden(newEndTurnTool())
+		agent.Tools.RegisterHidden(newFireEventTool())
+		agent.Tools.RegisterHidden(newListEventsTool())
 
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
