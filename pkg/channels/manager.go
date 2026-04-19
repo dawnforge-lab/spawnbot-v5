@@ -469,6 +469,13 @@ func (m *Manager) SetupHTTPServer(addr string, healthServer *health.Server) {
 	}
 }
 
+func (m *Manager) RegisterHTTPHandler(pattern string, handler http.HandlerFunc) {
+	if m.mux == nil {
+		panic("channels.Manager: RegisterHTTPHandler called before SetupHTTPServer")
+	}
+	m.mux.HandleFunc(pattern, handler)
+}
+
 func (m *Manager) StartAll(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
