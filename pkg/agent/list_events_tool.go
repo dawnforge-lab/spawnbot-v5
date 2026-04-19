@@ -39,6 +39,10 @@ func (t *listEventsTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Only return waiters for this session key.",
 			},
+			"scope": map[string]any{
+				"type":        "string",
+				"description": "Only return waiters with this scope. Use an explicit empty string to restrict to global (unscoped) waiters, or 'self' to auto-resolve to the current agent's id.",
+			},
 		},
 		"additionalProperties": false,
 	}
@@ -52,16 +56,28 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 
 	prefix := strings.ToLower(strings.TrimSpace(stringArg(args, "name_prefix")))
 	sessionKey := strings.TrimSpace(stringArg(args, "session_key"))
+	scopeArg, scopeProvided := args["scope"].(string)
+	scopeFilter := strings.TrimSpace(scopeArg)
+	if scopeFilter == "self" {
+		if ts := TurnStateFromContext(ctx); ts != nil && ts.agent != nil {
+			scopeFilter = ts.agent.ID
+		} else {
+			scopeFilter = ""
+		}
+	}
 
 	waiters := al.SnapshotEventWaiters()
 	groups := al.SnapshotEventGroups()
-	if prefix != "" || sessionKey != "" {
+	if prefix != "" || sessionKey != "" || scopeProvided {
 		filtered := waiters[:0]
 		for _, w := range waiters {
 			if prefix != "" && !strings.HasPrefix(w.Name, prefix) {
 				continue
 			}
 			if sessionKey != "" && w.SessionKey != sessionKey {
+				continue
+			}
+			if scopeProvided && w.Scope != scopeFilter {
 				continue
 			}
 			filtered = append(filtered, w)
@@ -71,6 +87,9 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 		fg := groups[:0]
 		for _, g := range groups {
 			if sessionKey != "" && g.SessionKey != sessionKey {
+				continue
+			}
+			if scopeProvided && g.Scope != scopeFilter {
 				continue
 			}
 			if prefix != "" {
@@ -137,8 +156,12 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 		if w.Sticky {
 			stickyDesc = " sticky"
 		}
-		fmt.Fprintf(&b, "- id=%d name=%s age=%s deadline=%s session=%s agent=%s%s\n",
-			w.ID, w.Name, age, deadlineDesc, w.SessionKey, w.AgentID, stickyDesc)
+		scopeDesc := "global"
+		if w.Scope != "" {
+			scopeDesc = w.Scope
+		}
+		fmt.Fprintf(&b, "- id=%d name=%s scope=%s age=%s deadline=%s session=%s agent=%s%s\n",
+			w.ID, w.Name, scopeDesc, age, deadlineDesc, w.SessionKey, w.AgentID, stickyDesc)
 		if w.Intent != "" {
 			fmt.Fprintf(&b, "    intent: %s\n", truncateForListing(w.Intent, 200))
 		}
@@ -168,8 +191,12 @@ func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tool
 			firedNames = append(firedNames, n)
 		}
 		sort.Strings(firedNames)
-		fmt.Fprintf(&b, "- group id=%d kind=await_%s age=%s deadline=%s session=%s agent=%s\n",
-			g.ID, g.Kind, age, deadlineDesc, g.SessionKey, g.AgentID)
+		scopeDesc := "global"
+		if g.Scope != "" {
+			scopeDesc = g.Scope
+		}
+		fmt.Fprintf(&b, "- group id=%d kind=await_%s scope=%s age=%s deadline=%s session=%s agent=%s\n",
+			g.ID, g.Kind, scopeDesc, age, deadlineDesc, g.SessionKey, g.AgentID)
 		fmt.Fprintf(&b, "    pending: %s\n", strings.Join(pendingNames, ", "))
 		if len(firedNames) > 0 {
 			fmt.Fprintf(&b, "    fired:   %s\n", strings.Join(firedNames, ", "))

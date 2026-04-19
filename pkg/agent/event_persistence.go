@@ -27,6 +27,7 @@ type persistedWaiter struct {
 	AfterMs        int64  `json:"after_ms,omitempty"`
 	Sticky         bool   `json:"sticky,omitempty"`
 	GroupID        uint64 `json:"group_id,omitempty"`
+	Scope          string `json:"scope,omitempty"`
 }
 
 type persistedGroup struct {
@@ -43,6 +44,7 @@ type persistedGroup struct {
 	AfterMs        int64             `json:"after_ms,omitempty"`
 	ChildIDs       map[string]uint64 `json:"child_ids,omitempty"` // name -> waiter id
 	Fired          map[string]string `json:"fired,omitempty"`
+	Scope          string            `json:"scope,omitempty"`
 }
 
 type persistedEventState struct {
@@ -128,6 +130,7 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 			intent:     p.Intent,
 			reason:     p.Reason,
 			createdAt:  time.UnixMilli(p.CreatedUnixMs),
+			scope:      p.Scope,
 			afterMS:    p.AfterMs,
 			sticky:     p.Sticky,
 			groupID:    p.GroupID,
@@ -169,6 +172,7 @@ func (al *AgentLoop) loadEventWaitersFromDisk() {
 			chatID:     pg.ChatID,
 			intent:     pg.Intent,
 			reason:     pg.Reason,
+			scope:      pg.Scope,
 			createdAt:  time.UnixMilli(pg.CreatedUnixMs),
 			afterMS:    pg.AfterMs,
 		}
@@ -239,6 +243,7 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 				AfterMs:       w.afterMS,
 				Sticky:        w.sticky,
 				GroupID:       w.groupID,
+				Scope:         w.scope,
 			}
 			if !w.deadline.IsZero() {
 				p.DeadlineUnixMs = w.deadline.UnixMilli()
@@ -270,6 +275,7 @@ func (al *AgentLoop) saveEventWaitersSnapshot() {
 			Reason:        g.reason,
 			CreatedUnixMs: g.createdAt.UnixMilli(),
 			AfterMs:       g.afterMS,
+			Scope:         g.scope,
 			ChildIDs:      make(map[string]uint64, len(g.childIDs)),
 			Fired:         make(map[string]string, len(g.fired)),
 		}

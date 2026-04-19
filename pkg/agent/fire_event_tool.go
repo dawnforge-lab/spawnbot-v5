@@ -36,6 +36,10 @@ func (t *fireEventTool) Parameters() map[string]any {
 				"type":        "string",
 				"description": "Optional short payload delivered to each waiter as part of their resumption context.",
 			},
+			"scope": map[string]any{
+				"type":        "string",
+				"description": "Optional scope to fire in. Empty (default) matches only global waiters. Set to an agent ID (or 'self') to fire only waiters registered with the same scope. Waiters in a different scope are untouched.",
+			},
 		},
 		"required":             []string{"name"},
 		"additionalProperties": false,
@@ -50,11 +54,20 @@ func (t *fireEventTool) Execute(ctx context.Context, args map[string]any) *tools
 		return tools.ErrorResult(err.Error()).WithError(err)
 	}
 	payload, _ := args["payload"].(string)
+	scope, _ := args["scope"].(string)
+	scope = strings.TrimSpace(scope)
 
 	al := AgentLoopFromContext(ctx)
 	if al == nil {
 		return tools.SilentResult("fire_event noted (no AgentLoop in context; nothing resumed).")
 	}
-	resolved := al.FireEvent(ctx, name, payload)
-	return tools.SilentResult(fmt.Sprintf("Fired %q; resumed %d waiter(s).", name, resolved))
+	if scope == "self" {
+		if ts := TurnStateFromContext(ctx); ts != nil && ts.agent != nil {
+			scope = ts.agent.ID
+		} else {
+			scope = ""
+		}
+	}
+	resolved := al.FireEventScoped(ctx, name, scope, payload)
+	return tools.SilentResult(fmt.Sprintf("Fired %q (scope=%q); resumed %d waiter(s).", name, scope, resolved))
 }

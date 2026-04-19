@@ -64,6 +64,10 @@ func (t *endTurnTool) Parameters() map[string]any {
 				"type":        "boolean",
 				"description": "For continuation=await_event: if true, the waiter is re-registered automatically after each fire so the subscription survives until it times out. Deadlines, if any, are renewed on each re-registration.",
 			},
+			"scope": map[string]any{
+				"type":        "string",
+				"description": "Optional scope for await_event / await_any / await_all. Empty (default) means the waiter is global and resolves only for global fires. Set to an agent ID (or 'self' to auto-resolve to your own agent ID) to restrict resolution to fires that specify the same scope. Useful for partitioning per-agent subscriptions that would otherwise collide by name.",
+			},
 			"reason": map[string]any{
 				"type":        "string",
 				"description": "Short rationale for the chosen continuation. Surfaced in logs.",
@@ -83,6 +87,9 @@ func (t *endTurnTool) Execute(ctx context.Context, args map[string]any) *tools.T
 	ts := turnStateFromContext(ctx)
 	if ts == nil {
 		return tools.SilentResult("Continuation noted (no active turn to record it on).")
+	}
+	if cont.Scope == "self" && ts.agent != nil {
+		cont.Scope = ts.agent.ID
 	}
 	ts.setContinuation(cont)
 	return tools.SilentResult("Continuation set: " + string(cont.Kind))

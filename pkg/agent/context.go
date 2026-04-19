@@ -168,6 +168,8 @@ At the end of every turn, call the end_turn tool to declare what should happen n
 - await_any: pause until the FIRST of several named events fires. Supply the names in events. Siblings are cancelled when one fires. Group deadline applies to the whole group via after_ms / at.
 - await_all: pause until EVERY named event has fired. Fired payloads are collected and delivered together on resumption. Group deadline applies to the whole group.
 
+Event scoping: events are global by default. Set scope on await_event / await_any / await_all (or fire_event) to partition subscriptions that would otherwise collide across agents. Use scope="self" to auto-resolve to your own agent id. Only fires with a matching scope resolve a scoped waiter; global fires do not reach scoped waiters and vice versa.
+
 Always supply a concrete intent for anything other than done, phrased as an instruction to yourself for the next turn. If you promise the user you'll do something after replying, declare that promise as a continuation instead of relying on memory. Consecutive self-continuations are capped for safety.`)
 
 	// Multi-Message Sending (if enabled)

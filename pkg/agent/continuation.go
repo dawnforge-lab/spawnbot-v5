@@ -36,6 +36,13 @@ type Continuation struct {
 	Events  []string
 	Intent  string
 	Reason  string
+	// Scope narrows an event waiter to a specific namespace. Empty means
+	// the waiter is global (matches only global fires). A non-empty scope
+	// only resolves when FireEvent is called with the identical scope.
+	// Conventionally set to an agent ID to partition per-agent
+	// subscriptions. The special value "self" is resolved to the declaring
+	// agent's ID by the end_turn tool before the continuation is recorded.
+	Scope string
 	// Sticky only applies when Kind == ContinuationAwaitEvent. When true,
 	// the waiter is re-registered automatically after each fire so the
 	// subscription survives until the model explicitly cancels it or the
@@ -252,6 +259,9 @@ func parseContinuationArgs(args map[string]any) (*Continuation, error) {
 	if v, ok := args["sticky"].(bool); ok {
 		cont.Sticky = v
 	}
+	if v, ok := args["scope"].(string); ok {
+		cont.Scope = strings.TrimSpace(v)
+	}
 
 	return cont, nil
 }
@@ -327,6 +337,9 @@ type eventWaiter struct {
 	reason     string
 	deadline   time.Time
 	createdAt  time.Time
+	// scope narrows resolution to a specific namespace (empty = global).
+	// Only FireEventScoped with the same scope resolves scoped waiters.
+	scope string
 	// afterMS is the original deadline-relative delay in ms (0 = no
 	// deadline, or deadline was expressed as an absolute `at` timestamp
 	// and cannot be renewed). Used when sticky=true to re-arm the
@@ -363,6 +376,7 @@ type eventGroup struct {
 	chatID     string
 	intent     string
 	reason     string
+	scope      string // inherited by all child waiters
 	deadline   time.Time
 	createdAt  time.Time
 	afterMS    int64
@@ -413,6 +427,7 @@ func (al *AgentLoop) registerEventWaiter(
 		intent:     intent,
 		reason:     cont.Reason,
 		createdAt:  time.Now(),
+		scope:      strings.TrimSpace(cont.Scope),
 		afterMS:    cont.AfterMS,
 		sticky:     cont.Sticky,
 	}
@@ -482,30 +497,48 @@ func (al *AgentLoop) timeoutEventWaiter(w *eventWaiter) {
 	al.resumeEventWaiter(w, "timed_out", "")
 }
 
-// FireEvent resolves all waiters registered for the given event name and
-// resumes each with the declared intent plus the supplied payload. Payload
-// is injected verbatim into the self-steer content, so keep it short.
-// Returns the number of waiters resolved.
+// FireEvent resolves all GLOBAL (unscoped) waiters for the given event name.
+// To fire a scoped event, use FireEventScoped.
 func (al *AgentLoop) FireEvent(ctx context.Context, name, payload string) int {
+	return al.FireEventScoped(ctx, name, "", payload)
+}
+
+// FireEventScoped resolves waiters registered for the given event name whose
+// scope matches. Empty scope matches only unscoped waiters; a non-empty scope
+// matches only waiters registered with the same scope. This partitions event
+// subscriptions across agents / namespaces without renaming them.
+// Returns the number of waiters resolved.
+func (al *AgentLoop) FireEventScoped(ctx context.Context, name, scope, payload string) int {
 	name = normalizeEventName(name)
 	if name == "" {
 		return 0
 	}
+	scope = strings.TrimSpace(scope)
 	bucket := al.eventsBucket(name)
 	bucket.mu.Lock()
-	waiters := bucket.waiters
-	bucket.waiters = nil
+	// Partition the bucket: take waiters matching scope, leave the rest.
+	remaining := bucket.waiters[:0]
+	var waiters []*eventWaiter
+	for _, w := range bucket.waiters {
+		if w.scope == scope {
+			waiters = append(waiters, w)
+		} else {
+			remaining = append(remaining, w)
+		}
+	}
+	bucket.waiters = remaining
 	bucket.mu.Unlock()
 
 	if len(waiters) == 0 {
-		logger.DebugCF("agent", "FireEvent: no waiters",
-			map[string]any{"event": name})
+		logger.DebugCF("agent", "FireEvent: no matching waiters",
+			map[string]any{"event": name, "scope": scope})
 		return 0
 	}
 
 	logger.InfoCF("agent", "FireEvent resolving waiters",
 		map[string]any{
 			"event":   name,
+			"scope":   scope,
 			"waiters": len(waiters),
 		})
 
@@ -545,6 +578,7 @@ func (al *AgentLoop) reRegisterStickyWaiter(prev *eventWaiter) {
 		intent:     prev.intent,
 		reason:     prev.reason,
 		createdAt:  time.Now(),
+		scope:      prev.scope,
 		afterMS:    prev.afterMS,
 		sticky:     true,
 	}
@@ -643,6 +677,7 @@ type EventWaiterInfo struct {
 	// GroupID is non-zero when the waiter is a child of an await_any or
 	// await_all group. Such waiters resolve via the group, not directly.
 	GroupID uint64
+	Scope   string
 }
 
 // SnapshotEventWaiters returns a flat, independent slice of all pending
@@ -671,6 +706,7 @@ func (al *AgentLoop) SnapshotEventWaiters() []EventWaiterInfo {
 				Sticky:     w.sticky,
 				AfterMS:    w.afterMS,
 				GroupID:    w.groupID,
+				Scope:      w.scope,
 			})
 		}
 		bucket.mu.Unlock()
@@ -692,6 +728,7 @@ type EventGroupInfo struct {
 	CreatedAt  time.Time
 	Deadline   time.Time
 	AfterMS    int64
+	Scope      string
 	// Pending maps child waiter id to event name for children still awaiting
 	// a fire.
 	Pending map[uint64]string
@@ -724,6 +761,7 @@ func (al *AgentLoop) SnapshotEventGroups() []EventGroupInfo {
 			CreatedAt:  g.createdAt,
 			Deadline:   g.deadline,
 			AfterMS:    g.afterMS,
+			Scope:      g.scope,
 			Pending:    make(map[uint64]string, len(g.childIDs)),
 			Fired:      make(map[string]string, len(g.fired)),
 		}
@@ -805,6 +843,7 @@ func (al *AgentLoop) registerEventGroup(
 	}
 
 	groupID := al.eventGroupSeq.Add(1)
+	scope := strings.TrimSpace(cont.Scope)
 	g := &eventGroup{
 		id:         groupID,
 		kind:       kind,
@@ -816,6 +855,7 @@ func (al *AgentLoop) registerEventGroup(
 		chatID:     opts.ChatID,
 		intent:     intent,
 		reason:     cont.Reason,
+		scope:      scope,
 		createdAt:  time.Now(),
 		afterMS:    cont.AfterMS,
 	}
@@ -835,6 +875,7 @@ func (al *AgentLoop) registerEventGroup(
 			intent:     intent,
 			reason:     cont.Reason,
 			createdAt:  time.Now(),
+			scope:      scope,
 			groupID:    groupID,
 		}
 		g.childIDs[childID] = name
