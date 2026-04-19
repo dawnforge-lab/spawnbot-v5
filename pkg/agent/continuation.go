@@ -265,6 +265,29 @@ func (al *AgentLoop) GetPendingContinuations(agentID string) []PendingContinuati
 		}
 		return true
 	})
+
+	// Also include event waiters (await_event / await_any / await_all) stored in
+	// al.events. These are tracked separately from pendingConts and would
+	// otherwise be invisible to callers (e.g. the API response).
+	for _, w := range al.SnapshotEventWaiters() {
+		if agentID != "" && w.AgentID != agentID {
+			continue
+		}
+		pc := PendingContinuation{
+			ID:         fmt.Sprintf("ew-%d", w.ID),
+			AgentID:    w.AgentID,
+			SessionKey: w.SessionKey,
+			Kind:       ContinuationAwaitEvent,
+			Intent:     w.Intent,
+			CreatedAt:  w.CreatedAt,
+			EventName:  w.Name,
+		}
+		if !w.Deadline.IsZero() {
+			pc.FiresAt = &w.Deadline
+		}
+		result = append(result, pc)
+	}
+
 	return result
 }
 

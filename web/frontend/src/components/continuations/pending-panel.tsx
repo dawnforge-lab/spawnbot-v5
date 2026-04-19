@@ -43,7 +43,7 @@ function TimeLabel({ item }: { item: PendingContinuation }) {
 
 export function PendingPanel({ agentName, items, onClose }: PendingPanelProps) {
   return (
-    <div className="bg-background border-border fixed bottom-4 left-64 z-50 w-80 rounded-lg border shadow-lg">
+    <div className="bg-background border-border fixed bottom-4 left-4 z-50 w-80 rounded-lg border shadow-lg">
       <div className="flex items-center justify-between border-b px-3 py-2">
         <span className="text-sm font-medium">
           Pending Continuations — {agentName}

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,16 +19,26 @@ type scriptedProvider struct {
 	responses []providers.LLMResponse
 	idx       atomic.Int32
 	callCount atomic.Int32
+
+	mu   sync.Mutex
+	calls [][]providers.Message // messages received on each Chat call
 }
 
 func (s *scriptedProvider) Chat(
 	_ context.Context,
-	_ []providers.Message,
+	msgs []providers.Message,
 	_ []providers.ToolDefinition,
 	_ string,
 	_ map[string]any,
 ) (*providers.LLMResponse, error) {
 	s.callCount.Add(1)
+	// Capture a copy of the messages for this call.
+	s.mu.Lock()
+	snapshot := make([]providers.Message, len(msgs))
+	copy(snapshot, msgs)
+	s.calls = append(s.calls, snapshot)
+	s.mu.Unlock()
+
 	i := int(s.idx.Add(1)) - 1
 	if i >= len(s.responses) {
 		return &providers.LLMResponse{Content: "done"}, nil
@@ -65,17 +77,37 @@ func newScriptedAgentLoopFull(t *testing.T, p providers.LLMProvider, maxDepth, m
 }
 
 // TestContinuation_ContinueNow verifies that a continue_now declaration causes
-// the agent loop to immediately queue a second turn and call the provider again.
+// the agent loop to queue a [self-continue] steering message and deliver it in
+// the next turn.
+//
+// Turn structure:
+//   - Iteration 1 → end_turn(continue_now): sets continuation.
+//   - Iteration 2 → plain text "thinking…": no tool calls, exits the turn loop;
+//     runTurn exits with continuation=continue_now.
+//   - dispatchContinuation enqueues [self-continue] into the steering queue.
+//   - Continue() starts Turn 2; iteration 1 sees [self-continue] in messages,
+//     then calls end_turn(done).
 func TestContinuation_ContinueNow(t *testing.T) {
 	p := &scriptedProvider{
 		responses: []providers.LLMResponse{
+			// Turn 1, iteration 1: declare continue_now.
 			{
 				Content:   "I will continue.",
 				ToolCalls: []providers.ToolCall{endTurnCall("continue_now", "testing continuation")},
 			},
+			// Turn 1, iteration 2: plain text — no tools, so the turn loop exits.
+			// continuation is still continue_now from iteration 1.
+			{
+				Content: "thinking…",
+			},
+			// Turn 2 (triggered by Continue): end with done.
 			{
 				Content:   "Done now.",
 				ToolCalls: []providers.ToolCall{endTurnCall("done", "finished")},
+			},
+			// Turn 2, iteration 2 (after end_turn(done)): plain exit.
+			{
+				Content: "done",
 			},
 		},
 	}
@@ -90,12 +122,41 @@ func TestContinuation_ContinueNow(t *testing.T) {
 		t.Fatalf("processMessage error: %v", err)
 	}
 
-	// Give the async self-continuation goroutine time to run.
-	time.Sleep(200 * time.Millisecond)
+	// Give dispatchContinuation time to enqueue the steering message.
+	time.Sleep(50 * time.Millisecond)
 
 	calls := p.callCount.Load()
 	if calls < 2 {
-		t.Errorf("expected provider called >= 2 times, got %d", calls)
+		t.Errorf("expected provider called >= 2 times after Turn 1, got %d", calls)
+	}
+
+	// The routing resolves the session key to "agent:main:main". Drain the
+	// steering queue using that resolved key to trigger Turn 2.
+	resolvedSessionKey := "agent:main:main"
+	_, err = al.Continue(context.Background(), resolvedSessionKey, "", "")
+	if err != nil {
+		t.Fatalf("Continue error: %v", err)
+	}
+
+	// Verify that Turn 2 received the [self-continue] steering message.
+	p.mu.Lock()
+	allCalls := p.calls
+	p.mu.Unlock()
+
+	foundMarker := false
+	for i := 1; i < len(allCalls); i++ { // skip Turn 1 first call
+		for _, msg := range allCalls[i] {
+			if strings.Contains(msg.Content, SelfContinueMarker) {
+				foundMarker = true
+				break
+			}
+		}
+		if foundMarker {
+			break
+		}
+	}
+	if !foundMarker {
+		t.Errorf("expected a message containing %q in Turn 2 context, but none found", SelfContinueMarker)
 	}
 }
 
