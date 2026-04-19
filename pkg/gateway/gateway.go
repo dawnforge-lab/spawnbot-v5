@@ -346,6 +346,10 @@ func setupAndStartServices(
 	addr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)
 	runningServices.HealthServer = health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
 	runningServices.ChannelManager.SetupHTTPServer(addr, runningServices.HealthServer)
+	runningServices.ChannelManager.RegisterHTTPHandler(
+		"GET /agents/{id}/continuations",
+		makeContinuationsHandler(agentLoop),
+	)
 
 	if err = runningServices.ChannelManager.StartAll(context.Background()); err != nil {
 		return nil, fmt.Errorf("error starting channels: %w", err)
@@ -564,6 +568,10 @@ func restartServices(
 		runningServices.HealthServer = health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
 	}
 	runningServices.ChannelManager.SetupHTTPServer(addr, runningServices.HealthServer)
+	runningServices.ChannelManager.RegisterHTTPHandler(
+		"GET /agents/{id}/continuations",
+		makeContinuationsHandler(al),
+	)
 
 	if err = runningServices.ChannelManager.Reload(context.Background(), cfg); err != nil {
 		return fmt.Errorf("error reload channels: %w", err)
