@@ -51,7 +51,8 @@ func (t *listEventsTool) Parameters() map[string]any {
 func (t *listEventsTool) Execute(ctx context.Context, args map[string]any) *tools.ToolResult {
 	al := AgentLoopFromContext(ctx)
 	if al == nil {
-		return tools.SilentResult("list_events: no AgentLoop in context.")
+		err := fmt.Errorf("list_events: no AgentLoop in context")
+		return tools.ErrorResult(err.Error()).WithError(err)
 	}
 
 	prefix := strings.ToLower(strings.TrimSpace(stringArg(args, "name_prefix")))
