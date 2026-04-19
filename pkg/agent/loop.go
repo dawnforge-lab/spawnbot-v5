@@ -1709,12 +1709,6 @@ func (al *AgentLoop) runAgentLoop(
 		}
 	}
 
-	// Dispatch any continuation the model declared via end_turn. For
-	// continue_now this enqueues a self-steering message that the existing
-	// post-message drain loop (in Run) will pick up. For wait/schedule a
-	// goroutine handles the delayed re-entry.
-	al.dispatchContinuation(ctx, agent, opts, result.continuation)
-
 	if opts.SendResponse && result.finalContent != "" {
 		al.bus.PublishOutbound(ctx, bus.OutboundMessage{
 			Channel: opts.Channel,
@@ -1722,6 +1716,11 @@ func (al *AgentLoop) runAgentLoop(
 			Content: result.finalContent,
 		})
 	}
+
+	// Dispatch continuation AFTER publishing the current reply so that
+	// continue_now cannot begin the next turn before the user receives
+	// the current response.
+	al.dispatchContinuation(ctx, agent, opts, result.continuation)
 
 	if result.finalContent != "" {
 		responsePreview := utils.Truncate(result.finalContent, 120)
