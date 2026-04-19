@@ -94,10 +94,10 @@ func (al *AgentLoop) dispatchContinuation(
 			al.decAutoContinueCount(sessionKey)
 			logger.WarnCF("agent", "Skipping declared continuation; depth cap reached",
 				map[string]any{
-					"session_key": sessionKey,
-					"kind":        string(cont.Kind),
-					"depth":       next,
-					"cap":         maxAutoContinueDepth,
+					"session_key":     sessionKey,
+					"kind":            string(cont.Kind),
+					"depth_attempted": next,
+					"cap":             maxAutoContinueDepth,
 					"intent":      cont.Intent,
 				})
 			return
@@ -164,6 +164,9 @@ func (al *AgentLoop) scheduleSelfContinuation(
 	defer timer.Stop()
 	<-timer.C
 
+	// The depth counter was pre-charged by dispatchContinuation. On enqueue
+	// failure the slot is burned until the next real inbound message resets
+	// it — an acceptable edge case given how rarely enqueue fails.
 	al.enqueueSelfContinuation(sessionKey, agent.ID, intent, reason)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -197,18 +200,6 @@ func continuationDelay(cont *Continuation) time.Duration {
 	return 0
 }
 
-func (al *AgentLoop) autoContinueCount(sessionKey string) int32 {
-	v, ok := al.autoContinueCounts.Load(sessionKey)
-	if !ok {
-		return 0
-	}
-	counter, ok := v.(*atomic.Int32)
-	if !ok {
-		return 0
-	}
-	return counter.Load()
-}
-
 func (al *AgentLoop) incAutoContinueCount(sessionKey string) int32 {
 	v, _ := al.autoContinueCounts.LoadOrStore(sessionKey, &atomic.Int32{})
 	counter := v.(*atomic.Int32)
@@ -222,6 +213,9 @@ func (al *AgentLoop) resetAutoContinueCount(sessionKey string) {
 func (al *AgentLoop) decAutoContinueCount(sessionKey string) {
 	v, ok := al.autoContinueCounts.Load(sessionKey)
 	if !ok {
+		// The key may have been deleted by a concurrent resetAutoContinueCount
+		// (triggered by a real inbound message). That reset wipes the entire
+		// counter, so the rollback is a no-op without consequence — the reset wins.
 		return
 	}
 	if counter, ok := v.(*atomic.Int32); ok {
