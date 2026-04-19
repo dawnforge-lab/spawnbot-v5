@@ -209,11 +209,11 @@ func registerSharedTools(
 		agent.Tools.Register(tools.NewSearchTools(agent.Tools))
 
 		// end_turn / fire_event / list_events are infrastructure tools.
-		// Hidden by default so they don't clutter the visible tool list;
-		// the system prompt instructs the model on their use.
+		// They are promoted immediately — no search_tools round-trip needed.
 		agent.Tools.RegisterHidden(newEndTurnTool())
 		agent.Tools.RegisterHidden(newFireEventTool())
 		agent.Tools.RegisterHidden(newListEventsTool())
+		agent.Tools.PromoteTools([]string{"end_turn", "fire_event", "list_events"})
 
 		if cfg.Tools.IsToolEnabled("web") {
 			searchTool, err := tools.NewWebSearchTool(tools.WebSearchToolOptions{
