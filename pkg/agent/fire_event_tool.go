@@ -59,7 +59,8 @@ func (t *fireEventTool) Execute(ctx context.Context, args map[string]any) *tools
 
 	al := AgentLoopFromContext(ctx)
 	if al == nil {
-		return tools.SilentResult("fire_event noted (no AgentLoop in context; nothing resumed).")
+		err := fmt.Errorf("fire_event: no AgentLoop in context")
+		return tools.ErrorResult(err.Error()).WithError(err)
 	}
 	if scope == "self" {
 		if ts := TurnStateFromContext(ctx); ts != nil && ts.agent != nil {

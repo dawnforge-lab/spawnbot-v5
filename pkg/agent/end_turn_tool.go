@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dawnforge-lab/spawnbot-v5/pkg/tools"
 )
@@ -86,7 +87,8 @@ func (t *endTurnTool) Execute(ctx context.Context, args map[string]any) *tools.T
 
 	ts := turnStateFromContext(ctx)
 	if ts == nil {
-		return tools.SilentResult("Continuation noted (no active turn to record it on).")
+		err := fmt.Errorf("end_turn: no active turn state in context")
+		return tools.ErrorResult(err.Error()).WithError(err)
 	}
 	if cont.Scope == "self" && ts.agent != nil {
 		cont.Scope = ts.agent.ID
