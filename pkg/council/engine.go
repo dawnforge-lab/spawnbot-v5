@@ -165,7 +165,7 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 	}
 
 	// Generate synthesis — retry on failure
-	synthesis, err := e.callWithRetry("synthesis", func() (string, error) {
+	synthesis, tasks, err := e.callWithRetrySynthesis("synthesis", func() (string, []CouncilTask, error) {
 		return e.generateSynthesis(ctx, meta, transcript)
 	})
 	if err != nil {
@@ -195,6 +195,7 @@ func (e *Engine) Run(ctx context.Context, cfg CouncilConfig) (*CouncilResult, er
 		Title:     meta.Title,
 		Rounds:    meta.Rounds,
 		Synthesis: synthesis,
+		Tasks:     tasks,
 		Status:    StatusClosed,
 	}
 
@@ -440,12 +441,25 @@ Respond with either "CONCLUDE" or a brief directive for the next round.`,
 }
 
 // generateSynthesis summarizes the full transcript into actionable output.
-func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, transcript []TranscriptEntry) (string, error) {
+func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, transcript []TranscriptEntry) (string, []CouncilTask, error) {
 	var messages []protocoltypes.Message
 
 	messages = append(messages, protocoltypes.Message{
-		Role:    "system",
-		Content: "You are a council synthesizer. Summarize the full discussion transcript into a clear, actionable synthesis that captures the key insights, recommendations, and action items from all agents.",
+		Role: "system",
+		Content: `You are a council synthesizer. Summarize the full discussion into this exact format:
+
+Summary:
+<2-3 sentence summary of key conclusions and agreements>
+
+Tasks:
+- agent: <agent name>  task: <one sentence describing what to do>  priority: high|medium|low
+- agent: <agent name>  task: <one sentence describing what to do>  priority: high|medium|low
+
+Rules:
+- Only assign tasks to agents who participated in the council, or "main" for the calling agent.
+- Each task must be one clear, actionable sentence.
+- Separate agent/task/priority fields with two spaces on each task line.
+- If there are no actionable tasks, omit the Tasks section entirely.`,
 	})
 
 	var sb strings.Builder
@@ -472,10 +486,11 @@ func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, trans
 	}
 	resp, err := e.provider.Chat(ctx, messages, nil, model, nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	return resp.Content, nil
+	summary, tasks := parseSynthesisOutput(resp.Content)
+	return summary, tasks, nil
 }
 
 const maxRetries = 2
@@ -499,6 +514,24 @@ func (e *Engine) callAgentWithRetry(ctx context.Context, meta *CouncilMeta, agen
 		}
 	}
 	return "", lastErr
+}
+
+// callWithRetrySynthesis retries a synthesis-returning function on failure.
+func (e *Engine) callWithRetrySynthesis(label string, fn func() (string, []CouncilTask, error)) (string, []CouncilTask, error) {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.InfoCF("council", "Retrying "+label,
+				map[string]any{"attempt": attempt + 1})
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+		summary, tasks, err := fn()
+		if err == nil {
+			return summary, tasks, nil
+		}
+		lastErr = err
+	}
+	return "", nil, lastErr
 }
 
 // callWithRetry retries a string-returning function on failure.
