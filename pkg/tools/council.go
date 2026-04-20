@@ -233,8 +233,19 @@ func (t *CouncilTool) resume(ctx context.Context, args map[string]any) *ToolResu
 }
 
 func (t *CouncilTool) formatResult(result *CouncilRunResult) *ToolResult {
-	forUser := fmt.Sprintf("Council %q completed (%d rounds).\n\nSynthesis:\n%s",
+	forUser := fmt.Sprintf("Council %q completed (%d rounds).\n\nSummary:\n%s",
 		result.Title, result.Rounds, result.Synthesis)
+
+	if len(result.Tasks) > 0 {
+		forUser += "\n\nTasks:"
+		for i, task := range result.Tasks {
+			priority := task.Priority
+			if priority == "" {
+				priority = "normal"
+			}
+			forUser += fmt.Sprintf("\n%d. [%s] %s  (%s)", i+1, task.Agent, task.Task, priority)
+		}
+	}
 
 	data, _ := json.Marshal(result)
 	return &ToolResult{

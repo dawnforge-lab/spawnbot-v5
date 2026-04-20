@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,49 @@ func TestCouncilTool_ResumeMissingID(t *testing.T) {
 	}
 	if result.ForLLM != "council engine not configured" {
 		t.Fatalf("expected engine not configured error, got: %s", result.ForLLM)
+	}
+}
+
+func TestFormatResult_WithTasks(t *testing.T) {
+	tool := NewCouncilTool(nil)
+	result := &CouncilRunResult{
+		ID:        "abc",
+		Title:     "Planning",
+		Rounds:    2,
+		Synthesis: "The team agreed on approach B.",
+		Tasks: []CouncilTask{
+			{Agent: "researcher", Task: "validate the hypothesis", Priority: "high"},
+			{Agent: "main", Task: "write the plan"},
+		},
+		Status: "closed",
+	}
+
+	tr := tool.formatResult(result)
+
+	if !strings.Contains(tr.ForUser, "1. [researcher] validate the hypothesis  (high)") {
+		t.Errorf("ForUser missing task 1: %s", tr.ForUser)
+	}
+	if !strings.Contains(tr.ForUser, "2. [main] write the plan  (normal)") {
+		t.Errorf("ForUser missing task 2 with default priority: %s", tr.ForUser)
+	}
+	if !strings.Contains(tr.ForLLM, `"tasks"`) {
+		t.Errorf("ForLLM missing tasks field: %s", tr.ForLLM)
+	}
+}
+
+func TestFormatResult_NoTasks(t *testing.T) {
+	tool := NewCouncilTool(nil)
+	result := &CouncilRunResult{
+		ID:        "xyz",
+		Title:     "Discussion",
+		Rounds:    1,
+		Synthesis: "No clear actions emerged.",
+		Status:    "closed",
+	}
+
+	tr := tool.formatResult(result)
+
+	if strings.Contains(tr.ForUser, "Tasks:") {
+		t.Errorf("ForUser should not contain Tasks section when there are none: %s", tr.ForUser)
 	}
 }

@@ -25,11 +25,21 @@ func (a *councilRunnerAdapter) Run(ctx context.Context, cfg tools.CouncilRunConf
 	if err != nil {
 		return nil, err
 	}
+	tasks := make([]tools.CouncilTask, len(result.Tasks))
+	for i, t := range result.Tasks {
+		tasks[i] = tools.CouncilTask{
+			Agent:    t.Agent,
+			Task:     t.Task,
+			Priority: t.Priority,
+		}
+	}
+
 	return &tools.CouncilRunResult{
 		ID:        result.ID,
 		Title:     result.Title,
 		Rounds:    result.Rounds,
 		Synthesis: result.Synthesis,
+		Tasks:     tasks,
 		Status:    result.Status,
 	}, nil
 }
