@@ -27,7 +27,11 @@ func (t *endTurnTool) Description() string {
 		"you want to immediately take another step without waiting for the " +
 		"user. Use wait with after_ms to pause before resuming. Use " +
 		"schedule with an RFC3339 at timestamp for a specific time. " +
-		"Provide a concrete intent describing what the next turn should do."
+		"Provide a concrete intent describing what the next turn should do. " +
+		"After receiving council results with tasks: use continue_now to " +
+		"dispatch each task to the appropriate agent (via spawn or " +
+		"fire_event), then schedule a follow-up check-in with wait " +
+		"(e.g. after_ms: 300000) to monitor progress or handle blockers."
 }
 
 func (t *endTurnTool) Parameters() map[string]any {
