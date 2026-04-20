@@ -440,27 +440,47 @@ Respond with either "CONCLUDE" or a brief directive for the next round.`,
 	return content, nil
 }
 
-// generateSynthesis summarizes the full transcript into actionable output.
+var submitSynthesisTool = providers.ToolDefinition{
+	Type: "function",
+	Function: providers.ToolFunctionDefinition{
+		Name:        "submit_synthesis",
+		Description: "Submit the final council synthesis with a summary and task assignments.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"summary": map[string]any{
+					"type":        "string",
+					"description": "2-3 sentence summary of key conclusions and agreements from the council.",
+				},
+				"tasks": map[string]any{
+					"type":        "array",
+					"description": "Actionable tasks assigned to specific agents. Omit if there are no concrete next steps.",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"agent":    map[string]any{"type": "string", "description": "Agent name (council participant, or 'main' for the calling agent)."},
+							"task":     map[string]any{"type": "string", "description": "One clear, actionable sentence."},
+							"priority": map[string]any{"type": "string", "enum": []string{"high", "medium", "low"}},
+						},
+						"required":             []string{"agent", "task", "priority"},
+						"additionalProperties": false,
+					},
+				},
+			},
+			"required":             []string{"summary"},
+			"additionalProperties": false,
+		},
+	},
+}
+
+// generateSynthesis summarizes the full transcript into actionable output using tool calling.
 func (e *Engine) generateSynthesis(ctx context.Context, meta *CouncilMeta, transcript []TranscriptEntry) (string, []CouncilTask, error) {
-	var messages []protocoltypes.Message
-
-	messages = append(messages, protocoltypes.Message{
-		Role: "system",
-		Content: `You are a council synthesizer. Summarize the full discussion into this exact format:
-
-Summary:
-<2-3 sentence summary of key conclusions and agreements>
-
-Tasks:
-- agent: <agent name>  task: <one sentence describing what to do>  priority: high|medium|low
-- agent: <agent name>  task: <one sentence describing what to do>  priority: high|medium|low
-
-Rules:
-- Only assign tasks to agents who participated in the council, or "main" for the calling agent.
-- Each task must be one clear, actionable sentence.
-- Separate agent/task/priority fields with two spaces on each task line.
-- If there are no actionable tasks, omit the Tasks section entirely.`,
-	})
+	messages := []protocoltypes.Message{
+		{
+			Role:    "system",
+			Content: "You are a council synthesizer. Call the submit_synthesis function to deliver your analysis.",
+		},
+	}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Council: %s\n\nFull Transcript:\n", meta.Title))
@@ -484,12 +504,47 @@ Rules:
 	if model == "" {
 		model = e.provider.GetDefaultModel()
 	}
-	resp, err := e.provider.Chat(ctx, messages, nil, model, nil)
+	resp, err := e.provider.Chat(ctx, messages, []providers.ToolDefinition{submitSynthesisTool}, model, nil)
 	if err != nil {
 		return "", nil, err
 	}
 
+	for _, tc := range resp.ToolCalls {
+		if tc.Name == "submit_synthesis" {
+			return extractSynthesisFromArgs(tc.Arguments)
+		}
+	}
+
+	// Model didn't call the tool — fall back to text parsing with a warning.
+	logger.WarnCF("council", "Synthesizer did not call submit_synthesis, falling back to text parsing",
+		map[string]any{"council_id": meta.ID})
 	summary, tasks := parseSynthesisOutput(resp.Content)
+	return summary, tasks, nil
+}
+
+// extractSynthesisFromArgs pulls summary and tasks out of the submit_synthesis tool call arguments.
+func extractSynthesisFromArgs(args map[string]any) (string, []CouncilTask, error) {
+	summary, _ := args["summary"].(string)
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return "", nil, fmt.Errorf("submit_synthesis: summary field is empty")
+	}
+	var tasks []CouncilTask
+	if rawTasks, ok := args["tasks"].([]any); ok {
+		for _, rt := range rawTasks {
+			m, ok := rt.(map[string]any)
+			if !ok {
+				continue
+			}
+			agent, _ := m["agent"].(string)
+			task, _ := m["task"].(string)
+			priority, _ := m["priority"].(string)
+			if agent == "" || task == "" {
+				continue
+			}
+			tasks = append(tasks, CouncilTask{Agent: agent, Task: task, Priority: priority})
+		}
+	}
 	return summary, tasks, nil
 }
 

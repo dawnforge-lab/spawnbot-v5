@@ -99,3 +99,54 @@ func TestParseSynthesisOutput_Empty(t *testing.T) {
 		t.Errorf("expected no tasks, got %v", tasks)
 	}
 }
+
+func TestExtractSynthesisFromArgs_Full(t *testing.T) {
+	args := map[string]any{
+		"summary": "The council agreed on a phased rollout.",
+		"tasks": []any{
+			map[string]any{"agent": "researcher", "task": "investigate caching options", "priority": "high"},
+			map[string]any{"agent": "main", "task": "write rollout plan", "priority": "medium"},
+		},
+	}
+
+	summary, tasks, err := extractSynthesisFromArgs(args)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary != "The council agreed on a phased rollout." {
+		t.Errorf("unexpected summary: %q", summary)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(tasks))
+	}
+	if tasks[0].Agent != "researcher" || tasks[0].Task != "investigate caching options" || tasks[0].Priority != "high" {
+		t.Errorf("unexpected task[0]: %+v", tasks[0])
+	}
+}
+
+func TestExtractSynthesisFromArgs_NoTasks(t *testing.T) {
+	args := map[string]any{"summary": "Conclusions reached, no follow-up needed."}
+
+	summary, tasks, err := extractSynthesisFromArgs(args)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if summary != "Conclusions reached, no follow-up needed." {
+		t.Errorf("unexpected summary: %q", summary)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("expected no tasks, got %v", tasks)
+	}
+}
+
+func TestExtractSynthesisFromArgs_EmptySummary(t *testing.T) {
+	args := map[string]any{"summary": ""}
+
+	_, _, err := extractSynthesisFromArgs(args)
+
+	if err == nil {
+		t.Error("expected error for empty summary")
+	}
+}
