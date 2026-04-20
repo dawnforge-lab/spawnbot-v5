@@ -29,11 +29,12 @@ type CouncilRunConfig struct {
 
 // CouncilRunResult mirrors council.CouncilResult without importing the package.
 type CouncilRunResult struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Rounds    int    `json:"rounds"`
-	Synthesis string `json:"synthesis,omitempty"`
-	Status    string `json:"status"`
+	ID        string        `json:"id"`
+	Title     string        `json:"title"`
+	Rounds    int           `json:"rounds"`
+	Synthesis string        `json:"synthesis,omitempty"`
+	Tasks     []CouncilTask `json:"tasks,omitempty"`
+	Status    string        `json:"status"`
 }
 
 // CouncilMetaSummary mirrors council.CouncilMeta fields needed for listing.
@@ -42,6 +43,13 @@ type CouncilMetaSummary struct {
 	Title  string `json:"title"`
 	Status string `json:"status"`
 	Rounds int    `json:"rounds"`
+}
+
+// CouncilTask mirrors council.CouncilTask without importing the package.
+type CouncilTask struct {
+	Agent    string `json:"agent"`
+	Task     string `json:"task"`
+	Priority string `json:"priority,omitempty"`
 }
 
 // CouncilTool wraps the council engine for the main agent tool interface.

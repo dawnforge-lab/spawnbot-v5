@@ -52,11 +52,19 @@ type CouncilConfig struct {
 	AgentContext string   `json:"agent_context,omitempty"` // Brief intro from the invoking agent
 }
 
+// CouncilTask is a single action item extracted from the council synthesis.
+type CouncilTask struct {
+	Agent    string `json:"agent"`
+	Task     string `json:"task"`
+	Priority string `json:"priority,omitempty"`
+}
+
 // CouncilResult holds the result summary of a council session.
 type CouncilResult struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	Rounds    int    `json:"rounds"`
-	Synthesis string `json:"synthesis,omitempty"`
-	Status    string `json:"status"`
+	ID        string        `json:"id"`
+	Title     string        `json:"title"`
+	Rounds    int           `json:"rounds"`
+	Synthesis string        `json:"synthesis,omitempty"`
+	Tasks     []CouncilTask `json:"tasks,omitempty"`
+	Status    string        `json:"status"`
 }
