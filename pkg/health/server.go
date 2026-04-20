@@ -12,12 +12,13 @@ import (
 )
 
 type Server struct {
-	server     *http.Server
-	mu         sync.RWMutex
-	ready      bool
-	checks     map[string]Check
-	startTime  time.Time
-	reloadFunc func() error
+	server       *http.Server
+	mu           sync.RWMutex
+	ready        bool
+	checks       map[string]Check
+	startTime    time.Time
+	reloadFunc   func() error
+	defaultModel string
 }
 
 type Check struct {
@@ -28,10 +29,11 @@ type Check struct {
 }
 
 type StatusResponse struct {
-	Status string           `json:"status"`
-	Uptime string           `json:"uptime"`
-	Checks map[string]Check `json:"checks,omitempty"`
-	Pid    int              `json:"pid"`
+	Status       string           `json:"status"`
+	Uptime       string           `json:"uptime"`
+	Checks       map[string]Check `json:"checks,omitempty"`
+	Pid          int              `json:"pid"`
+	DefaultModel string           `json:"default_model,omitempty"`
 }
 
 func NewServer(host string, port int) *Server {
@@ -115,6 +117,13 @@ func (s *Server) SetReloadFunc(fn func() error) {
 	s.reloadFunc = fn
 }
 
+// SetDefaultModel stores the model name this gateway was booted with.
+func (s *Server) SetDefaultModel(model string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.defaultModel = model
+}
+
 func (s *Server) reloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Content-Type", "application/json")
@@ -150,11 +159,16 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	s.mu.RLock()
+	model := s.defaultModel
+	s.mu.RUnlock()
+
 	uptime := time.Since(s.startTime)
 	resp := StatusResponse{
-		Status: "ok",
-		Uptime: uptime.String(),
-		Pid:    os.Getpid(),
+		Status:       "ok",
+		Uptime:       uptime.String(),
+		Pid:          os.Getpid(),
+		DefaultModel: model,
 	}
 
 	json.NewEncoder(w).Encode(resp)

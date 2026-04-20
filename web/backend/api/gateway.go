@@ -136,7 +136,7 @@ func (h *Handler) TryAutoStartGateway() {
 				logger.InfoC("gateway", fmt.Sprintf("Skip auto-starting gateway: %s", reason))
 				return
 			}
-			_, err = h.startGatewayLocked("starting", pid)
+			_, err = h.startGatewayLocked("starting", pid, healthResp.DefaultModel)
 			if err != nil {
 				logger.ErrorC("gateway", fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err))
 			}
@@ -161,7 +161,7 @@ func (h *Handler) TryAutoStartGateway() {
 		return
 	}
 
-	pid, err := h.startGatewayLocked("starting", 0)
+	pid, err := h.startGatewayLocked("starting", 0, "")
 	if err != nil {
 		logger.ErrorC("gateway", fmt.Sprintf("Failed to auto-start gateway: %v", err))
 		return
@@ -244,8 +244,9 @@ func setGatewayRuntimeStatusLocked(status string) {
 
 // attachToGatewayProcess attaches to an existing gateway process by PID
 // and updates the gateway state accordingly.
+// bootModel is the model the gateway was actually started with (from its health endpoint).
 // Assumes gateway.mu is held by the caller.
-func attachToGatewayProcessLocked(pid int, cfg *config.Config) error {
+func attachToGatewayProcessLocked(pid int, bootModel string) error {
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return fmt.Errorf("failed to find process for PID %d: %w", pid, err)
@@ -254,12 +255,7 @@ func attachToGatewayProcessLocked(pid int, cfg *config.Config) error {
 	gateway.cmd = &exec.Cmd{Process: process}
 	gateway.owned = false // We didn't start this process
 	setGatewayRuntimeStatusLocked("running")
-
-	// Update bootDefaultModel from config
-	if cfg != nil {
-		defaultModelName := strings.TrimSpace(cfg.Agents.Defaults.GetModelName())
-		gateway.bootDefaultModel = defaultModelName
-	}
+	gateway.bootDefaultModel = strings.TrimSpace(bootModel)
 
 	logger.InfoC("gateway", fmt.Sprintf("Attached to gateway process (PID: %d)", pid))
 	return nil
@@ -383,7 +379,7 @@ func stopGatewayProcessForRestart(cmd *exec.Cmd) error {
 	return fmt.Errorf("existing gateway did not exit before restart")
 }
 
-func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int, error) {
+func (h *Handler) startGatewayLocked(initialStatus string, existingPid int, existingBootModel string) (int, error) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to load config: %w", err)
@@ -394,10 +390,10 @@ func (h *Handler) startGatewayLocked(initialStatus string, existingPid int) (int
 	var pid int
 
 	if existingPid > 0 {
-		// Attach to existing process
+		// Attach to existing process, using the model it was actually started with.
 		pid = existingPid
 		gateway.cmd = nil // Clear first to ensure clean state
-		if err = attachToGatewayProcessLocked(pid, cfg); err != nil {
+		if err = attachToGatewayProcessLocked(pid, existingBootModel); err != nil {
 			return 0, err
 		}
 
@@ -577,7 +573,7 @@ func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			_, err = h.startGatewayLocked("starting", pid)
+			_, err = h.startGatewayLocked("starting", pid, healthResp.DefaultModel)
 			gateway.mu.Unlock()
 			if err != nil {
 				logger.ErrorC("gateway", fmt.Sprintf("Failed to attach to running gateway (PID: %d): %v", pid, err))
@@ -621,7 +617,7 @@ func (h *Handler) handleGatewayStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pid, err := h.startGatewayLocked("starting", 0)
+	pid, err := h.startGatewayLocked("starting", 0, "")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to start gateway: %v", err), http.StatusInternalServerError)
 		return
@@ -745,7 +741,7 @@ func (h *Handler) RestartGateway() (int, error) {
 		gateway.cmd = nil
 		gateway.bootDefaultModel = ""
 	}
-	pid, err := h.startGatewayLocked("restarting", 0)
+	pid, err := h.startGatewayLocked("restarting", 0, "")
 	if err != nil {
 		gateway.cmd = nil
 		gateway.bootDefaultModel = ""
@@ -867,7 +863,7 @@ func (h *Handler) gatewayStatusData() map[string]any {
 					),
 				)
 
-				if err := attachToGatewayProcessLocked(healthResp.Pid, cfg); err != nil {
+				if err := attachToGatewayProcessLocked(healthResp.Pid, healthResp.DefaultModel); err != nil {
 					// Failed to find the process, treat as error
 					setGatewayRuntimeStatusLocked("error")
 					data["gateway_status"] = "error"

@@ -345,6 +345,7 @@ func setupAndStartServices(
 
 	addr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)
 	runningServices.HealthServer = health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
+	runningServices.HealthServer.SetDefaultModel(cfg.Agents.Defaults.GetModelName())
 	runningServices.ChannelManager.SetupHTTPServer(addr, runningServices.HealthServer)
 	runningServices.ChannelManager.RegisterHTTPHandler(
 		"GET /agents/{id}/continuations",
@@ -567,6 +568,7 @@ func restartServices(
 	if runningServices.HealthServer == nil {
 		runningServices.HealthServer = health.NewServer(cfg.Gateway.Host, cfg.Gateway.Port)
 	}
+	runningServices.HealthServer.SetDefaultModel(cfg.Agents.Defaults.GetModelName())
 	runningServices.ChannelManager.SetupHTTPServer(addr, runningServices.HealthServer)
 	runningServices.ChannelManager.RegisterHTTPHandler(
 		"GET /agents/{id}/continuations",

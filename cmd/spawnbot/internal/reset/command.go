@@ -183,6 +183,14 @@ func stopAndRemoveServices() {
 
 	// Reload systemd
 	exec.Command("systemctl", "--user", "daemon-reload").Run()
+
+	// Kill any gateway or web processes not managed by systemd (e.g. dev builds).
+	// This prevents stale processes from blocking port 18790 after reinstall.
+	for _, pattern := range []string{"spawnbot gateway", "spawnbot-web"} {
+		if err := exec.Command("pkill", "-f", pattern).Run(); err == nil {
+			fmt.Printf("  Killed remaining '%s' processes\n", pattern)
+		}
+	}
 }
 
 func removePATHEntry(userHome string) {
